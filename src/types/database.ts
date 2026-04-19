@@ -223,6 +223,11 @@ export type ProductFormValues = {
   cost_price: string;
   selling_price: string;
   image_url: string;
+  bulk_quantity?: string | number | null;
+  bulk_price?: string | number | null;
+  parent_id?: string | null;
+  is_parent?: boolean;
+  variant_combination?: any | null;
 };
 
 export type CustomerFormValues = {

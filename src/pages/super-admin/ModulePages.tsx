@@ -104,7 +104,7 @@ export function BusinessesPage() {
   const handleResetPassword = async (biz: any) => {
     const owner = biz.owner;
     if (!owner || !owner.auth_user_id) {
-      showToast("No administrator account found linked to this business profile.", "error");
+      showToast("error", "No administrator account found linked to this business profile.");
       return;
     }
     setResetPasswordOwner({ ...owner, businessName: biz.name });
@@ -648,7 +648,7 @@ function DeleteBusinessModal({ business, onClose, onComplete }: any) {
     setIsDeleting(true);
     try {
       await superAdminService.deleteBusiness(business.id);
-      showToast("Business node completely wiped out successfully.", "success");
+      showToast("success", "Business node completely wiped out successfully.");
       onComplete();
     } catch (err: any) {
       showToast(err.message, "error");
@@ -774,17 +774,17 @@ function ResetPasswordModal({ owner, onClose }: any) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (password.length < 6) {
-      showToast("Password must be at least 6 characters long.", "warning");
+      showToast("warning", "Password must be at least 6 characters long.");
       return;
     }
 
     setIsUpdating(true);
     try {
       await superAdminService.resetUserPassword(owner.auth_user_id, password);
-      showToast("Password Overwritten & Secured!", "success");
+      showToast("success", "Password Overwritten & Secured!");
       onClose();
     } catch (err: any) {
-      showToast(err.message || "Failed to update password", "error");
+      showToast("error", err.message || "Failed to update password");
     } finally {
       setIsUpdating(false);
     }

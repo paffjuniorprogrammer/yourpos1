@@ -110,8 +110,6 @@ export function StockPage() {
           productId: product.id,
           name: product.name,
           stockQty: product.stock_quantity,
-          name: product.name,
-          stockQty: product.stock_quantity,
           mode: "Add",
           reason: "correction",
           countedQty: 1,
@@ -170,8 +168,6 @@ export function StockPage() {
         const updatedProducts = productList.map((p) => ({
           id: p.id,
           productId: p.id,
-          name: p.name,
-          stockQty: p.stock_quantity,
           name: p.name,
           stockQty: p.stock_quantity,
           mode: "Add" as const,

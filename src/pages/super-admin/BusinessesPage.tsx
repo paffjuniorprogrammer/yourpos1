@@ -161,7 +161,7 @@ export function BusinessesPage() {
   const handleExportData = async (biz: any) => {
     try {
       showToast("info", "Preparing export...");
-      await superAdminService.exportBusinessData(biz.id, biz.name);
+      await superAdminService.exportBusinessDataCSV(biz.id, biz.name);
       showToast("success", "Data exported successfully!");
     } catch (err: any) {
       console.error("Export failed:", err);

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { AppRole, LocationRecord } from "../types/database";
-import { Building2, Pencil, Plus, Search, ShieldCheck, WalletCards, X, MapPin, Edit, Code2, Key } from "lucide-react";
+import { Trash2, Building2, Pencil, Plus, Search, ShieldCheck, WalletCards, X, MapPin, Edit, Code2, Key } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useNotification } from "../context/NotificationContext";
 import {

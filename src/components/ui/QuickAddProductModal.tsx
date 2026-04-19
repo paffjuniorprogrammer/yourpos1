@@ -82,10 +82,8 @@ export function QuickAddProductModal({ isOpen, onClose, onSuccess }: Props) {
         ...form,
         cost_price: Number(form.cost_price),
         selling_price: Number(form.selling_price),
-        stock_quantity: Number(form.stock_quantity),
-        reorder_level: Number(form.reorder_level),
         image_url: "",
-      }, activeLocationId);
+      });
       
       await refreshData();
       
