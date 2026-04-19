@@ -1,0 +1,60 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color: #0f172a;
+  background:
+    radial-gradient(circle at top left, rgba(37, 99, 235, 0.16), transparent 26%),
+    linear-gradient(180deg, #f8fbff 0%, #f9fafb 45%, #f3f7fb 100%);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* ═══════════════════════════════════════
+   COMPACT TABLE STYLES — Applied globally
+   ═══════════════════════════════════════ */
+table th {
+  font-size: 10px !important;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding-top: 0.5rem !important;
+  padding-bottom: 0.5rem !important;
+  line-height: 1.2;
+}
+
+table td {
+  font-size: 12px !important;
+  padding-top: 0.45rem !important;
+  padding-bottom: 0.45rem !important;
+  line-height: 1.4;
+}
+
+table tr {
+  height: auto !important;
+}
+
+/* Keep badges and labels readable */
+table td span,
+table td p,
+table td a {
+  font-size: 11px !important;
+}
+
+/* Action icon buttons in tables stay the same size */
+table td button {
+  font-size: 11px !important;
+}
