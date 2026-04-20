@@ -16,6 +16,7 @@ import {
   updateLocation,
   deleteLocation,
   upsertUserLocations,
+  resetStaffPassword,
 } from "../services/settingsService";
 import { listApiKeys, generateApiKey, revokeApiKey, type ApiKeyRecord } from "../services/apiService";
 import { UserPermissionRecord } from "../types/database";
@@ -40,6 +41,7 @@ type StaffAccount = {
   locationId: string | null;
   assignedLocationIds: string[];
   permissions: StaffPermission[];
+  auth_user_id?: string | null;
 };
 
 type StaffForm = {
@@ -139,6 +141,7 @@ export function SettingsPage() {
   const [creatingLocation, setCreatingLocation] = useState(false);
   const [editingLocationId, setEditingLocationId] = useState<string | null>(null);
   const [editingLocationName, setEditingLocationName] = useState("");
+  const [resetPasswordStaff, setResetPasswordStaff] = useState<StaffAccount | null>(null);
   
   // API Keys state
   const [apiKeys, setApiKeys] = useState<ApiKeyRecord[]>([]);
@@ -225,6 +228,7 @@ export function SettingsPage() {
         setStaffAccounts(
           (users ?? []).map((user) => ({
             id: user.id,
+            auth_user_id: user.auth_user_id,
             fullName: user.full_name,
             email: user.email,
             phone: "",
@@ -375,6 +379,7 @@ export function SettingsPage() {
       setStaffAccounts(
         (users ?? []).map((user) => ({
           id: user.id,
+          auth_user_id: user.auth_user_id,
           fullName: user.full_name,
           email: user.email,
           phone: "",
@@ -428,6 +433,21 @@ export function SettingsPage() {
             location_id: staffForm.locationId,
           });
           await upsertUserPermissions(editingStaffId, permissionsToSave);
+          
+          if (staffForm.password.trim().length > 0) {
+            if (staffForm.password.trim().length < 6) {
+              throw new Error("Password must be at least 6 characters.");
+            }
+            const staff = staffAccounts.find(s => s.id === editingStaffId);
+            if (staff?.auth_user_id) {
+               await import("../lib/supabase").then(({ supabase }) => 
+                 supabase.rpc('admin_reset_user_password', {
+                   p_target_auth_id: staff.auth_user_id,
+                   p_new_password: staffForm.password.trim()
+                 })
+               );
+            }
+          }
         } else {
           const created = await createStaffAccount({
             email: staffForm.email.trim(),
@@ -653,6 +673,13 @@ export function SettingsPage() {
                         </div>
                       </td>
                       <td className="border-b border-slate-100 px-5 py-4 flex gap-2">
+                        <button
+                          onClick={() => setResetPasswordStaff(staff)}
+                          className="rounded-xl bg-indigo-50 p-2 text-indigo-600 transition hover:bg-indigo-100"
+                          title="Reset Password"
+                        >
+                          <Key size={16} />
+                        </button>
                         <button
                           onClick={() => openEditStaffModal(staff)}
                           className="rounded-xl bg-sky-50 p-2 text-sky-600 transition hover:bg-sky-100"
@@ -1203,6 +1230,92 @@ export function SettingsPage() {
           </div>
         </div>
       ) : null}
+      {/* Reset Password Modal */}
+      {resetPasswordStaff && (
+        <ResetPasswordModal
+          staff={resetPasswordStaff}
+          onClose={() => setResetPasswordStaff(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function ResetPasswordModal({ staff, onClose }: { staff: StaffAccount; onClose: () => void }) {
+  const [password, setPassword] = useState("");
+  const [isUpdating, setIsUpdating] = useState(false);
+  const { showToast } = useNotification();
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (password.length < 6) {
+      showToast("warning", "Password must be at least 6 characters long.");
+      return;
+    }
+
+    setIsUpdating(true);
+    try {
+      if (!staff.auth_user_id) {
+        throw new Error("Staff member has no linked auth account.");
+      }
+      await resetStaffPassword(staff.auth_user_id, password);
+      showToast("success", "Password updated successfully!");
+      onClose();
+    } catch (err: any) {
+      showToast("error", err.message || "Failed to update password");
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-sm rounded-3xl bg-white p-8 shadow-2xl">
+        <div className="mb-6 flex items-center justify-between">
+          <h3 className="text-xl font-bold text-ink">Reset Password</h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
+            <X size={20} />
+          </button>
+        </div>
+        
+        <p className="mb-6 text-sm text-slate-500">
+          Set a new password for <span className="font-semibold text-ink">{staff.fullName}</span>.
+        </p>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-400">
+              New Password
+            </label>
+            <input
+              type="password"
+              autoFocus
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-brand-300"
+              placeholder="••••••••"
+            />
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 rounded-2xl bg-slate-100 py-3 font-semibold text-slate-600 transition hover:bg-slate-200"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isUpdating}
+              className="flex-1 rounded-2xl bg-brand-500 py-3 font-semibold text-white shadow-soft transition hover:bg-brand-600 disabled:opacity-50"
+            >
+              {isUpdating ? "Updating..." : "Update"}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

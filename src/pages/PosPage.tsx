@@ -323,29 +323,7 @@ export function PosPage() {
     }
   }
 
-  useEffect(() => {
-    const normalized = query.trim().toLowerCase();
-    if (normalized.length < 4) {
-      return;
-    }
 
-    const barcodeMatch = products.find(
-      (product) => (product.barcode ?? "").toLowerCase() === normalized,
-    );
-
-    if (barcodeMatch) {
-      addToCart(barcodeMatch.id);
-      return;
-    }
-
-    const nameMatches = products.filter((product) =>
-      product.name.toLowerCase().includes(normalized),
-    );
-
-    if (nameMatches.length === 1) {
-      addToCart(nameMatches[0].id);
-    }
-  }, [products, query]);
 
   useEffect(() => {
     if (!closeDayOpen || !profile?.id || !authConfigured || !activeLocationId || !activeShift?.opened_at) {
@@ -410,9 +388,46 @@ export function PosPage() {
   }
 
   function onSearchKeyDown(event: KeyboardEvent<HTMLInputElement>) {
-    if (event.key === "Enter" && filteredProducts[0]) {
+    if (event.key === "Enter") {
       event.preventDefault();
-      addToCart(filteredProducts[0].id);
+      
+      const inputValue = event.currentTarget.value.trim().toLowerCase();
+      if (!inputValue) return;
+      
+      // Force clear the hardware input synchronously to prevent twin 'Enter' events (e.g. CR+LF) 
+      // from slipping past React's async stat batching
+      
+      const barcodeMatch = products.find(
+        (product) => (product.barcode ?? "").toLowerCase() === inputValue,
+      );
+
+      if (barcodeMatch) {
+        event.currentTarget.value = "";
+        addToCart(barcodeMatch.id);
+        return;
+      }
+
+      const nameMatches = products.filter((product) =>
+        product.name.toLowerCase().includes(inputValue),
+      );
+
+      if (nameMatches.length === 1) {
+        event.currentTarget.value = "";
+        addToCart(nameMatches[0].id);
+        return;
+      }
+
+      // If we fallthrough but still have filtered matches via React state or direct match
+      const fallbackMatches = products.filter(
+        (product) =>
+          product.name.toLowerCase().includes(inputValue) ||
+          (product.barcode ?? "").toLowerCase().includes(inputValue),
+      );
+
+      if (fallbackMatches.length > 0) {
+        event.currentTarget.value = "";
+        addToCart(fallbackMatches[0].id);
+      }
     }
   }
 
@@ -932,7 +947,16 @@ export function PosPage() {
                             <p className="font-semibold text-white">{product.name}</p>
                             <p className="text-xs text-slate-400">{product.barcode}</p>
                           </div>
-                          <span className="text-sm font-semibold text-sky-300">{rwf(product.selling_price)}</span>
+                          <div className="flex flex-col items-end gap-1">
+                            <span className="text-sm font-semibold text-sky-300">{rwf(product.selling_price)}</span>
+                            <span className={`text-[10px] font-black rounded-lg px-2 py-0.5 ${
+                              product.stock_quantity <= 0 ? 'bg-rose-500/20 text-rose-400' :
+                              product.stock_quantity <= product.reorder_level ? 'bg-amber-500/20 text-amber-400' :
+                              'bg-emerald-500/20 text-emerald-400'
+                            }`}>
+                              {product.stock_quantity <= 0 ? 'OUT' : `×${product.stock_quantity}`}
+                            </span>
+                          </div>
                         </button>
                       ))}
                     </div>

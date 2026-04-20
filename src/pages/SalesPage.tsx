@@ -136,8 +136,10 @@ export function SalesPage() {
         unit_price: Number(item.unit_price),
         restock: true,
       })));
+      return details;
     } catch {
       setSaleDetails(null);
+      return null;
     } finally {
       setDetailsLoading(false);
     }
@@ -362,7 +364,17 @@ export function SalesPage() {
                           {can("Sales", "edit") && (
                             <>
                               <button onClick={() => { setSelectedSale(sale); handleViewSaleDetails(sale).then(() => setShowEditModal(true)); }} className="rounded-xl bg-sky-50 p-2 text-sky-600 transition hover:bg-sky-100" title="Edit"><Pencil size={15} /></button>
-                              <button disabled={sale.payment_status === "paid"} onClick={() => { setSelectedSale(sale); setPaymentAmount(String(sale.total_amount)); setShowPaymentModal(true); }} className={`rounded-xl p-2 transition ${sale.payment_status === "paid" ? "bg-slate-50 text-slate-300" : "bg-emerald-50 text-emerald-600 hover:bg-emerald-100"}`} title="Payment"><CreditCard size={15} /></button>
+                              <button disabled={sale.payment_status === "paid"} onClick={() => { 
+                                setSelectedSale(sale); 
+                                handleViewSaleDetails(sale).then((details) => {
+                                  if (details) {
+                                    const paid = (details.sale_payments || []).reduce((s: number, p: any) => s + Number(p.amount), 0);
+                                    const remaining = Number(sale.total_amount) - paid;
+                                    setPaymentAmount(String(Math.max(0, remaining)));
+                                  }
+                                  setShowPaymentModal(true);
+                                });
+                              }} className={`rounded-xl p-2 transition ${sale.payment_status === "paid" ? "bg-slate-50 text-slate-300" : "bg-emerald-50 text-emerald-600 hover:bg-emerald-100"}`} title="Payment"><CreditCard size={15} /></button>
                               {!(sale as any).sale_returns?.length && (
                                 <button onClick={() => { handleViewSaleDetails(sale).then(() => setShowReturnModal(true)); }} className="rounded-xl bg-amber-50 p-2 text-amber-600 transition hover:bg-amber-100" title="Return/Refund"><ArrowLeftRight size={15} /></button>
                               )}
@@ -457,7 +469,12 @@ export function SalesPage() {
                       <button onClick={() => setShowReturnModal(true)} className="flex items-center gap-2 rounded-2xl bg-amber-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-amber-600">
                         <ArrowLeftRight size={15} /> Return / Refund
                       </button>
-                      <button disabled={selectedSale.payment_status === "paid"} onClick={() => { setPaymentAmount(String(Number(selectedSale.total_amount))); setShowPaymentModal(true); }} className={`flex items-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-semibold text-white ${selectedSale.payment_status === "paid" ? "bg-slate-300" : "bg-emerald-500 hover:bg-emerald-600"}`}>
+                      <button disabled={selectedSale.payment_status === "paid"} onClick={() => { 
+                        const paid = (saleDetails?.sale_payments || []).reduce((s: number, p: any) => s + Number(p.amount), 0);
+                        const remaining = Number(selectedSale.total_amount) - paid;
+                        setPaymentAmount(String(Math.max(0, remaining))); 
+                        setShowPaymentModal(true); 
+                      }} className={`flex items-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-semibold text-white ${selectedSale.payment_status === "paid" ? "bg-slate-300" : "bg-emerald-500 hover:bg-emerald-600"}`}>
                         <CreditCard size={15} /> {selectedSale.payment_status === "paid" ? "Fully Paid" : "Record Payment"}
                       </button>
                     </>
@@ -624,6 +641,11 @@ export function SalesPage() {
               <button onClick={() => setShowPaymentModal(false)} className="rounded-full bg-slate-100 p-2"><X size={18} /></button>
             </div>
             <p className="text-sm text-slate-500 mb-4">Recording payment for <strong>{selectedSale.sale_number}</strong></p>
+            <div className="flex justify-between items-center mb-6 text-sm font-medium bg-slate-50 p-4 rounded-xl">
+               <span className="text-slate-700">Total: <br/><strong className="text-lg">{formatCurrency(Number(selectedSale.total_amount))}</strong></span>
+               <span className="text-emerald-600 text-center">Paid: <br/><strong className="text-lg">{formatCurrency((saleDetails?.sale_payments || []).reduce((s: number, p: any) => s + Number(p.amount), 0))}</strong></span>
+               <span className="text-amber-600 text-right">Remaining: <br/><strong className="text-lg">{formatCurrency(Math.max(0, Number(selectedSale.total_amount) - (saleDetails?.sale_payments || []).reduce((s: number, p: any) => s + Number(p.amount), 0)))}</strong></span>
+            </div>
             <div className="space-y-4">
               <label className="block">
                 <span className="text-sm font-medium text-slate-700">Amount (RWF)</span>

@@ -14,6 +14,7 @@ import { SettingsPage } from "./pages/SettingsPage";
 import { StockPage } from "./pages/StockPage";
 import { SuppliersPage } from "./pages/SuppliersPage";
 import { Toaster } from "./components/ui/Toaster";
+import { ConnectionStatus } from "./components/ui/ConnectionStatus";
 import { SubscriptionGuard, SuperAdminGuard } from "./components/auth/SubscriptionGuard";
 import { SuperAdminDashboard } from "./pages/SuperAdminDashboard";
 import { SuperAdminShell } from "./components/layout/SuperAdminShell";
@@ -148,6 +149,7 @@ export default function App() {
         <Route path="/subscription-expired" element={<SubscriptionExpiredPage />} />
       </Routes>
       <Toaster />
+      <ConnectionStatus />
     </>
   );
 }

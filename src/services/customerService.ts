@@ -1,4 +1,5 @@
 import { ensureSupabaseConfigured } from "./supabaseUtils";
+import { db } from "../lib/db";
 
 // Performance cache
 let customersCache: { data: CustomerRecord[], timestamp: number } | null = null;
@@ -92,6 +93,63 @@ export async function listCustomersWithMetrics() {
 }
 
 export async function createCustomer(values: CustomerFormValues) {
+  const isOnline = navigator.onLine;
+
+  if (isOnline) {
+    try {
+      const client = await ensureSupabaseConfigured();
+      const { data, error } = await client
+        .from("customers")
+        .insert(mapCustomerPayload(values))
+        .select()
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      customersCache = null;
+      
+      // Update local cache too
+      if (data) {
+        await db.cached_customers.put({ id: data.id, data });
+      }
+
+      return data as CustomerRecord;
+    } catch (err: any) {
+      if (err?.message !== 'Failed to fetch' && !err?.message?.includes('network')) {
+        throw err;
+      }
+    }
+  }
+
+  // OFFLINE FALLBACK
+  const localId = crypto.randomUUID();
+  const now = new Date().toISOString();
+  const customerData = {
+    ...mapCustomerPayload(values),
+    id: localId,
+    created_at: now
+  };
+
+  await db.pending_actions.add({
+    id: localId,
+    type: 'customer',
+    payload: values,
+    status: 'pending',
+    created_at: now
+  });
+
+  // Put in local cache so it shows up in search
+  await db.cached_customers.add({
+    id: localId,
+    data: customerData
+  });
+
+  return customerData as CustomerRecord;
+}
+
+export async function pushCustomerToSupabase(values: CustomerFormValues) {
   const client = await ensureSupabaseConfigured();
   const { data, error } = await client
     .from("customers")
@@ -99,11 +157,7 @@ export async function createCustomer(values: CustomerFormValues) {
     .select()
     .single();
 
-  if (error) {
-    throw error;
-  }
-
-  customersCache = null;
+  if (error) throw error;
   return data as CustomerRecord;
 }
 

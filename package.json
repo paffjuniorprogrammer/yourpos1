@@ -11,6 +11,8 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.49.4",
     "@types/papaparse": "^5.5.2",
+    "dexie": "^4.4.2",
+    "dexie-react-hooks": "^4.4.0",
     "jsbarcode": "^3.12.3",
     "lucide-react": "^0.503.0",
     "papaparse": "^5.5.3",

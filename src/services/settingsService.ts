@@ -47,32 +47,28 @@ export async function createStaffAccount(values: {
   business_id: string;
 }) {
   const client = await ensureSupabaseConfigured();
-  const { data, error } = await client.auth.signUp({
-    email: values.email,
-    password: values.password,
-    options: { 
-      data: { 
-        role: values.role, 
-        full_name: values.full_name,
-        business_id: values.business_id
-      } 
-    },
+  
+  const { data: authUserId, error } = await client.rpc('admin_create_staff', {
+    p_business_id: values.business_id,
+    p_email: values.email,
+    p_password: values.password,
+    p_full_name: values.full_name,
+    p_role: values.role,
+    p_location_id: values.location_id || null
   });
 
   if (error) {
     throw error;
   }
 
-  const authUserId = data.user?.id;
   if (!authUserId) {
     throw new Error("Failed to create auth user.");
   }
 
   const { data: profile, error: profileError } = await client
     .from("users")
-    .update({ location_id: values.location_id || null })
-    .eq("auth_user_id", authUserId)
     .select("*")
+    .eq("auth_user_id", authUserId)
     .single();
 
   if (profileError) {
@@ -277,6 +273,20 @@ export async function deleteLocation(id: string) {
     .from("locations")
     .delete()
     .eq("id", id);
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+export async function resetStaffPassword(targetAuthUserId: string, newPassword: string) {
+  const client = await ensureSupabaseConfigured();
+  const { data, error } = await client.rpc('admin_reset_user_password', {
+    p_target_auth_id: targetAuthUserId,
+    p_new_password: newPassword
+  });
 
   if (error) {
     throw error;

@@ -1,5 +1,6 @@
 import { ensureSupabaseConfigured } from "./supabaseUtils";
 import type { ProductRecord, Category } from "../types/database";
+import { db } from "../lib/db";
 
 export type ProductFormValues = {
   name: string;
@@ -54,55 +55,111 @@ function mapProductPayload(values: ProductFormValues) {
 }
 
 export async function listProducts(locationId?: string | null) {
-  const client = await ensureSupabaseConfigured();
-  
-  const selectQuery = locationId ? `
-    *,
-    product_stocks(quantity, location_id)
-  ` : '*';
+  const isOnline = navigator.onLine;
 
-  const { data, error } = await client
-    .from("products")
-    .select(selectQuery)
-    .order("created_at", { ascending: false });
+  if (isOnline) {
+    try {
+      const client = await ensureSupabaseConfigured();
+      
+      const selectQuery = locationId ? `
+        *,
+        product_stocks(quantity, location_id)
+      ` : '*';
 
-  if (error) {
-    throw error;
-  }
+      const { data, error } = await client
+        .from("products")
+        .select(selectQuery)
+        .order("created_at", { ascending: false });
 
-  if (locationId) {
-    return (data || []).map((product: any) => {
-      let branchStock = product.stock_quantity; // fallback to global
-      if (product.product_stocks && Array.isArray(product.product_stocks)) {
-        const stockEntry = product.product_stocks.find((s: any) => s.location_id === locationId);
-        if (stockEntry !== undefined) {
-          branchStock = stockEntry.quantity;
-        }
+      if (error) {
+        throw error;
       }
-      return {
-        ...product,
-        stock_quantity: branchStock,
-        product_stocks: undefined
-      };
-    }) as ProductRecord[];
+
+      let parsedData: ProductRecord[] = [];
+
+      if (locationId) {
+        parsedData = (data || []).map((product: any) => {
+          let branchStock = product.stock_quantity; // fallback to global
+          if (product.product_stocks && Array.isArray(product.product_stocks)) {
+            const stockEntry = product.product_stocks.find((s: any) => s.location_id === locationId);
+            if (stockEntry !== undefined) {
+              branchStock = stockEntry.quantity;
+            }
+          }
+          return {
+            ...product,
+            stock_quantity: branchStock,
+            product_stocks: undefined
+          };
+        }) as ProductRecord[];
+      } else {
+        parsedData = (data || []) as unknown as ProductRecord[];
+      }
+
+      // Cache the result in Dexie
+      try {
+        const businessId = parsedData.length > 0 ? parsedData[0].business_id : 'unknown';
+        await db.cached_products.bulkPut(parsedData.map(p => ({
+          id: p.id,
+          business_id: businessId,
+          data: p,
+          updated_at: new Date().toISOString()
+        })));
+      } catch (cacheErr) {
+        console.warn("Failed to cache products locally:", cacheErr);
+      }
+
+      return parsedData;
+    } catch (err: any) {
+      if (err?.message !== 'Failed to fetch' && !err?.message?.includes('network')) {
+        throw err;
+      }
+      console.warn("Network error, falling back to offline products cache.");
+    }
   }
 
-  return (data || []) as unknown as ProductRecord[];
+  // Fallback to Dexie
+  const cached = await db.cached_products.toArray();
+  return cached.map(c => c.data) as ProductRecord[];
 }
 
 export async function listCategories() {
-  const client = await ensureSupabaseConfigured();
-  const { data, error } = await client
-    .from("categories")
-    .select("*")
-    .order("name", { ascending: true });
+  const isOnline = navigator.onLine;
 
-  if (error) {
-    throw error;
+  if (isOnline) {
+    try {
+      const client = await ensureSupabaseConfigured();
+      const { data, error } = await client
+        .from("categories")
+        .select("*")
+        .order("name", { ascending: true });
+
+      if (error) {
+        throw error;
+      }
+
+      const result = (data ?? []) as Category[];
+      
+      try {
+        await db.cached_categories.bulkPut(result.map(c => ({
+          id: c.id,
+          data: c
+        })));
+      } catch (cacheErr) {
+        console.warn("Failed to cache categories.", cacheErr);
+      }
+
+      return result;
+    } catch (err: any) {
+      if (err?.message !== 'Failed to fetch' && !err?.message?.includes('network')) {
+        throw err;
+      }
+      console.warn("Network error, falling back to offline categories cache.");
+    }
   }
 
-  const result = (data ?? []) as Category[];
-  return result;
+  const cached = await db.cached_categories.toArray();
+  return cached.map(c => c.data) as Category[];
 }
 
 export async function createCategory(name: string) {
