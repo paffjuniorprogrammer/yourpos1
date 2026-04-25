@@ -8,9 +8,11 @@ import { useAsyncAction } from "../hooks/useAsyncAction";
 import { RefreshCcw, ShoppingBag, TrendingUp, Wallet, Users, Package, AlertTriangle } from "lucide-react";
 import { getDashboardStats, getRecentTransactions, getSalesTrend, getUnpaidCustomers, getUnpaidSuppliers, type DashboardStat, type RecentTransaction, type SalesTrendItem, type UnpaidItem } from "../services/dashboardService";
 import { useRealtimeSync } from "../hooks/useRealtimeSync";
+import { useTranslation } from "react-i18next";
 import { SubscriptionStatusBanner } from "../components/ui/SubscriptionStatusBanner";
 
 export function DashboardPage() {
+  const { t } = useTranslation();
   const { can, profile, hasRole } = useAuth();
   const [stats, setStats] = useState<DashboardStat[]>([]);
   const [salesTrend, setSalesTrend] = useState<SalesTrendItem[]>([]);
@@ -91,24 +93,26 @@ export function DashboardPage() {
         <div className="mb-4 rounded-full bg-rose-50 p-6 text-rose-600">
           <RefreshCcw size={48} />
         </div>
-        <h2 className="text-2xl font-bold text-ink">Access Denied</h2>
+        <h2 className="text-2xl font-bold text-ink">{t('common.error')}</h2>
         <p className="mt-2 text-slate-500">You do not have permission to view the performance dashboard.</p>
         <button 
           onClick={() => window.history.back()}
           className="mt-6 rounded-2xl bg-brand-500 px-6 py-3 text-sm font-semibold text-white transition hover:bg-brand-600"
         >
-          Go Back
+          {t('common.actions')}
         </button>
       </div>
+
     );
   }
 
   const greeting = () => {
     const hour = new Date().getHours();
-    if (hour < 12) return "Good morning";
-    if (hour < 17) return "Good afternoon";
-    return "Good evening";
+    if (hour < 12) return t('dashboard.greeting_morning');
+    if (hour < 17) return t('dashboard.greeting_afternoon');
+    return t('dashboard.greeting_evening');
   };
+
 
   return (
     <div className="space-y-4">
@@ -124,52 +128,62 @@ export function DashboardPage() {
         </div>
         <div className="flex items-center gap-3">
           <div className="text-right">
-            <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400">Sync Status</p>
+            <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400">{t('dashboard.sync_status')}</p>
             <p className="text-[10px] font-bold text-slate-500">{lastRefreshed}</p>
           </div>
           <button 
             onClick={() => void loadDashboardData(true)}
             className="rounded-xl bg-white p-2 text-brand-600 shadow-sm ring-1 ring-slate-100 transition hover:bg-brand-50"
-            title="Refresh data"
+            title={t('dashboard.refresh')}
           >
             <RefreshCcw size={16} className={loading ? "animate-spin" : ""} />
           </button>
         </div>
+
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         {stats.map((stat) => {
+          const title = stat.title;
           let icon = ShoppingBag;
           let tone: "sky" | "emerald" | "amber" | "rose" | "indigo" | "orange" = "sky";
+          let translatedTitle = title;
 
-          if (stat.title.includes("Sales")) {
+          if (title.includes("Sales")) {
             icon = ShoppingBag;
             tone = "sky";
-          } else if (stat.title.includes("Revenue")) {
+            translatedTitle = t('dashboard.stats.sales');
+          } else if (title.includes("Revenue")) {
             icon = TrendingUp;
             tone = "emerald";
-          } else if (stat.title.includes("Suppliers")) {
+            translatedTitle = t('dashboard.stats.revenue');
+          } else if (title.includes("Suppliers")) {
             icon = Wallet;
             tone = "rose";
-          } else if (stat.title.includes("Customers")) {
+            translatedTitle = t('dashboard.stats.suppliers');
+          } else if (title.includes("Customers")) {
             icon = Users;
             tone = "amber";
-          } else if (stat.title.includes("Sold")) {
+            translatedTitle = t('dashboard.stats.customers');
+          } else if (title.includes("Sold")) {
             icon = Package;
             tone = "indigo";
-          } else if (stat.title.includes("Alerts")) {
+            translatedTitle = t('dashboard.stats.sold');
+          } else if (title.includes("Alerts")) {
             icon = AlertTriangle;
             tone = "orange";
+            translatedTitle = t('dashboard.stats.alerts');
           }
 
-          return <StatCard key={stat.title} {...stat} icon={icon} tone={tone} />;
+          return <StatCard key={title} {...stat} title={translatedTitle} icon={icon} tone={tone} />;
         })}
+
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[1.5fr_1fr]">
         <SectionCard
-          title="Weekly sales trend"
-          subtitle="Sales volume over the last seven trading days"
+          title={t('dashboard.weekly_trend')}
+          subtitle={t('dashboard.weekly_subtitle')}
         >
           <div className="flex h-72 items-end gap-4">
             {salesTrend.map((item) => (
@@ -187,11 +201,12 @@ export function DashboardPage() {
         </SectionCard>
 
         <SectionCard
-          title="Recent transactions"
-          subtitle="The latest receipts closed by the team"
+          title={t('dashboard.recent_tx')}
+          subtitle={t('dashboard.recent_subtitle')}
         >
           <div className="space-y-4">
             {recentTransactions.length > 0 ? recentTransactions.map((transaction) => (
+
               <div
                 key={transaction.id}
                 className="rounded-2xl border border-slate-100 p-4"
@@ -209,7 +224,7 @@ export function DashboardPage() {
                 </div>
               </div>
             )) : (
-              <p className="py-10 text-center text-sm text-slate-400">No recent transactions</p>
+              <p className="py-10 text-center text-sm text-slate-400">{t('dashboard.no_recent')}</p>
             )}
           </div>
         </SectionCard>
@@ -217,7 +232,7 @@ export function DashboardPage() {
 
       <div className="grid gap-6 xl:grid-cols-2">
         <SectionCard
-          title="Unpaid customers"
+          title={t('dashboard.unpaid_customers')}
           subtitle="Customers with outstanding sales balances"
         >
           <div className="space-y-4">
@@ -225,7 +240,7 @@ export function DashboardPage() {
               <div key={item.id} className="flex items-center justify-between rounded-2xl bg-amber-50 p-4 border border-amber-100">
                 <div>
                   <p className="font-semibold text-amber-900">{item.name}</p>
-                  <p className="text-xs text-amber-700">Due since {item.date}</p>
+                  <p className="text-xs text-amber-700">{t('dashboard.due_since')} {item.date}</p>
                 </div>
                 <p className="font-bold text-amber-600">{item.amount}</p>
               </div>
@@ -236,7 +251,7 @@ export function DashboardPage() {
         </SectionCard>
 
         <SectionCard
-          title="Unpaid suppliers"
+          title={t('dashboard.unpaid_suppliers')}
           subtitle="Outstanding balances owed to suppliers"
         >
           <div className="space-y-4">
@@ -244,7 +259,7 @@ export function DashboardPage() {
               <div key={item.id} className="flex items-center justify-between rounded-2xl bg-rose-50 p-4 border border-rose-100">
                 <div>
                   <p className="font-semibold text-rose-900">{item.name}</p>
-                  <p className="text-xs text-rose-700">Owed from {item.date}</p>
+                  <p className="text-xs text-rose-700">{t('dashboard.owed_from')} {item.date}</p>
                 </div>
                 <p className="font-bold text-rose-600">{item.amount}</p>
               </div>
@@ -254,6 +269,7 @@ export function DashboardPage() {
           </div>
         </SectionCard>
       </div>
+
     </div>
   );
 }

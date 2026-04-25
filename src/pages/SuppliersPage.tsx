@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Building2, Eye, Pencil, Plus, Printer, Search, Trash2, X } from "lucide-react";
+
 import { useAuth } from "../context/AuthContext";
 import { useNotification } from "../context/NotificationContext";
 import { SectionCard } from "../components/ui/SectionCard";
@@ -49,7 +51,9 @@ function makeSupplierRow(supplier: SupplierMetrics): SupplierRow {
 }
 
 export function SuppliersPage() {
+  const { t } = useTranslation();
   const { can } = useAuth();
+
   const { showToast, confirm } = useNotification();
   const [search, setSearch] = useState("");
   const [rows, setRows] = useState<SupplierRow[]>([]);
@@ -160,12 +164,12 @@ export function SuppliersPage() {
     if (selectedSupplier?.id === nextRow.id) {
       setSelectedSupplier(nextRow);
     }
-    showToast("success", formValues.id ? "Supplier updated successfully!" : "Supplier created successfully!");
+    showToast("success", formValues.id ? t('suppliers.success.updated') : t('suppliers.success.created'));
     setFormOpen(false);
   }
 
   async function deleteSupplier(id: string) {
-    const confirmed = await confirm("Delete Supplier", "Are you sure you want to delete this supplier? This action cannot be undone.");
+    const confirmed = await confirm(t('suppliers.modal.delete_title'), t('suppliers.modal.delete_desc'));
     if (!confirmed) return;
 
     try {
@@ -175,7 +179,7 @@ export function SuppliersPage() {
         if (selectedSupplier?.id === id) {
           setSelectedSupplier(null);
         }
-        showToast("success", "Supplier deleted.");
+        showToast("success", t('suppliers.success.deleted'));
       });
     } catch (error) {
       console.error("Failed to delete supplier:", error);
@@ -193,11 +197,12 @@ export function SuppliersPage() {
   return (
     <div className="space-y-6">
       <div className="mb-2">
-        <p className="text-sm font-semibold uppercase tracking-[0.25em] text-brand-600">Operations</p>
-        <h2 className="mt-1 text-3xl font-bold text-ink">Supplier Registry</h2>
+        <p className="text-sm font-semibold uppercase tracking-[0.25em] text-brand-600">{t('dashboard.stats.suppliers')}</p>
+        <h2 className="mt-1 text-3xl font-bold text-ink">{t('suppliers.title')}</h2>
       </div>
 
-      <SectionCard title="Supplier directory" subtitle="Track all supplier records, balances, and quick actions">
+
+      <SectionCard title={t('suppliers.title')} subtitle={t('suppliers.subtitle')}>
         <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <label className="flex w-full max-w-xl items-center gap-3 rounded-2xl border border-brand-100 bg-gradient-to-r from-brand-50 to-white px-4 py-3">
             <Search size={16} className="text-brand-500" />
@@ -205,17 +210,19 @@ export function SuppliersPage() {
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               className="w-full border-none bg-transparent text-sm outline-none"
-              placeholder="Search supplier, contact, phone or location"
+              placeholder={t('suppliers.search_placeholder')}
             />
           </label>
+
           {can("Suppliers", "add") && (
             <button
               onClick={openCreateModal}
               className="flex items-center justify-center gap-2 rounded-2xl bg-brand-500 px-5 py-3 text-sm font-semibold text-white transition hover:bg-brand-600"
             >
               <Plus size={18} />
-              Create supplier
+              {t('suppliers.new_supplier')}
             </button>
+
           )}
         </div>
 
@@ -225,16 +232,17 @@ export function SuppliersPage() {
               <thead className="bg-gradient-to-r from-slate-900 via-slate-800 to-brand-700 text-white">
                 <tr>
                   {[
-                    "Supplier Name",
-                    "Contact",
-                    "Total Purchase",
-                    "Unpaid Amount",
-                    "Actions",
+                    t('suppliers.table.name'),
+                    t('suppliers.table.contact'),
+                    t('suppliers.table.total_purchase'),
+                    t('suppliers.table.unpaid'),
+                    t('common.actions'),
                   ].map((column) => (
                     <th key={column} className="border-b border-white/10 px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-100">
                       {column}
                     </th>
                   ))}
+
                 </tr>
               </thead>
               <tbody className="bg-white">
@@ -261,7 +269,7 @@ export function SuppliersPage() {
                             <button
                               onClick={() => openEditModal(row)}
                               className="rounded-xl bg-sky-50 p-2 text-sky-600 transition hover:bg-sky-100"
-                              title="Edit Supplier"
+                              title={t('common.edit')}
                             >
                               <Pencil size={16} />
                             </button>
@@ -270,7 +278,7 @@ export function SuppliersPage() {
                             <button
                               onClick={() => deleteSupplier(row.id)}
                               className="rounded-xl bg-rose-50 p-2 text-rose-600 transition hover:bg-rose-100"
-                              title="Delete Supplier"
+                              title={t('common.delete')}
                             >
                               <Trash2 size={16} />
                             </button>
@@ -278,14 +286,14 @@ export function SuppliersPage() {
                           <button
                             onClick={() => setSelectedSupplier(row)}
                             className="rounded-xl bg-emerald-50 p-2 text-emerald-600 transition hover:bg-emerald-100"
-                            title="View Details"
+                            title={t('common.view')}
                           >
                             <Eye size={16} />
                           </button>
                           <button
                             onClick={() => handlePrint()}
                             className="rounded-xl bg-orange-50 p-2 text-orange-600 transition hover:bg-orange-100"
-                            title="Print Report"
+                            title={t('common.print')}
                           >
                             <Printer size={16} />
                           </button>
@@ -296,7 +304,7 @@ export function SuppliersPage() {
                 ) : (
                   <tr>
                     <td colSpan={5} className="px-5 py-10 text-center text-slate-500">
-                      No suppliers found in the database.
+                      {t('suppliers.no_suppliers')}
                     </td>
                   </tr>
                 )}
@@ -319,12 +327,13 @@ export function SuppliersPage() {
             <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
               <div>
                 <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-600">
-                  {formValues.id ? "Edit Supplier" : "Add Supplier"}
+                  {formValues.id ? t('suppliers.modal.edit_title') : t('suppliers.modal.create_title')}
                 </p>
                 <h2 className="mt-1 text-2xl font-bold text-ink">
-                  {formValues.id ? formValues.name : "Create supplier profile"}
+                  {formValues.id ? formValues.name : t('suppliers.modal.subtitle')}
                 </h2>
               </div>
+
               <button onClick={() => setFormOpen(false)} className="rounded-full bg-slate-100 p-2 text-slate-600">
                 <X size={18} />
               </button>
@@ -332,13 +341,13 @@ export function SuppliersPage() {
 
             <div className="grid gap-3 overflow-y-auto px-5 py-4 md:grid-cols-2">
               {[
-                { label: "Supplier Name", value: formValues.name, key: "name" },
-                { label: "Location", value: formValues.location, key: "location" },
-                { label: "Contact", value: formValues.contact, key: "contact" },
-                { label: "Phone", value: formValues.phone, key: "phone" },
-                { label: "TIN Number", value: formValues.tinNumber, key: "tinNumber" },
-                { label: "Payment Term", value: formValues.paymentTerm, key: "paymentTerm" },
-                { label: "Bank Account", value: formValues.bankAccount, key: "bankAccount" },
+                { label: t('suppliers.modal.name'), value: formValues.name, key: "name" },
+                { label: t('suppliers.modal.location'), value: formValues.location, key: "location" },
+                { label: t('suppliers.modal.contact'), value: formValues.contact, key: "contact" },
+                { label: t('suppliers.modal.phone'), value: formValues.phone, key: "phone" },
+                { label: t('suppliers.modal.tin'), value: formValues.tinNumber, key: "tinNumber" },
+                { label: t('suppliers.modal.payment_term'), value: formValues.paymentTerm, key: "paymentTerm" },
+                { label: t('suppliers.modal.bank_account'), value: formValues.bankAccount, key: "bankAccount" },
               ].map(({ label, value, key }) => (
                 <label key={key} className="rounded-2xl bg-slate-50 p-3">
                   <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{label}</span>
@@ -352,12 +361,13 @@ export function SuppliersPage() {
               ))}
             </div>
 
+
             <div className="flex items-center justify-end gap-3 border-t border-slate-100 px-5 py-4">
               <button onClick={() => setFormOpen(false)} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100">
-                Cancel
+                {t('common.cancel')}
               </button>
               <button onClick={saveSupplier} className="rounded-2xl bg-brand-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-brand-700">
-                Save Supplier
+                {t('suppliers.modal.save_btn')}
               </button>
             </div>
           </div>

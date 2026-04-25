@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useNotification } from "../context/NotificationContext";
+
 import { ArrowRightLeft, Pencil, Plus, Search, Trash2, X, Eye, Printer, ChevronRight } from "lucide-react";
 import { SectionCard } from "../components/ui/SectionCard";
 import { Pagination } from "../components/ui/Pagination";
@@ -70,7 +72,9 @@ const emptyTransferForm: TransferForm = {
 };
 
 export function StockPage() {
+  const { t } = useTranslation();
   const { profile, can, activeLocationId } = useAuth();
+
   const { showToast } = useNotification();
   const { refreshData } = usePosData();
   const [products, setProducts] = useState<CountingLine[]>([]);
@@ -255,7 +259,7 @@ export function StockPage() {
 
   function openCountingModal(record?: CountingRecord) {
     if (record) {
-      showToast("info", "Viewing previously completed counts is read-only.");
+      showToast("info", t('stock.counts.read_only_info'));
       return;
     }
     const defaultLoc = profile?.location_id || (locations.length > 0 ? locations[0].id : "");
@@ -266,7 +270,7 @@ export function StockPage() {
 
   function openTransferModal(record?: TransferRecord) {
     if (record) {
-      showToast("info", "Viewing previously completed transfers is read-only.");
+      showToast("info", t('stock.transfers.read_only_info'));
       return;
     }
     const defaultFrom = profile?.location_id || (locations.length > 0 ? locations[0].id : "");
@@ -313,7 +317,7 @@ export function StockPage() {
     // Ensure we have a valid database user ID (UUID)
     const userId = profile?.id;
     if (!userId) {
-      showToast("error", "Error: Your user profile could not be loaded. Please refresh the page and try again.");
+      showToast("error", t('stock.errors.profile_load'));
       console.error("Save failed: Profile ID is missing", profile);
       return;
     }
@@ -335,7 +339,7 @@ export function StockPage() {
       setCountingForm(emptyCountingForm);
       await loadStockData();
       await refreshData();
-      showToast("success", "Stock count saved successfully!");
+      showToast("success", t('stock.success.count_saved'));
     } catch (error: any) {
       console.error("Stock Count Error:", error);
       
@@ -351,13 +355,13 @@ export function StockPage() {
   async function saveTransfer() {
     if (!transferForm.lines.length || transferForm.fromLocationId === transferForm.toLocationId || !transferForm.fromLocationId || !transferForm.toLocationId) return;
     if (transferForm.lines.some((line) => line.sendQty > line.availableQty)) {
-        showToast("warning", "Cannot send more than available quantity.");
+        showToast("warning", t('stock.errors.transfer_limit'));
         return;
     }
 
     const userId = profile?.id;
     if (!userId) {
-      showToast("error", "Error: Your user profile could not be loaded. Please refresh the page and try again.");
+      showToast("error", t('stock.errors.profile_load'));
       console.error("Transfer failed: Profile ID is missing", profile);
       return;
     }
@@ -378,7 +382,7 @@ export function StockPage() {
       setTransferForm(emptyTransferForm);
       await loadStockData();
       await refreshData();
-      showToast("success", "Stock transfer recorded successfully!");
+      showToast("success", t('stock.success.transfer_saved'));
     } catch (error: any) {
       console.error("Stock Transfer Error:", error);
       
@@ -398,7 +402,7 @@ export function StockPage() {
       setStatusUpdateTransfer(null);
       await loadStockData();
       await refreshData();
-      showToast("success", "Transfer status updated.");
+      showToast("success", t('stock.success.status_updated'));
     } catch (error: any) {
       showToast("error", `Failed to update status: ${error.message}`);
     }
@@ -415,13 +419,14 @@ export function StockPage() {
   return (
     <div className="space-y-6">
       <div className="mb-2">
-        <p className="text-sm font-semibold uppercase tracking-[0.25em] text-brand-600">Operations</p>
+        <p className="text-sm font-semibold uppercase tracking-[0.25em] text-brand-600">{t('stock.title')}</p>
         <h2 className="mt-1 text-3xl font-bold text-ink">
-          Inventory Control {activeLocationId && locations.find(l => l.id === activeLocationId) ? `— ${locations.find(l => l.id === activeLocationId)?.name}` : ""}
+          {t('stock.title')} {activeLocationId && locations.find(l => l.id === activeLocationId) ? `— ${locations.find(l => l.id === activeLocationId)?.name}` : ""}
         </h2>
       </div>
 
-      <SectionCard title="Stock counts" subtitle="Track physical stock takes and adjustment requests.">
+
+      <SectionCard title={t('stock.counts.title')} subtitle={t('stock.counts.subtitle')}>
         <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <label className="flex w-full max-w-xl items-center gap-3 rounded-2xl border border-brand-100 bg-gradient-to-r from-brand-50 to-white px-4 py-3">
             <Search size={16} className="text-brand-500" />
@@ -429,7 +434,7 @@ export function StockPage() {
               value={countingSearch}
               onChange={(event) => setCountingSearch(event.target.value)}
               className="w-full border-none bg-transparent text-sm outline-none"
-              placeholder="Search stock count, location or recorder"
+              placeholder={t('stock.counts.search_placeholder')}
             />
           </label>
           {can("Stock", "add") && (
@@ -438,10 +443,11 @@ export function StockPage() {
               className="flex items-center justify-center gap-2 rounded-2xl bg-brand-500 px-5 py-3 text-sm font-semibold text-white transition hover:bg-brand-600"
             >
               <Plus size={16} />
-              New Count
+              {t('stock.counts.new_count')}
             </button>
           )}
         </div>
+
 
         <div className="overflow-hidden rounded-3xl border border-brand-100 shadow-[0_20px_50px_rgba(37,99,235,0.08)]">
           <div className="overflow-x-auto">
@@ -449,11 +455,11 @@ export function StockPage() {
               <thead className="bg-gradient-to-r from-slate-900 via-slate-800 to-brand-700 text-white">
                 <tr>
                   {[
-                    "Count",
-                    "Stock Location",
-                    "Recorder",
-                    "Date",
-                    "Actions",
+                    t('stock.counts.table.count'),
+                    t('stock.counts.table.location'),
+                    t('stock.counts.table.recorder'),
+                    t('stock.counts.table.date'),
+                    t('common.actions'),
                   ].map((column) => (
                     <th key={column} className="border-b border-white/10 px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-100">
                       {column}
@@ -461,6 +467,7 @@ export function StockPage() {
                   ))}
                 </tr>
               </thead>
+
               <tbody className="bg-white">
                 {paginatedCountings.length > 0 ? (
                   paginatedCountings.map((count) => (
@@ -502,7 +509,7 @@ export function StockPage() {
                 ) : (
                   <tr>
                     <td colSpan={5} className="px-5 py-10 text-center text-slate-500">
-                      No stock count records available.
+                      {t('stock.counts.no_records')}
                     </td>
                   </tr>
                 )}
@@ -519,7 +526,7 @@ export function StockPage() {
         </div>
       </SectionCard>
 
-      <SectionCard title="Stock transfers" subtitle="Monitor stock movement between locations.">
+      <SectionCard title={t('stock.transfers.title')} subtitle={t('stock.transfers.subtitle')}>
         <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <label className="flex w-full max-w-xl items-center gap-3 rounded-2xl border border-brand-100 bg-gradient-to-r from-brand-50 to-white px-4 py-3">
             <Search size={16} className="text-brand-500" />
@@ -527,7 +534,7 @@ export function StockPage() {
               value={transferSearch}
               onChange={(event) => setTransferSearch(event.target.value)}
               className="w-full border-none bg-transparent text-sm outline-none"
-              placeholder="Search transfer ID, origin or destination"
+              placeholder={t('stock.transfers.search_placeholder')}
             />
           </label>
           {can("Stock", "add") && (
@@ -536,10 +543,11 @@ export function StockPage() {
               className="flex items-center justify-center gap-2 rounded-2xl bg-brand-500 px-5 py-3 text-sm font-semibold text-white transition hover:bg-brand-600"
             >
               <Plus size={16} />
-              New Transfer
+              {t('stock.transfers.new_transfer')}
             </button>
           )}
         </div>
+
 
         <div className="overflow-hidden rounded-3xl border border-brand-100 shadow-[0_20px_50px_rgba(37,99,235,0.08)]">
           <div className="overflow-x-auto">
@@ -547,12 +555,12 @@ export function StockPage() {
               <thead className="bg-gradient-to-r from-slate-900 via-slate-800 to-brand-700 text-white">
                 <tr>
                   {[
-                    "Transfer",
-                    "From",
-                    "To",
-                    "Status",
-                    "Created",
-                    "Actions",
+                    t('stock.transfers.table.transfer'),
+                    t('stock.transfers.table.from'),
+                    t('stock.transfers.table.to'),
+                    t('stock.transfers.table.status'),
+                    t('stock.transfers.table.date'),
+                    t('common.actions'),
                   ].map((column) => (
                     <th key={column} className="border-b border-white/10 px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-100">
                       {column}
@@ -560,6 +568,7 @@ export function StockPage() {
                   ))}
                 </tr>
               </thead>
+
               <tbody className="bg-white">
                 {paginatedTransfers.length > 0 ? (
                   paginatedTransfers.map((transfer) => {
@@ -599,9 +608,12 @@ export function StockPage() {
                             className={`rounded-full border px-3 py-1 text-[11px] font-bold uppercase tracking-wider transition hover:brightness-95 disabled:hover:brightness-100 ${statusColors[transfer.status]}`}
                           >
                             <div className="flex items-center gap-1.5">
-                              {transfer.status}
+                              {transfer.status === "Pending" ? t('stock.transfers.status.pending') :
+                               transfer.status === "In Transit" ? t('stock.transfers.status.in_transit') :
+                               t('stock.transfers.status.completed')}
                               {transfer.status !== 'Completed' && <ArrowRightLeft size={10} />}
                             </div>
+
                           </button>
                         </td>
                         <td className="border-b border-slate-100 px-5 py-4 text-slate-500">{transfer.createdAt}</td>
@@ -633,7 +645,7 @@ export function StockPage() {
                 ) : (
                   <tr>
                     <td colSpan={6} className="px-5 py-10 text-center text-slate-500">
-                      No stock transfer records available.
+                      {t('stock.transfers.no_records')}
                     </td>
                   </tr>
                 )}
@@ -655,38 +667,41 @@ export function StockPage() {
           <div className="w-full max-w-3xl rounded-[2rem] border border-slate-200 bg-white p-6 shadow-soft" onClick={(e) => e.stopPropagation()}>
             <div className="mb-5 flex items-center justify-between">
               <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.22em] text-brand-600">Inventory Control</p>
-                <h2 className="mt-2 text-2xl font-bold text-ink">{countingForm.id ? "Edit Stock Count" : "New Stock Count"}</h2>
+                <p className="text-sm font-semibold uppercase tracking-[0.22em] text-brand-600">{t('stock.title')}</p>
+                <h2 className="mt-2 text-2xl font-bold text-ink">{countingForm.id ? t('stock.counts.edit_title') : t('stock.counts.create_title')}</h2>
               </div>
               <button type="button" onClick={() => setCountingModalOpen(false)} className="rounded-full bg-slate-100 p-2 text-slate-600 transition hover:bg-slate-200">
                 <X size={18} />
               </button>
             </div>
+
             
             <div className="mb-6 grid gap-4 lg:grid-cols-[1fr_auto]">
               <div className="rounded-2xl border border-brand-100 bg-brand-50 p-4">
-                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-brand-700">Stock Location</p>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-brand-700">{t('stock.counts.modal.location')}</p>
                 <select
                   value={countingForm.locationId}
                   onChange={(e) => setCountingForm((prev) => ({ ...prev, locationId: e.target.value }))}
                   className="w-full rounded-xl border border-sky-100 bg-white px-4 py-2 text-sm outline-none mb-4"
                 >
-                  <option value="" disabled>Select Location</option>
+                  <option value="" disabled>{t('stock.counts.modal.select_location')}</option>
+
                   {locations.map((loc) => (
                     <option key={loc.id} value={loc.id}>{loc.name}</option>
                   ))}
                 </select>
 
-                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-brand-700">Notes (Optional)</p>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-brand-700">{t('stock.counts.modal.notes')}</p>
                 <input
                   value={countingForm.notes}
                   onChange={(e) => setCountingForm((prev) => ({ ...prev, notes: e.target.value }))}
-                  placeholder="e.g. End of month review"
+                  placeholder={t('stock.counts.modal.notes_placeholder')}
                   className="w-full rounded-xl border border-sky-100 bg-white px-4 py-2 text-sm outline-none"
                 />
+
               </div>
               <div className="rounded-2xl border border-brand-100 bg-brand-50 p-4">
-                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-brand-700">Add Products</p>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-brand-700">{t('stock.counts.modal.add_products')}</p>
                 <div className="relative">
                   <div className="flex gap-2 text-ink">
                     <div className="relative flex-1">
@@ -695,8 +710,9 @@ export function StockPage() {
                         value={countingProductSearch}
                         onChange={(e) => setCountingProductSearch(e.target.value)}
                         className="w-full rounded-xl border border-sky-100 bg-white pl-9 pr-4 py-2 text-sm outline-none shadow-sm"
-                        placeholder="Search products..."
+                        placeholder={t('stock.counts.modal.search_products')}
                       />
+
                     </div>
                     <button
                       type="button"
@@ -729,12 +745,12 @@ export function StockPage() {
               <table className="min-w-full text-sm">
                 <thead className="sticky top-0 bg-slate-100">
                   <tr className="text-left text-xs font-semibold uppercase tracking-[0.1em] text-slate-500">
-                    <th className="px-4 py-3">Item Name</th>
-                    <th className="px-4 py-3">Sys Qty</th>
-                    <th className="px-4 py-3">Amount</th>
-                    <th className="px-4 py-3">Mode</th>
-                    <th className="px-4 py-3">Reason</th>
-                    <th className="px-4 py-3 text-right">Remove</th>
+                    <th className="px-4 py-3">{t('stock.counts.modal.table.name')}</th>
+                    <th className="px-4 py-3">{t('stock.counts.modal.table.system_qty')}</th>
+                    <th className="px-4 py-3">{t('stock.counts.modal.table.counted_qty')}</th>
+                    <th className="px-4 py-3">{t('stock.counts.modal.table.mode')}</th>
+                    <th className="px-4 py-3">{t('stock.counts.modal.table.reason')}</th>
+                    <th className="px-4 py-3 text-right">{t('common.remove')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 bg-white">
@@ -814,9 +830,10 @@ export function StockPage() {
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={6} className="px-4 py-6 text-center text-slate-500">No items added. Search above.</td>
+                      <td colSpan={6} className="px-4 py-6 text-center text-slate-500">{t('stock.counts.modal.no_items')}</td>
                     </tr>
                   )}
+
                 </tbody>
               </table>
             </div>
@@ -834,23 +851,25 @@ export function StockPage() {
           <div className="w-full max-w-4xl rounded-[2rem] border border-slate-200 bg-white p-6 shadow-soft" onClick={(e) => e.stopPropagation()}>
             <div className="mb-5 flex items-center justify-between">
               <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.22em] text-brand-600">Stock Exchange</p>
-                <h2 className="mt-2 text-2xl font-bold text-ink">{transferForm.id ? "Edit Stock Transfer" : "New Stock Transfer"}</h2>
+                <p className="text-sm font-semibold uppercase tracking-[0.22em] text-brand-600">{t('stock.transfers.title')}</p>
+                <h2 className="mt-2 text-2xl font-bold text-ink">{transferForm.id ? t('stock.transfers.edit_title') : t('stock.transfers.create_title')}</h2>
               </div>
               <button type="button" onClick={() => setTransferModalOpen(false)} className="rounded-full bg-slate-100 p-2 text-slate-600 transition hover:bg-slate-200">
                 <X size={18} />
               </button>
             </div>
+
             
             <div className="mb-6 grid gap-4 md:grid-cols-3">
               <div className="rounded-2xl border border-brand-100 bg-brand-50 p-4">
-                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-brand-700">Origin Site</p>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-brand-700">{t('stock.transfers.modal.origin')}</p>
                 <select
                   value={transferForm.fromLocationId}
                   onChange={(e) => setTransferForm((prev) => ({ ...prev, fromLocationId: e.target.value }))}
                   className="w-full rounded-xl border border-sky-100 bg-white px-4 py-2 text-sm outline-none"
                 >
-                  <option value="" disabled>Select Origin</option>
+                  <option value="" disabled>{t('stock.transfers.modal.select_origin')}</option>
+
                   {locations.map((loc) => (
                     <option key={loc.id} value={loc.id}>{loc.name}</option>
                   ))}
@@ -862,13 +881,14 @@ export function StockPage() {
               </div>
 
               <div className="rounded-2xl border border-brand-100 bg-brand-50 p-4">
-                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-brand-700">Destination Site</p>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-brand-700">{t('stock.transfers.modal.destination')}</p>
                 <select
                   value={transferForm.toLocationId}
                   onChange={(e) => setTransferForm((prev) => ({ ...prev, toLocationId: e.target.value }))}
                   className="w-full rounded-xl border border-sky-100 bg-white px-4 py-2 text-sm outline-none"
                 >
-                  <option value="" disabled>Select Destination</option>
+                  <option value="" disabled>{t('stock.transfers.modal.select_destination')}</option>
+
                   {locations.map((loc) => (
                     <option key={loc.id} value={loc.id}>{loc.name}</option>
                   ))}
@@ -878,17 +898,18 @@ export function StockPage() {
             
             <div className="mb-4 grid gap-4 lg:grid-cols-[1fr_auto]">
               <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
-                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-700">Transfer Status</p>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-700">{t('stock.transfers.modal.status')}</p>
                 <select
                   value={transferForm.status}
                   onChange={(e) => setTransferForm((prev) => ({ ...prev, status: e.target.value as TransferStatus }))}
                   className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm outline-none"
                 >
-                  <option value="Pending">Pending</option>
-                  <option value="In Transit">In Transit</option>
-                  <option value="Completed">Completed</option>
+                  <option value="Pending">{t('stock.transfers.status.pending')}</option>
+                  <option value="In Transit">{t('stock.transfers.status.in_transit')}</option>
+                  <option value="Completed">{t('stock.transfers.status.completed')}</option>
                 </select>
               </div>
+
               
               <div className="rounded-2xl border border-indigo-100 bg-indigo-50 p-4">
                 <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-indigo-700">Add Products</p>
@@ -922,12 +943,13 @@ export function StockPage() {
               <table className="min-w-full text-sm">
                 <thead className="sticky top-0 bg-slate-100">
                   <tr className="text-left text-xs font-semibold uppercase tracking-[0.1em] text-slate-500">
-                    <th className="px-4 py-3">Item Name</th>
-                    <th className="px-4 py-3">Avail in Origin</th>
-                    <th className="px-4 py-3">Send Qty</th>
-                    <th className="px-4 py-3 text-right">Remove</th>
+                    <th className="px-4 py-3">{t('stock.transfers.modal.table.name')}</th>
+                    <th className="px-4 py-3">{t('stock.transfers.modal.table.available')}</th>
+                    <th className="px-4 py-3">{t('stock.transfers.modal.table.qty')}</th>
+                    <th className="px-4 py-3 text-right">{t('common.remove')}</th>
                   </tr>
                 </thead>
+
                 <tbody className="divide-y divide-slate-200 bg-white">
                   {transferForm.lines.length > 0 ? (
                     transferForm.lines.map((line, idx) => (
@@ -989,7 +1011,7 @@ export function StockPage() {
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/45 px-4 backdrop-blur-sm print:contents" onClick={() => setSelectedCount(null)}>
           <div className="w-full max-w-2xl rounded-[2rem] border border-slate-200 bg-white p-8 shadow-soft print:shadow-none print:border-none print:p-0" onClick={(e) => e.stopPropagation()}>
             <div className="mb-8 flex items-center justify-between print:hidden">
-              <h3 className="text-xl font-bold text-ink">Count Details</h3>
+              <h3 className="text-xl font-bold text-ink">{t('stock.counts.details_title')}</h3>
               <button 
                 onClick={() => setSelectedCount(null)} 
                 className="rounded-full bg-slate-100 p-2 text-slate-600 transition hover:bg-slate-200"
@@ -997,6 +1019,7 @@ export function StockPage() {
                 <X size={18} />
               </button>
             </div>
+
 
             <div id="printable-count" className="print:block">
               <div className="mb-6 flex items-center justify-between border-b pb-6">
@@ -1026,14 +1049,15 @@ export function StockPage() {
                 <table className="w-full text-sm">
                   <thead className="bg-slate-50">
                     <tr className="text-left text-xs font-bold uppercase tracking-widest text-slate-500">
-                      <th className="px-4 py-3">Product Name</th>
-                      <th className="px-4 py-3">System Qty</th>
-                      <th className="px-4 py-3">Counted</th>
-                      <th className="px-4 py-3">Mode</th>
-                      <th className="px-4 py-3">Reason</th>
-                      <th className="px-4 py-3 text-right">Final Qty</th>
+                      <th className="px-4 py-3">{t('stock.counts.modal.table.name')}</th>
+                      <th className="px-4 py-3">{t('stock.counts.modal.table.system_qty')}</th>
+                      <th className="px-4 py-3">{t('stock.counts.modal.table.counted_qty')}</th>
+                      <th className="px-4 py-3">{t('stock.counts.modal.table.mode')}</th>
+                      <th className="px-4 py-3">{t('stock.counts.modal.table.reason')}</th>
+                      <th className="px-4 py-3 text-right">{t('stock.counts.modal.table.final')}</th>
                     </tr>
                   </thead>
+
                   <tbody className="divide-y divide-slate-100 bg-white">
                     {selectedCount.lines.map((line) => (
                       <tr key={line.id}>
@@ -1069,8 +1093,9 @@ export function StockPage() {
                 className="flex items-center justify-center gap-2 rounded-2xl bg-brand-500 px-8 py-3 text-sm font-semibold text-white hover:bg-brand-600"
               >
                 <Printer size={18} />
-                Print Report
+                {t('common.print')}
               </button>
+
             </div>
           </div>
         </div>

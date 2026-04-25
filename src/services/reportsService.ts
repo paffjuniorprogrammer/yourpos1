@@ -9,7 +9,17 @@ export type ReportCard = {
   title: string;
   value: string;
   meta: string;
+  color?: string;
 };
+
+export type FinancialSummary = {
+  totalSales: number;
+  totalCost: number;
+  grossProfit: number;
+  taxCollected: number;
+  netIncome: number;
+};
+
 
 export async function getReportCards(forceRefresh = false): Promise<ReportCard[]> {
   const now = Date.now();
@@ -228,3 +238,52 @@ export async function getRecentReturns(limit = 10) {
   if (error) throw error;
   return data;
 }
+
+export async function getFinancialReport(startDate: string, endDate: string): Promise<FinancialSummary> {
+  const client = await ensureSupabaseConfigured();
+  
+  // 1. Get all paid sales in range
+  const { data: sales, error: salesError } = await client
+    .from('sales')
+    .select('id, total_amount, tax_amount')
+    .gte('created_at', `${startDate}T00:00:00.000Z`)
+    .lte('created_at', `${endDate}T23:59:59.999Z`)
+    .eq('payment_status', 'paid');
+    
+  if (salesError) throw salesError;
+  
+  const totalSales = sales?.reduce((sum, s) => sum + Number(s.total_amount), 0) || 0;
+  const taxCollected = sales?.reduce((sum, s) => sum + Number(s.tax_amount), 0) || 0;
+  
+  // 2. Get all sale items for these sales to calculate cost
+  const saleIds = sales?.map(s => s.id) || [];
+  if (saleIds.length === 0) {
+    return { totalSales: 0, totalCost: 0, grossProfit: 0, taxCollected: 0, netIncome: 0 };
+  }
+  
+  // We fetch in chunks if there are too many sales (supabase 'in' limit is usually ~1000)
+  // For now, simpler:
+  const { data: items, error: itemsError } = await client
+    .from('sale_items')
+    .select('quantity, products(cost_price)')
+    .in('sale_id', saleIds);
+    
+  if (itemsError) throw itemsError;
+  
+  let totalCost = 0;
+  items?.forEach(item => {
+    const cost = (item.products as any)?.cost_price || 0;
+    totalCost += cost * Number(item.quantity);
+  });
+  
+  const grossProfit = totalSales - totalCost;
+  const netIncome = grossProfit - taxCollected;
+  
+  return {
+    totalSales,
+    totalCost,
+    grossProfit,
+    taxCollected,
+    netIncome
+  };
+}

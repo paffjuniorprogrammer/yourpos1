@@ -4,6 +4,7 @@ import { supabase, supabaseConfigured } from "../lib/supabase";
 import { getCurrentProfile, getSession, signInWithPassword, signOut } from "../services/authService";
 import type { AppRole, UserProfile, LocationRecord, BusinessRecord } from "../types/database";
 import { LoadingPOS } from "../components/ui/LoadingPOS";
+import i18n from "../i18n";
 
 type AuthContextValue = {
   session: Session | null;
@@ -31,6 +32,12 @@ async function loadProfile(session: Session | null) {
   }
 
   return getCurrentProfile(session.user.id);
+}
+
+function applyProfileLanguage(profile: UserProfile | null) {
+  if (profile?.language && profile.language !== i18n.language) {
+    i18n.changeLanguage(profile.language);
+  }
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -131,6 +138,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setProfile(currentProfile);
             setBusiness(currentProfile.business || null);
             localStorage.setItem("cached_user_profile", JSON.stringify(currentProfile));
+            applyProfileLanguage(currentProfile);
           }
         }
       } catch (err) {
@@ -160,6 +168,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (isMounted) {
             setProfile(nextProfile);
             setBusiness(nextProfile?.business || null);
+            if (nextProfile) applyProfileLanguage(nextProfile);
           }
         })
         .catch((err) => {
@@ -195,6 +204,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setProfile(profile);
           setBusiness(profile.business || null);
           localStorage.setItem("cached_user_profile", JSON.stringify(profile));
+          applyProfileLanguage(profile);
         }
         return profile;
       },

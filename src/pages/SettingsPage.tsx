@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { AppRole, LocationRecord } from "../types/database";
-import { Trash2, Building2, Pencil, Plus, Search, ShieldCheck, WalletCards, X, MapPin, Edit, Code2, Key } from "lucide-react";
+import { Trash2, Building2, Pencil, Plus, Search, ShieldCheck, WalletCards, X, MapPin, Edit, Code2, Key, Globe } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useNotification } from "../context/NotificationContext";
 import {
@@ -17,12 +17,15 @@ import {
   deleteLocation,
   upsertUserLocations,
   resetStaffPassword,
+  updateUserLanguage,
 } from "../services/settingsService";
 import { listApiKeys, generateApiKey, revokeApiKey, type ApiKeyRecord } from "../services/apiService";
 import { UserPermissionRecord } from "../types/database";
 import { getFinanceOverview, type FinanceOverview } from "../services/dashboardService";
 import { SectionCard } from "../components/ui/SectionCard";
 import { useRealtimeSync } from "../hooks/useRealtimeSync";
+import { useTranslation } from "react-i18next";
+import i18n from "../i18n";
 
 type StaffPermission = {
   module: string;
@@ -64,7 +67,7 @@ type BusinessSettings = {
   taxPercentage: string;
 };
 
-type SettingsSection = "staff" | "business" | "finance" | "locations" | "api";
+type SettingsSection = "staff" | "business" | "finance" | "locations" | "api" | "preferences";
 
 const moduleTemplates = [
   { module: "Dashboard", view: true, add: false, edit: false, remove: false },
@@ -123,6 +126,7 @@ const financeCards = [
 ];
 
 export function SettingsPage() {
+  const { t } = useTranslation();
   const { authConfigured, profile } = useAuth();
   const { showToast, confirm } = useNotification();
   const [businessSettings, setBusinessSettings] = useState(initialBusinessSettings);
@@ -142,12 +146,37 @@ export function SettingsPage() {
   const [editingLocationId, setEditingLocationId] = useState<string | null>(null);
   const [editingLocationName, setEditingLocationName] = useState("");
   const [resetPasswordStaff, setResetPasswordStaff] = useState<StaffAccount | null>(null);
+  const [selectedLanguage, setSelectedLanguage] = useState<string>(profile?.language || i18n.language || 'en');
+  const [savingLanguage, setSavingLanguage] = useState(false);
   
   // API Keys state
   const [apiKeys, setApiKeys] = useState<ApiKeyRecord[]>([]);
   const [newKeyName, setNewKeyName] = useState("");
   const [generatedKey, setGeneratedKey] = useState<string | null>(null);
   const [loadingApiKeys, setLoadingApiKeys] = useState(false);
+
+  const handleSaveLanguage = async () => {
+    if (!profile?.id) return;
+    setSavingLanguage(true);
+    try {
+      await updateUserLanguage(profile.id, selectedLanguage);
+      await i18n.changeLanguage(selectedLanguage);
+      // Update cached profile
+      const cached = localStorage.getItem('cached_user_profile');
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          parsed.language = selectedLanguage;
+          localStorage.setItem('cached_user_profile', JSON.stringify(parsed));
+        } catch { /* ignore */ }
+      }
+      showToast('success', t('settings.personal.success'));
+    } catch (err: any) {
+      showToast('error', err.message || 'Failed to save language preference');
+    } finally {
+      setSavingLanguage(false);
+    }
+  };
 
   const loadSettingsAndStaff = async () => {
     try {
@@ -557,34 +586,35 @@ export function SettingsPage() {
   return (
     <div className="space-y-6">
       <div className="mb-2">
-        <p className="text-sm font-semibold uppercase tracking-[0.25em] text-brand-600">Preferences</p>
-        <h2 className="mt-1 text-3xl font-bold text-ink">System Settings</h2>
+        <p className="text-sm font-semibold uppercase tracking-[0.25em] text-brand-600">{t('settings.preferences')}</p>
+        <h2 className="mt-1 text-3xl font-bold text-ink">{t('settings.title')}</h2>
       </div>
 
 
       <div className="grid gap-4 md:grid-cols-3">
         <div className="rounded-3xl bg-white p-5 shadow-soft">
-          <p className="text-sm text-slate-500">Supabase Auth</p>
-          <p className="mt-2 text-2xl font-bold text-ink">{authConfigured ? "Connected" : "Not Configured"}</p>
+          <p className="text-sm text-slate-500">{t('settings.stats.auth')}</p>
+          <p className="mt-2 text-2xl font-bold text-ink">{authConfigured ? t('settings.status.connected') : t('settings.status.not_configured')}</p>
         </div>
         <div className="rounded-3xl bg-white p-5 shadow-soft">
-          <p className="text-sm text-slate-500">Current Admin</p>
-          <p className="mt-2 text-2xl font-bold text-ink">{profile?.full_name ?? "No active session"}</p>
+          <p className="text-sm text-slate-500">{t('settings.stats.admin')}</p>
+          <p className="mt-2 text-2xl font-bold text-ink">{profile?.full_name ?? t('settings.status.no_session')}</p>
         </div>
         <div className="rounded-3xl bg-white p-5 shadow-soft">
-          <p className="text-sm text-slate-500">Role</p>
-          <p className="mt-2 text-2xl font-bold text-ink">{profile?.role ?? "Unknown"}</p>
+          <p className="text-sm text-slate-500">{t('settings.stats.role')}</p>
+          <p className="mt-2 text-2xl font-bold text-ink">{profile?.role ?? t('settings.status.unknown')}</p>
         </div>
       </div>
 
       <div className="rounded-3xl bg-white p-3 shadow-soft">
         <div className="grid gap-2 md:grid-cols-3">
           {[
-            { id: "staff", label: "Staff Control", icon: ShieldCheck },
-            { id: "business", label: "Business Setup", icon: Building2 },
-            { id: "finance", label: "Finance Totals", icon: WalletCards },
-            { id: "locations", label: "Locations", icon: MapPin },
-            { id: "api", label: "Developer API", icon: Code2 },
+            { id: "preferences", label: t('settings.personal.title'), icon: Globe },
+            { id: "staff", label: t('settings.nav.staff'), icon: ShieldCheck },
+            { id: "business", label: t('settings.nav.business'), icon: Building2 },
+            { id: "finance", label: t('settings.nav.finance'), icon: WalletCards },
+            { id: "locations", label: t('settings.nav.locations'), icon: MapPin },
+            { id: "api", label: t('settings.nav.api'), icon: Code2 },
           ].map((section) => {
             const Icon = section.icon;
             const isActive = activeSection === section.id;
@@ -607,8 +637,51 @@ export function SettingsPage() {
         </div>
       </div>
 
+      {activeSection === "preferences" ? (
+        <SectionCard title={t('settings.personal.title')} subtitle={t('settings.personal.subtitle')}>
+          <div className="max-w-md space-y-5">
+            <div className="rounded-2xl bg-indigo-50 p-4">
+              <div className="flex items-center gap-3 mb-2">
+                <Globe size={18} className="text-indigo-600" />
+                <p className="text-sm font-semibold text-indigo-800">{t('settings.personal.language')}</p>
+              </div>
+              <p className="text-xs text-indigo-600 mb-4">{t('settings.personal.language_desc')}</p>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { code: 'en', label: 'English', flag: '🇬🇧' },
+                  { code: 'rw', label: 'Kinyarwanda', flag: '🇷🇼' },
+                  { code: 'fr', label: 'Français', flag: '🇫🇷' },
+                ].map(lang => (
+                  <button
+                    key={lang.code}
+                    onClick={() => setSelectedLanguage(lang.code)}
+                    className={`flex flex-col items-center gap-1.5 rounded-2xl border-2 p-3 text-sm font-semibold transition ${
+                      selectedLanguage === lang.code
+                        ? 'border-indigo-500 bg-indigo-100 text-indigo-800'
+                        : 'border-slate-200 bg-white text-slate-600 hover:border-indigo-300 hover:bg-indigo-50'
+                    }`}
+                  >
+                    <span className="text-2xl">{lang.flag}</span>
+                    <span className="text-xs">{lang.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <button
+              onClick={handleSaveLanguage}
+              disabled={savingLanguage}
+              className="inline-flex items-center gap-2 rounded-2xl bg-brand-500 px-6 py-3 text-sm font-semibold text-white shadow-[0_8px_20px_rgba(37,99,235,0.25)] transition hover:bg-brand-600 disabled:opacity-60"
+            >
+              <Globe size={16} />
+              {savingLanguage ? t('common.saving') : t('settings.personal.save_btn')}
+            </button>
+          </div>
+        </SectionCard>
+      ) : null}
+
       {activeSection === "staff" ? (
-        <SectionCard title="Staff user control" subtitle="Create cashier accounts and control which features each staff member can access">
+        <SectionCard title={t('settings.staff.title')} subtitle={t('settings.staff.subtitle')}>
           <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center">
             <label className="flex w-full items-center gap-3 rounded-2xl border border-brand-100 bg-gradient-to-r from-brand-50 to-white px-4 py-3">
               <Search size={16} className="text-brand-500" />
@@ -616,7 +689,7 @@ export function SettingsPage() {
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 className="w-full border-none bg-transparent text-sm outline-none"
-                placeholder="Search staff by name, email or role"
+                placeholder={t('settings.staff.search_placeholder')}
               />
             </label>
             <button
@@ -624,7 +697,7 @@ export function SettingsPage() {
               className="inline-flex items-center justify-center gap-2 rounded-2xl bg-brand-500 px-5 py-3 text-sm font-semibold text-white"
             >
               <Plus size={16} />
-              Create Staff Account
+              {t('settings.staff.add_btn')}
             </button>
           </div>
 
@@ -633,7 +706,7 @@ export function SettingsPage() {
               <table className="min-w-full border-separate border-spacing-0 text-sm">
                 <thead className="bg-gradient-to-r from-slate-900 via-slate-800 to-brand-700 text-white">
                   <tr>
-                    {["Staff", "Role", "Location", "Permissions", "Actions"].map((column) => (
+                    {[t('settings.staff.col_staff'), t('settings.staff.col_role'), t('settings.staff.col_location'), t('settings.staff.col_permissions'), t('settings.staff.col_actions')].map((column) => (
                       <th key={column} className="border-b border-white/10 px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-100">
                         {column}
                       </th>
@@ -658,7 +731,7 @@ export function SettingsPage() {
                           <span className="text-xs font-medium">
                             {(staff.assignedLocationIds?.length || 0) > 0 
                               ? locations.filter(l => staff.assignedLocationIds?.includes(l.id)).map(l => l.name).join(", ")
-                              : staff.role === "admin" ? "Global Access" : "No Locations"}
+                              : staff.role === "admin" ? t('settings.staff.global_access') : t('settings.staff.no_locations')}
                           </span>
                         </div>
                       </td>
@@ -676,21 +749,21 @@ export function SettingsPage() {
                         <button
                           onClick={() => setResetPasswordStaff(staff)}
                           className="rounded-xl bg-indigo-50 p-2 text-indigo-600 transition hover:bg-indigo-100"
-                          title="Reset Password"
+                          title={t('settings.staff.reset_pw')}
                         >
                           <Key size={16} />
                         </button>
                         <button
                           onClick={() => openEditStaffModal(staff)}
                           className="rounded-xl bg-sky-50 p-2 text-sky-600 transition hover:bg-sky-100"
-                          title="Edit Staff"
+                          title={t('settings.staff.edit_staff')}
                         >
                           <Pencil size={16} />
                         </button>
                         <button
                           onClick={() => deleteStaffAccount(staff.id)}
                           className="rounded-xl bg-rose-50 p-2 text-rose-600 transition hover:bg-rose-100"
-                          title="Delete Staff"
+                          title={t('settings.staff.delete_staff')}
                         >
                           <X size={16} />
                         </button>
@@ -706,10 +779,10 @@ export function SettingsPage() {
 
       {activeSection === "business" ? (
         <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
-          <SectionCard title="Business profile" subtitle="These settings can be used on receipts, POS header, sales printouts, and reports">
+          <SectionCard title={t('settings.business.title')} subtitle={t('settings.business.subtitle')}>
             <div className="grid gap-3">
               <label className="rounded-2xl bg-slate-50 p-3">
-                <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Business Name</span>
+                <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{t('settings.business.name')}</span>
                 <input
                   value={businessSettings.name}
                   onChange={(event) => setBusinessSettings((current) => ({ ...current, name: event.target.value }))}
@@ -717,7 +790,7 @@ export function SettingsPage() {
                 />
               </label>
               <label className="rounded-2xl bg-sky-50 p-3">
-                <span className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-700">Business Address</span>
+                <span className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-700">{t('settings.business.address')}</span>
                 <input
                   value={businessSettings.address}
                   onChange={(event) => setBusinessSettings((current) => ({ ...current, address: event.target.value }))}
@@ -725,7 +798,7 @@ export function SettingsPage() {
                 />
               </label>
               <label className="rounded-2xl bg-emerald-50 p-3">
-                <span className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Business Contact</span>
+                <span className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">{t('settings.business.contact')}</span>
                 <input
                   value={businessSettings.contact}
                   onChange={(event) => setBusinessSettings((current) => ({ ...current, contact: event.target.value }))}
@@ -733,7 +806,7 @@ export function SettingsPage() {
                 />
               </label>
               <div className="rounded-2xl bg-amber-50 p-3">
-                <span className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">Business Logo</span>
+                <span className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">{t('settings.business.logo')}</span>
                 <div className="mt-3 flex items-center gap-4">
                   {businessSettings.logoUrl ? (
                     <img src={businessSettings.logoUrl} alt="Logo Preview" className="h-16 w-16 rounded-xl object-contain bg-white shadow-sm" />
@@ -744,7 +817,7 @@ export function SettingsPage() {
                   )}
                   <label className="flex-1">
                     <div className="flex cursor-pointer items-center justify-center rounded-xl border-2 border-dashed border-amber-200 bg-white px-4 py-3 text-sm font-medium text-amber-700 transition hover:border-amber-400 hover:bg-amber-50/50">
-                      <span>Click to upload logo</span>
+                      <span>{t('settings.business.logo_upload')}</span>
                     </div>
                     <input
                       type="file"
@@ -759,17 +832,17 @@ export function SettingsPage() {
                     onClick={() => setBusinessSettings(c => ({ ...c, logoUrl: "" }))}
                     className="mt-2 text-xs text-rose-600 font-semibold hover:underline"
                   >
-                    Remove logo
+                    {t('settings.business.logo_remove')}
                   </button>
                 )}
               </div>
             </div>
           </SectionCard>
 
-          <SectionCard title="Profit And Tax" subtitle="Admin values that can be used as defaults across products, purchases, and reports">
+          <SectionCard title={t('settings.finance.title')} subtitle={t('settings.finance.subtitle')}>
             <div className="grid gap-3 md:grid-cols-2">
               <label className="rounded-2xl bg-brand-50 p-3">
-                <span className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-700">Default Profit %</span>
+                <span className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-700">{t('settings.finance.profit_label')}</span>
                 <input
                   value={businessSettings.defaultProfitPercentage}
                   onChange={(event) =>
@@ -779,7 +852,7 @@ export function SettingsPage() {
                 />
               </label>
               <label className="rounded-2xl bg-rose-50 p-3">
-                <span className="text-xs font-semibold uppercase tracking-[0.18em] text-rose-700">Tax %</span>
+                <span className="text-xs font-semibold uppercase tracking-[0.18em] text-rose-700">{t('settings.finance.tax_label')}</span>
                 <input
                   value={businessSettings.taxPercentage}
                   onChange={(event) =>
@@ -794,19 +867,19 @@ export function SettingsPage() {
               <div className="rounded-2xl bg-slate-50 p-4">
                 <div className="flex items-center gap-3">
                   <Building2 size={18} className="text-brand-600" />
-                  <p className="text-sm font-semibold text-ink">Default profit applied where needed</p>
+                  <p className="text-sm font-semibold text-ink">{t('settings.finance.profit_applied')}</p>
                 </div>
                 <p className="mt-2 text-sm text-slate-500">
-                  Product smart pricing, purchase suggestions, and report defaults can follow this percentage.
+                  {t('settings.finance.profit_desc')}
                 </p>
               </div>
               <div className="rounded-2xl bg-slate-50 p-4">
                 <div className="flex items-center gap-3">
                   <WalletCards size={18} className="text-rose-600" />
-                  <p className="text-sm font-semibold text-ink">Tax calculation base</p>
+                  <p className="text-sm font-semibold text-ink">{t('settings.finance.tax_calc')}</p>
                 </div>
                 <p className="mt-2 text-sm text-slate-500">
-                  Sales tax can be calculated from this admin percentage and shown in summaries and receipts.
+                  {t('settings.finance.tax_desc')}
                 </p>
               </div>
             </div>
@@ -818,7 +891,7 @@ export function SettingsPage() {
                 disabled={savingSettings}
                 className="rounded-2xl bg-brand-500 px-5 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {savingSettings ? "Saving..." : "Save Business Settings"}
+                {savingSettings ? t('common.saving') : t('settings.business.save_btn')}
               </button>
             </div>
           </SectionCard>
@@ -826,17 +899,17 @@ export function SettingsPage() {
       ) : null}
 
       {activeSection === "finance" ? (
-        <SectionCard title="Business Totals" subtitle="Quick overview of today, month, year, purchase usage, supplier dues, customer unpaid amounts, and calculated tax">
+        <SectionCard title={t('settings.totals.title')} subtitle={t('settings.totals.subtitle')}>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             {[
-              { title: "Sales Today", value: financeOverview ? `${Math.round(financeOverview.salesToday).toLocaleString()} RWF` : "Loading...", tone: "bg-sky-50 text-sky-700" },
-              { title: "Sales This Month", value: financeOverview ? `${Math.round(financeOverview.salesMonth).toLocaleString()} RWF` : "Loading...", tone: "bg-emerald-50 text-emerald-700" },
-              { title: "Sales This Year", value: financeOverview ? `${Math.round(financeOverview.salesYear).toLocaleString()} RWF` : "Loading...", tone: "bg-indigo-50 text-indigo-700" },
-              { title: "Purchases Total", value: financeOverview ? `${Math.round(financeOverview.purchasesTotal).toLocaleString()} RWF` : "Loading...", tone: "bg-amber-50 text-amber-700" },
-              { title: "Supplier Due Amount", value: financeOverview ? `${Math.round(financeOverview.supplierDue).toLocaleString()} RWF` : "Loading...", tone: "bg-rose-50 text-rose-700" },
-              { title: "All Paid To Suppliers", value: financeOverview ? `${Math.round(financeOverview.supplierPaid).toLocaleString()} RWF` : "Loading...", tone: "bg-emerald-50 text-emerald-700" },
-              { title: "Customer Unpaid Amount", value: financeOverview ? `${Math.round(financeOverview.customerUnpaid).toLocaleString()} RWF` : "Loading...", tone: "bg-orange-50 text-orange-700" },
-              { title: "Tax To Be Paid (Est.)", value: financeOverview ? `${Math.round(financeOverview.taxEstimation).toLocaleString()} RWF` : "Loading...", tone: "bg-brand-50 text-brand-700" },
+              { title: t('settings.totals.sales_today'), value: financeOverview ? `${Math.round(financeOverview.salesToday).toLocaleString()} RWF` : t('common.loading'), tone: "bg-sky-50 text-sky-700" },
+              { title: t('settings.totals.sales_month'), value: financeOverview ? `${Math.round(financeOverview.salesMonth).toLocaleString()} RWF` : t('common.loading'), tone: "bg-emerald-50 text-emerald-700" },
+              { title: t('settings.totals.sales_year'), value: financeOverview ? `${Math.round(financeOverview.salesYear).toLocaleString()} RWF` : t('common.loading'), tone: "bg-indigo-50 text-indigo-700" },
+              { title: t('settings.totals.purchases_total'), value: financeOverview ? `${Math.round(financeOverview.purchasesTotal).toLocaleString()} RWF` : t('common.loading'), tone: "bg-amber-50 text-amber-700" },
+              { title: t('settings.totals.supplier_due'), value: financeOverview ? `${Math.round(financeOverview.supplierDue).toLocaleString()} RWF` : t('common.loading'), tone: "bg-rose-50 text-rose-700" },
+              { title: t('settings.totals.supplier_paid'), value: financeOverview ? `${Math.round(financeOverview.supplierPaid).toLocaleString()} RWF` : t('common.loading'), tone: "bg-emerald-50 text-emerald-700" },
+              { title: t('settings.totals.customer_unpaid'), value: financeOverview ? `${Math.round(financeOverview.customerUnpaid).toLocaleString()} RWF` : t('common.loading'), tone: "bg-orange-50 text-orange-700" },
+              { title: t('settings.totals.tax_est'), value: financeOverview ? `${Math.round(financeOverview.taxEstimation).toLocaleString()} RWF` : t('common.loading'), tone: "bg-brand-50 text-brand-700" },
             ].map((card) => (
               <div key={card.title} className={`rounded-3xl p-5 ${card.tone}`}>
                 <p className="text-sm font-semibold">{card.title}</p>
@@ -849,18 +922,18 @@ export function SettingsPage() {
 
       {activeSection === "api" ? (
         <div className="grid gap-6 lg:grid-cols-[1fr_1.5fr]">
-          <SectionCard title="Generate API Key" subtitle="Create secure credentials for external automation or third-party apps">
+          <SectionCard title={t('settings.api.title')} subtitle={t('settings.api.subtitle')}>
             <div className="space-y-4">
               <div className="rounded-2xl border border-brand-100 bg-brand-50/50 p-5">
-                <p className="text-sm font-semibold text-brand-700">New Access Key</p>
-                <p className="mt-1 text-xs text-brand-600">Give your key a name to remember what it's for (e.g. 'Production Website').</p>
+                <p className="text-sm font-semibold text-brand-700">{t('settings.api.new_key')}</p>
+                <p className="mt-1 text-xs text-brand-600">{t('settings.api.new_key_desc')}</p>
                 
                 <div className="mt-4 space-y-3">
                   <input
                     value={newKeyName}
                     onChange={(e) => setNewKeyName(e.target.value)}
                     className="w-full rounded-2xl border border-brand-200 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-brand-200"
-                    placeholder="e.g. My Custom Website"
+                    placeholder={t('settings.api.key_placeholder')}
                   />
                   <button
                     onClick={() => {
@@ -875,7 +948,7 @@ export function SettingsPage() {
                     }}
                     className="w-full rounded-2xl bg-brand-500 py-3 text-sm font-bold text-white shadow-soft transition hover:bg-brand-600"
                   >
-                    Generate Live Key
+                    {t('settings.api.generate_btn')}
                   </button>
                 </div>
               </div>
@@ -884,9 +957,9 @@ export function SettingsPage() {
                 <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 animate-fade-in shadow-lg shadow-emerald-100/50">
                   <div className="flex items-center gap-2 text-emerald-700 mb-2">
                     <ShieldCheck size={16} />
-                    <span className="text-xs font-bold uppercase tracking-wider">Crucial Security Alert</span>
+                    <span className="text-xs font-bold uppercase tracking-wider">{t('settings.api.security_alert')}</span>
                   </div>
-                  <p className="text-sm text-emerald-800">Please copy this key now. It will <strong>NOT</strong> be shown again for security reasons.</p>
+                  <p className="text-sm text-emerald-800">{t('settings.api.security_desc')}</p>
                   <div className="mt-3 flex items-center justify-between gap-3 rounded-xl bg-white border border-emerald-100 px-4 py-3 font-mono text-xs text-ink">
                     <span className="break-all">{generatedKey}</span>
                     <button 
@@ -896,36 +969,36 @@ export function SettingsPage() {
                       }}
                       className="text-emerald-600 hover:text-emerald-700 font-bold uppercase transition"
                     >
-                      Copy
+                      {t('common.copy')}
                     </button>
                   </div>
                   <button 
                     onClick={() => setGeneratedKey(null)}
                     className="mt-4 w-full rounded-xl bg-emerald-600 py-2 text-xs font-bold text-white"
                   >
-                    I have saved the key
+                    {t('settings.api.saved_btn')}
                   </button>
                 </div>
               )}
             </div>
           </SectionCard>
 
-          <SectionCard title="Active Access Keys" subtitle="Monitor and manage your business's external API credentials">
+          <SectionCard title={t('settings.api.active_keys')} subtitle={t('settings.api.active_keys_subtitle')}>
             <div className="overflow-hidden rounded-2xl border border-slate-100">
               <table className="min-w-full text-sm">
                 <thead className="bg-slate-50 text-slate-500">
                   <tr>
-                    <th className="px-5 py-3 text-left text-xs font-bold uppercase tracking-wider">Key Name</th>
-                    <th className="px-5 py-3 text-left text-xs font-bold uppercase tracking-wider">Last Used</th>
-                    <th className="px-5 py-3 text-left text-xs font-bold uppercase tracking-wider">Prefix</th>
-                    <th className="px-5 py-3 text-center text-xs font-bold uppercase tracking-wider">Actions</th>
+                    <th className="px-5 py-3 text-left text-xs font-bold uppercase tracking-wider">{t('settings.api.col_name')}</th>
+                    <th className="px-5 py-3 text-left text-xs font-bold uppercase tracking-wider">{t('settings.api.col_used')}</th>
+                    <th className="px-5 py-3 text-left text-xs font-bold uppercase tracking-wider">{t('settings.api.col_prefix')}</th>
+                    <th className="px-5 py-3 text-center text-xs font-bold uppercase tracking-wider">{t('settings.api.col_actions')}</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white">
                   {apiKeys.length === 0 ? (
                     <tr>
                       <td colSpan={4} className="px-5 py-8 text-center text-slate-400 italic">
-                        No active API keys found.
+                        {t('settings.api.no_keys')}
                       </td>
                     </tr>
                   ) : (
@@ -940,7 +1013,7 @@ export function SettingsPage() {
                           </div>
                         </td>
                         <td className="px-5 py-4 text-slate-500">
-                          {key.last_used_at ? new Date(key.last_used_at).toLocaleDateString() : 'Never'}
+                          {key.last_used_at ? new Date(key.last_used_at).toLocaleDateString() : t('common.never')}
                         </td>
                         <td className="px-5 py-4">
                           <code className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-600">{key.key_prefix}****</code>
@@ -949,15 +1022,15 @@ export function SettingsPage() {
                           <button 
                             onClick={() => {
                               void (async () => {
-                                const confirmed = await confirm("Revoke API Key", "Are you sure? Any apps using this key will immediately lose access.");
+                                const confirmed = await confirm(t('settings.api.revoke_title'), t('settings.api.revoke_desc'));
                                 if (!confirmed) return;
                                 await revokeApiKey(key.id);
                                 setApiKeys(prev => prev.filter(k => k.id !== key.id));
-                                showToast("success", "API Key Revoked");
+                                showToast("success", t('settings.api.revoke_success'));
                               })();
                             }}
                             className="rounded-xl p-2 text-rose-300 transition hover:bg-rose-50 hover:text-rose-600"
-                            title="Revoke Key"
+                            title={t('settings.api.revoke_btn')}
                           >
                             <Trash2 size={16} />
                           </button>
@@ -973,7 +1046,7 @@ export function SettingsPage() {
       ) : null}
 
       {activeSection === "locations" ? (
-        <SectionCard title="Stock Locations" subtitle="Manage warehouses or physical stores where inventory is tracked.">
+        <SectionCard title={t('settings.locations.title')} subtitle={t('settings.locations.subtitle')}>
           <div className="mb-6 flex flex-col gap-3 lg:flex-row lg:items-center">
             <label className="flex w-full items-center gap-3 rounded-2xl border border-brand-100 bg-gradient-to-r from-brand-50 to-white px-4 py-3">
               <MapPin size={16} className="text-brand-500" />
@@ -981,7 +1054,7 @@ export function SettingsPage() {
                 value={newLocationName}
                 onChange={(event) => setNewLocationName(event.target.value)}
                 className="w-full border-none bg-transparent text-sm outline-none"
-                placeholder="New location name (e.g. Supermarket)"
+                placeholder={t('settings.locations.placeholder')}
               />
             </label>
             <button
@@ -990,14 +1063,14 @@ export function SettingsPage() {
               className="inline-flex flex-shrink-0 items-center justify-center gap-2 rounded-2xl bg-brand-500 px-5 py-3 text-sm font-semibold text-white disabled:opacity-50"
             >
               <Plus size={16} />
-              {creatingLocation ? "Adding..." : "Add Location"}
+              {creatingLocation ? t('common.adding') : t('settings.locations.add_btn')}
             </button>
           </div>
 
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {locations.length === 0 ? (
               <div className="col-span-full rounded-2xl bg-slate-50 p-8 text-center text-slate-500">
-                No locations exist yet. Create one to start tracking inventory separately!
+                {t('settings.locations.no_records')}
               </div>
             ) : null}
             {locations.map((loc) => (
@@ -1045,14 +1118,14 @@ export function SettingsPage() {
                         setEditingLocationName(loc.name);
                       }}
                       className="rounded-xl p-2 text-slate-400 transition hover:bg-brand-50 hover:text-brand-500"
-                      title="Edit Location"
+                      title={t('settings.locations.edit_btn')}
                     >
                       <Edit size={18} />
                     </button>
                     <button
                       onClick={() => handleDeleteLocation(loc.id)}
                       className="rounded-xl p-2 text-rose-500 transition hover:bg-rose-50"
-                      title="Delete Location"
+                      title={t('settings.locations.delete_btn')}
                     >
                       <X size={18} />
                     </button>
@@ -1070,10 +1143,10 @@ export function SettingsPage() {
             <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
               <div>
                 <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-600">
-                  {editingStaffId ? "Edit Staff Account" : "Create Cashier Account"}
+                  {editingStaffId ? t('settings.staff_modal.edit_title') : t('settings.staff_modal.create_title')}
                 </p>
                 <h2 className="mt-1 text-2xl font-bold text-ink">
-                  {editingStaffId ? staffForm.fullName : "Staff permissions"}
+                  {editingStaffId ? staffForm.fullName : t('settings.staff_modal.permissions')}
                 </h2>
               </div>
               <button onClick={() => setStaffModalOpen(false)} className="rounded-full bg-slate-100 p-2 text-slate-600">
@@ -1084,7 +1157,7 @@ export function SettingsPage() {
             <div className="grid gap-4 overflow-y-auto px-5 py-4 xl:grid-cols-[0.9fr_1.1fr]">
               <div className="space-y-3">
                 <label className="rounded-2xl bg-slate-50 p-3 block">
-                  <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Full Name</span>
+                  <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{t('settings.staff_modal.name')}</span>
                   <input
                     value={staffForm.fullName}
                     onChange={(event) => setStaffForm((current) => ({ ...current, fullName: event.target.value }))}
@@ -1092,7 +1165,7 @@ export function SettingsPage() {
                   />
                 </label>
                 <label className="rounded-2xl bg-sky-50 p-3 block">
-                  <span className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-700">Email</span>
+                  <span className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-700">{t('settings.staff_modal.email')}</span>
                   <input
                     value={staffForm.email}
                     onChange={(event) => setStaffForm((current) => ({ ...current, email: event.target.value }))}
@@ -1100,7 +1173,7 @@ export function SettingsPage() {
                   />
                 </label>
                 <label className="rounded-2xl bg-emerald-50 p-3 block">
-                  <span className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Phone</span>
+                  <span className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">{t('common.phone')}</span>
                   <input
                     value={staffForm.phone}
                     onChange={(event) => setStaffForm((current) => ({ ...current, phone: event.target.value }))}
@@ -1108,7 +1181,7 @@ export function SettingsPage() {
                   />
                 </label>
                 <label className="rounded-2xl bg-amber-50 p-3 block">
-                  <span className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">Role</span>
+                  <span className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">{t('settings.staff_modal.role')}</span>
                   <select
                     value={staffForm.role}
                     onChange={(event) =>
@@ -1116,14 +1189,14 @@ export function SettingsPage() {
                     }
                     className="mt-2 w-full rounded-xl border border-amber-200 bg-white px-3 py-2.5 text-sm outline-none"
                   >
-                    <option value="cashier">cashier</option>
-                    <option value="manager">manager</option>
-                    {(profile?.role === 'super_admin' || profile?.role === 'admin') && <option value="admin">admin</option>}
+                    <option value="cashier">{t('settings.roles.cashier')}</option>
+                    <option value="manager">{t('settings.roles.manager')}</option>
+                    {(profile?.role === 'super_admin' || profile?.role === 'admin') && <option value="admin">{t('settings.roles.admin')}</option>}
                   </select>
                 </label>
                 <div className="rounded-2xl bg-cyan-50 p-3 block">
-                  <span className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-700">Branch Assignments</span>
-                  <p className="text-[10px] text-cyan-600 mt-1 mb-3">Select one or more branches this staff member can access</p>
+                  <span className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-700">{t('settings.staff_modal.branches')}</span>
+                  <p className="text-[10px] text-cyan-600 mt-1 mb-3">{t('settings.staff_modal.branches_desc')}</p>
                   <div className="flex flex-wrap gap-2">
                     {locations.map(loc => {
                       const isActive = staffForm.assignedLocationIds.includes(loc.id);
@@ -1154,13 +1227,13 @@ export function SettingsPage() {
                   {staffForm.assignedLocationIds.length === 0 && (
                     <p className="mt-2 text-[10px] font-bold text-rose-500 flex items-center gap-1">
                       <X size={10} />
-                      Staff will be blocked from accessing the POS!
+                      {t('settings.staff_modal.branch_warning')}
                     </p>
                   )}
                 </div>
                 {!editingStaffId ? (
                   <label className="rounded-2xl bg-violet-50 p-3 block">
-                    <span className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-700">Password</span>
+                    <span className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-700">{t('common.password')}</span>
                     <input
                       type="password"
                       value={staffForm.password}
@@ -1175,22 +1248,22 @@ export function SettingsPage() {
                 <div className="mb-4 flex items-center gap-3">
                   <ShieldCheck size={18} className="text-brand-600" />
                   <div>
-                    <p className="text-sm font-semibold text-ink">Feature Permissions</p>
+                    <p className="text-sm font-semibold text-ink">{t('settings.staff_modal.permissions_title')}</p>
                     <p className="text-sm text-slate-500">
                       {staffForm.role === 'admin' 
-                        ? "Administrators have full access to all modules automatically." 
-                        : "Control which features each staff member can access across the system."}
+                        ? t('settings.staff_modal.admin_permissions_desc') 
+                        : t('settings.staff_modal.staff_permissions_desc')}
                     </p>
                   </div>
                 </div>
 
                 <div className="overflow-hidden rounded-2xl border border-brand-100 bg-white">
                   <div className="grid grid-cols-[1.2fr_repeat(4,0.55fr)] bg-gradient-to-r from-slate-900 via-slate-800 to-brand-700 px-4 py-3 text-xs font-semibold uppercase tracking-[0.18em] text-white">
-                    <span>Module</span>
-                    <span>View</span>
-                    <span>Add</span>
-                    <span>Edit</span>
-                    <span>Delete</span>
+                    <span>{t('settings.staff_modal.col_module')}</span>
+                    <span>{t('settings.staff_modal.col_view')}</span>
+                    <span>{t('settings.staff_modal.col_add')}</span>
+                    <span>{t('settings.staff_modal.col_edit')}</span>
+                    <span>{t('settings.staff_modal.col_delete')}</span>
                   </div>
                   {permissionRows.map((permission) => (
                     <div key={permission.module} className="grid grid-cols-[1.2fr_repeat(4,0.55fr)] items-center border-t border-slate-100 px-4 py-3 text-sm">
@@ -1217,14 +1290,14 @@ export function SettingsPage() {
                 onClick={() => setStaffModalOpen(false)}
                 className="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700"
               >
-                Cancel
+                {t('common.cancel')}
               </button>
               <button
                 onClick={saveStaffAccount}
                 disabled={savingStaff}
                 className="rounded-2xl bg-brand-500 px-5 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {savingStaff ? "Saving..." : "Save Staff Account"}
+                {savingStaff ? t('common.saving') : t('settings.staff_modal.save_btn')}
               </button>
             </div>
           </div>
@@ -1245,6 +1318,7 @@ function ResetPasswordModal({ staff, onClose }: { staff: StaffAccount; onClose: 
   const [password, setPassword] = useState("");
   const [isUpdating, setIsUpdating] = useState(false);
   const { showToast } = useNotification();
+  const { t } = useTranslation();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1272,20 +1346,20 @@ function ResetPasswordModal({ staff, onClose }: { staff: StaffAccount; onClose: 
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm">
       <div className="w-full max-w-sm rounded-3xl bg-white p-8 shadow-2xl">
         <div className="mb-6 flex items-center justify-between">
-          <h3 className="text-xl font-bold text-ink">Reset Password</h3>
+          <h3 className="text-xl font-bold text-ink">{t('settings.reset_modal.title')}</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
             <X size={20} />
           </button>
         </div>
         
         <p className="mb-6 text-sm text-slate-500">
-          Set a new password for <span className="font-semibold text-ink">{staff.fullName}</span>.
+          {t('settings.reset_modal.desc', { name: staff.fullName })}
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-400">
-              New Password
+              {t('settings.reset_modal.new_pw')}
             </label>
             <input
               type="password"
@@ -1304,14 +1378,14 @@ function ResetPasswordModal({ staff, onClose }: { staff: StaffAccount; onClose: 
               onClick={onClose}
               className="flex-1 rounded-2xl bg-slate-100 py-3 font-semibold text-slate-600 transition hover:bg-slate-200"
             >
-              Cancel
+              {t('common.cancel')}
             </button>
             <button
               type="submit"
               disabled={isUpdating}
               className="flex-1 rounded-2xl bg-brand-500 py-3 font-semibold text-white shadow-soft transition hover:bg-brand-600 disabled:opacity-50"
             >
-              {isUpdating ? "Updating..." : "Update"}
+              {isUpdating ? t('common.updating') : t('common.update')}
             </button>
           </div>
         </form>

@@ -294,3 +294,15 @@ export async function resetStaffPassword(targetAuthUserId: string, newPassword: 
 
   return data;
 }
+
+export async function updateUserLanguage(userId: string, language: string) {
+  const client = await ensureSupabaseConfigured();
+  const { error } = await client
+    .from("users")
+    .update({ language })
+    .eq("id", userId);
+
+  if (error) {
+    throw error;
+  }
+}

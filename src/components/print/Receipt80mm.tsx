@@ -1,4 +1,5 @@
 import type { ShopSettingsRecord } from "../../types/database";
+import { useTranslation } from "react-i18next";
 
 interface ReceiptItem {
   name: string;
@@ -6,6 +7,13 @@ interface ReceiptItem {
   unit_price: number;
   line_total: number;
   discount_amount?: number;
+  bulk_breakdown?: {
+    bulkPackages: number;
+    bulkQty: number;
+    bulkPrice: number;
+    remainingUnits: number;
+    unitPrice: number;
+  };
 }
 
 interface Receipt80mmProps {
@@ -30,6 +38,7 @@ export function Receipt80mm({
   items, subtotal, tax_amount, total_amount, discount_amount = 0,
   payment_method, payments, settings, isReturn, return_number,
 }: Receipt80mmProps) {
+  const { t } = useTranslation();
   const fmt = (v: number) => v.toLocaleString("fr-RW");
   const date = new Date(created_at);
 
@@ -68,25 +77,25 @@ export function Receipt80mm({
 
       {/* Receipt type */}
       <div style={{ textAlign: "center", fontWeight: "bold", fontSize: "12px", marginBottom: "4px" }}>
-        {isReturn ? "⟵ REFUND RECEIPT" : "CUSTOMER RECEIPT"}
+        {isReturn ? t('sales.receipt.refund_title') : t('sales.receipt.title')}
       </div>
 
       {/* Meta */}
       <div style={{ marginBottom: "6px", fontSize: "10px" }}>
         <div style={{ display: "flex", justifyContent: "space-between" }}>
-          <span>{isReturn ? "Return #" : "Invoice #"}</span>
+          <span>{isReturn ? t('sales.receipt.return_no') : t('sales.receipt.invoice_no')}</span>
           <span style={{ fontWeight: "bold" }}>{isReturn ? return_number : sale_number}</span>
         </div>
         <div style={{ display: "flex", justifyContent: "space-between" }}>
-          <span>Date</span>
+          <span>{t('common.date')}</span>
           <span>{date.toLocaleDateString()} {date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
         </div>
         <div style={{ display: "flex", justifyContent: "space-between" }}>
-          <span>Customer</span>
-          <span>{customer_name || "Walk-in"}</span>
+          <span>{t('sales.details.customer')}</span>
+          <span>{customer_name || t('sales.details.walk_in')}</span>
         </div>
         <div style={{ display: "flex", justifyContent: "space-between" }}>
-          <span>Cashier</span>
+          <span>{t('sales.table.cashier')}</span>
           <span>{cashier_name || "—"}</span>
         </div>
       </div>
@@ -104,9 +113,17 @@ export function Receipt80mm({
               <span>{item.quantity} × {fmt(item.unit_price)}</span>
               <span style={{ fontWeight: "bold" }}>{fmt(item.line_total)}</span>
             </div>
+            {item.bulk_breakdown && item.bulk_breakdown.bulkPackages > 0 && (
+              <div style={{ fontSize: "9px", color: "#444", marginLeft: "4px", borderLeft: "1px solid #ddd", paddingLeft: "4px" }}>
+                <div>{item.bulk_breakdown.bulkPackages} {item.bulk_breakdown.bulkPackages > 1 ? 'Boxes' : 'Box'} ({item.bulk_breakdown.bulkQty}) @ {fmt(item.bulk_breakdown.bulkPrice)}</div>
+                {item.bulk_breakdown.remainingUnits > 0 && (
+                  <div>{item.bulk_breakdown.remainingUnits} {item.bulk_breakdown.remainingUnits > 1 ? 'Units' : 'Unit'} (Loose) @ {fmt(item.bulk_breakdown.unitPrice)}</div>
+                )}
+              </div>
+            )}
             {item.discount_amount && item.discount_amount > 0 ? (
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: "10px", color: "#333" }}>
-                <span>  Discount</span>
+                <span>  {t('sales.details.discount')}</span>
                 <span>-{fmt(item.discount_amount)}</span>
               </div>
             ) : null}
@@ -119,18 +136,18 @@ export function Receipt80mm({
       {/* Totals */}
       <div style={{ fontSize: "10px", marginBottom: "6px" }}>
         <div style={{ display: "flex", justifyContent: "space-between" }}>
-          <span>Subtotal</span>
+          <span>{t('sales.details.subtotal')}</span>
           <span>{fmt(subtotal)}</span>
         </div>
         {discount_amount > 0 && (
           <div style={{ display: "flex", justifyContent: "space-between" }}>
-            <span>Discount</span>
+            <span>{t('sales.details.discount')}</span>
             <span>-{fmt(discount_amount)}</span>
           </div>
         )}
         {tax_amount > 0 && (
           <div style={{ display: "flex", justifyContent: "space-between" }}>
-            <span>Tax ({settings?.tax_percentage ?? 0}%)</span>
+            <span>{t('sales.details.tax')} ({settings?.tax_percentage ?? 0}%)</span>
             <span>{fmt(tax_amount)}</span>
           </div>
         )}
@@ -139,7 +156,7 @@ export function Receipt80mm({
       <div style={{ borderTop: "2px solid #000", margin: "4px 0" }} />
 
       <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", fontWeight: "900", marginBottom: "6px" }}>
-        <span>{isReturn ? "REFUNDED" : "TOTAL"}</span>
+        <span>{isReturn ? t('sales.receipt.refunded') : t('common.total')}</span>
         <span>{fmt(total_amount)} RWF</span>
       </div>
 
@@ -148,7 +165,7 @@ export function Receipt80mm({
         <div style={{ fontSize: "10px", marginBottom: "6px" }}>
           {payments.map((p, i) => (
             <div key={i} style={{ display: "flex", justifyContent: "space-between" }}>
-              <span style={{ textTransform: "capitalize" }}>Paid ({p.payment_method})</span>
+              <span style={{ textTransform: "capitalize" }}>{t('sales.receipt.paid_via')} ({p.payment_method})</span>
               <span>{fmt(p.amount)}</span>
             </div>
           ))}
@@ -157,7 +174,7 @@ export function Receipt80mm({
       {!payments && payment_method && (
         <div style={{ fontSize: "10px", marginBottom: "4px" }}>
           <div style={{ display: "flex", justifyContent: "space-between" }}>
-            <span>Payment</span>
+            <span>{t('sales.payments.method_label')}</span>
             <span style={{ textTransform: "capitalize" }}>{payment_method}</span>
           </div>
         </div>
@@ -167,11 +184,11 @@ export function Receipt80mm({
 
       {/* Footer */}
       <div style={{ textAlign: "center", fontSize: "10px", marginTop: "6px" }}>
-        <div style={{ marginBottom: "4px" }}>★ Thank you for shopping with us! ★</div>
-        <div>Come visit us again</div>
+        <div style={{ marginBottom: "4px" }}>{t('sales.receipt.footer1')}</div>
+        <div>{t('sales.receipt.footer2')}</div>
         {date && (
           <div style={{ marginTop: "8px", fontSize: "9px", color: "#555" }}>
-            Printed: {new Date().toLocaleString()}
+            {t('sales.receipt.printed_at')} {new Date().toLocaleString()}
           </div>
         )}
       </div>

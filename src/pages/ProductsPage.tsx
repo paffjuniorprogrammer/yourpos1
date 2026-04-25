@@ -42,6 +42,8 @@ import { getShopSettingsRecord } from "../services/settingsService";
 import { BarcodeLabel, BarcodePrintSheet } from "../components/print/BarcodeLabel";
 import { listProductVariants, createProductVariant, deleteProductVariant, type ProductVariant } from "../services/variantService";
 import type { Category, ProductFormValues, ProductRecord, ShopSettingsRecord } from "../types/database";
+import { useTranslation } from "react-i18next";
+
 
 const DEFAULT_PROFIT = 30;
 
@@ -59,14 +61,17 @@ function currency(value: number) {
   return value.toLocaleString();
 }
 
-function stockStatus(product: ProductRecord) {
-  if (product.stock_quantity === 0) return "Out of Stock";
-  if (product.stock_quantity <= product.reorder_level) return "Low Stock";
-  return "In Stock";
+function stockStatus(product: ProductRecord, t: any) {
+  if (product.stock_quantity === 0) return t('products.out_of_stock');
+  if (product.stock_quantity <= product.reorder_level) return t('products.low_stock');
+  return t('products.in_stock');
 }
 
+
 export function ProductsPage() {
+  const { t } = useTranslation();
   const { can, hasRole, business, assignedLocations, activeLocationId } = useAuth();
+
   const { showToast, confirm } = useNotification();
   const [products, setProducts] = useState<ProductRecord[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -95,6 +100,8 @@ export function ProductsPage() {
   const [bulkEnabled, setBulkEnabled] = useState(false);
   const [bulkQuantity, setBulkQuantity] = useState("");
   const [bulkPrice, setBulkPrice] = useState("");
+  const [bulkPricingMode, setBulkPricingMode] = useState<'fixed' | 'discount_amount' | 'discount_percentage'>('fixed');
+  const [bulkDiscountValue, setBulkDiscountValue] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Variants state
@@ -178,6 +185,40 @@ export function ProductsPage() {
     }
   }, [reportProduct, loadProductReport]);
 
+  // Logic to handle dynamic bulk pricing recalculation
+  const [prevUnitPrice, setPrevUnitPrice] = useState<number>(0);
+
+  useEffect(() => {
+    if (!bulkEnabled) return;
+
+    const unitPrice = Number(values.selling_price || 0);
+    const qty = Number(bulkQuantity || 0);
+    if (qty <= 1 || unitPrice <= 0) return;
+
+    const normalTotal = qty * unitPrice;
+
+    if (bulkPricingMode === 'discount_amount') {
+      const discount = Number(bulkDiscountValue || 0);
+      setBulkPrice(String(Math.max(0, Math.round(normalTotal - discount))));
+    } else if (bulkPricingMode === 'discount_percentage') {
+      const discountPercent = Number(bulkDiscountValue || 0);
+      setBulkPrice(String(Math.max(0, Math.round(normalTotal * (1 - discountPercent / 100)))));
+    } else if (bulkPricingMode === 'fixed') {
+      // Requirement: New Bulk Price = (Bulk Qty * New Unit Price) - Previous Discount Value
+      // We only recalculate if the unit price has actually changed
+      if (prevUnitPrice > 0 && unitPrice !== prevUnitPrice) {
+        const currentBulkPrice = Number(bulkPrice || 0);
+        const previousNormalTotal = qty * prevUnitPrice;
+        const previousDiscountValue = previousNormalTotal - currentBulkPrice;
+        
+        const newBulkPrice = normalTotal - previousDiscountValue;
+        setBulkPrice(String(Math.max(0, Math.round(newBulkPrice))));
+      }
+    }
+    
+    setPrevUnitPrice(unitPrice);
+  }, [values.selling_price, bulkQuantity, bulkPricingMode, bulkDiscountValue, bulkEnabled]);
+
   // Real-time synchronization for Products Page
   useRealtimeSync({
     onProductChanged: () => {
@@ -219,15 +260,16 @@ export function ProductsPage() {
         (product.barcode ?? "").toLowerCase().includes(search.toLowerCase());
       const matchesCategory =
         categoryFilter === "all" ? true : product.category_id === categoryFilter;
-      const status = stockStatus(product);
+      const status = stockStatus(product, t);
       const matchesStock =
         stockFilter === "all"
           ? true
           : stockFilter === "low"
-            ? status === "Low Stock"
+            ? status === t('products.low_stock')
             : stockFilter === "in"
-              ? status === "In Stock"
-              : status === "Out of Stock";
+              ? status === t('products.in_stock')
+              : status === t('products.out_of_stock');
+
 
       return matchesSearch && matchesCategory && matchesStock;
     });
@@ -254,9 +296,10 @@ export function ProductsPage() {
     setImagePreview("");
     setProfitPercent(settings?.default_profit_percentage ?? DEFAULT_PROFIT);
     setManualPrice(false);
-    setBulkEnabled(false);
     setBulkQuantity("");
     setBulkPrice("");
+    setBulkPricingMode('fixed');
+    setBulkDiscountValue("");
     setShowModal(true);
   }
 
@@ -277,7 +320,9 @@ export function ProductsPage() {
     const hasBulk = product.bulk_quantity != null && product.bulk_quantity > 0;
     setBulkEnabled(hasBulk);
     setBulkQuantity(hasBulk ? String(product.bulk_quantity) : "");
-    setBulkPrice(hasBulk && product.bulk_price != null ? String(product.bulk_price) : "");
+    setBulkPrice(hasBulk ? String(product.bulk_price) : "");
+    setBulkPricingMode(product.bulk_pricing_mode || 'fixed');
+    setBulkDiscountValue(product.bulk_discount_value ? String(product.bulk_discount_value) : "");
     setShowModal(true);
   }
 
@@ -404,10 +449,12 @@ export function ProductsPage() {
     }
 
     await run(async () => {
-      const productValues = {
+      const productValues: ProductFormValues = {
         ...values,
         bulk_quantity: bulkEnabled && bulkQuantity ? bulkQuantity : null,
         bulk_price: bulkEnabled && bulkPrice ? bulkPrice : null,
+        bulk_pricing_mode: bulkEnabled ? bulkPricingMode : 'fixed',
+        bulk_discount_value: bulkEnabled ? bulkDiscountValue : 0,
       };
       if (editingProduct) {
         const updated = await updateProduct(editingProduct.id, productValues);
@@ -466,7 +513,8 @@ export function ProductsPage() {
   return (
     <div className="space-y-6">
 
-      <SectionCard title="Product center" subtitle="Search, filter and manage inventory quickly">
+      <SectionCard title={t('products.title')} subtitle={t('products.subtitle')}>
+
         <div className="mb-5 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div className="grid flex-1 gap-3 md:grid-cols-3">
             <label className="flex items-center gap-3 rounded-2xl border border-brand-100 bg-gradient-to-r from-brand-50 to-white px-4 py-3">
@@ -475,7 +523,7 @@ export function ProductsPage() {
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 className="w-full border-none bg-transparent text-sm outline-none"
-                placeholder="Search products or barcode"
+                placeholder={t('products.search_placeholder')}
               />
             </label>
             <select
@@ -483,7 +531,8 @@ export function ProductsPage() {
               onChange={(event) => setCategoryFilter(event.target.value)}
               className="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3 text-sm font-medium text-slate-700 outline-none"
             >
-              <option value="all">Filter by Category</option>
+              <option value="all">{t('products.filter_category')}</option>
+
               {categories.map((category) => (
                 <option key={category.id} value={category.id}>
                   {category.name}
@@ -495,11 +544,12 @@ export function ProductsPage() {
               onChange={(event) => setStockFilter(event.target.value)}
               className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm font-medium text-slate-700 outline-none"
             >
-              <option value="all">Stock Status</option>
-              <option value="in">In Stock</option>
-              <option value="low">Low Stock</option>
-              <option value="out">Out of Stock</option>
+              <option value="all">{t('products.filter_stock')}</option>
+              <option value="in">{t('products.in_stock')}</option>
+              <option value="low">{t('products.low_stock')}</option>
+              <option value="out">{t('products.out_of_stock')}</option>
             </select>
+
           </div>
           {canAddProducts && (
             <div className="flex items-center gap-2">
@@ -508,14 +558,16 @@ export function ProductsPage() {
                 onClick={handleExportTemplate}
                 className="flex items-center justify-center gap-2 rounded-2xl border border-brand-200 bg-white px-5 py-3 text-sm font-semibold text-brand-600"
               >
-                Export CSV
+                {t('products.export_csv')}
               </button>
+
               <button
                 onClick={() => fileInputRef.current?.click()}
                 className="flex items-center justify-center gap-2 rounded-2xl border border-brand-200 bg-white px-5 py-3 text-sm font-semibold text-brand-600"
               >
-                Import CSV
+                {t('products.import_csv')}
               </button>
+
               <button
                 onClick={() => {
                   setShowAttributeModal(true);
@@ -526,16 +578,17 @@ export function ProductsPage() {
                 }}
                 className="flex items-center justify-center gap-2 rounded-2xl border border-brand-200 bg-white px-5 py-3 text-sm font-semibold text-brand-600"
               >
-                Attributes
+                {t('products.attributes')}
               </button>
               <button
                 onClick={openCreateModal}
                 className="flex items-center justify-center gap-2 rounded-2xl bg-brand-500 px-5 py-3 text-sm font-semibold text-white"
               >
                 <Plus size={16} />
-                New Product
+                {t('products.new_product')}
               </button>
             </div>
+
           )}
         </div>
 
@@ -544,24 +597,31 @@ export function ProductsPage() {
             <table className="min-w-full border-separate border-spacing-0 text-sm">
               <thead className="bg-gradient-to-r from-slate-900 via-slate-800 to-brand-700 text-white">
                 <tr>
-                  {["Name", "Category", "Cost", "Price", "Stock", "Actions"].map((column) => (
+                  {[
+                    t('products.table.name'),
+                    t('products.table.category'),
+                    t('products.table.cost'),
+                    t('products.table.price'),
+                    t('products.table.stock'),
+                    t('common.actions')
+                  ].map((column) => (
                     <th key={column} className="border-b border-white/10 px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-100">
                       {column}
                     </th>
                   ))}
                 </tr>
               </thead>
+
               <tbody className="bg-white">
                 {loading ? (
-                  <tr>
                     <td colSpan={6} className="px-5 py-10 text-center text-slate-500">
-                      Loading products...
+                      {t('products.loading')}
                     </td>
-                  </tr>
                 ) : paginatedProducts.length ? (
                   paginatedProducts.map((product) => {
-                    const status = stockStatus(product);
-                    const lowStock = status === "Low Stock" || status === "Out of Stock";
+                    const status = stockStatus(product, t);
+                    const lowStock = status === t('products.low_stock') || status === t('products.out_of_stock');
+
 
                     return (
                       <tr key={product.id} className="transition hover:bg-brand-50/40">
@@ -621,11 +681,9 @@ export function ProductsPage() {
                     );
                   })
                 ) : (
-                  <tr>
                     <td colSpan={6} className="px-5 py-10 text-center text-slate-500">
-                      No products match your current search or filters.
+                      {t('products.no_results')}
                     </td>
-                  </tr>
                 )}
               </tbody>
             </table>
@@ -645,9 +703,10 @@ export function ProductsPage() {
           <div className="w-full max-w-3xl rounded-[2rem] border border-slate-200 bg-gradient-to-b from-white to-slate-50 p-6 shadow-soft" onClick={(e) => e.stopPropagation()}>
             <div className="mb-6 flex items-center justify-between">
               <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.22em] text-brand-600">Product Form</p>
-                <h2 className="mt-2 text-2xl font-bold text-ink">{editingProduct ? "Edit Product" : "Create New Product"}</h2>
+                <p className="text-sm font-semibold uppercase tracking-[0.22em] text-brand-600">{t('products.modal.form_title')}</p>
+                <h2 className="mt-2 text-2xl font-bold text-ink">{editingProduct ? t('products.modal.edit_title') : t('products.modal.create_title')}</h2>
               </div>
+
               <button onClick={() => setShowModal(false)} className="rounded-full bg-slate-100 p-2 text-slate-600">
                 <X size={18} />
               </button>
@@ -656,35 +715,38 @@ export function ProductsPage() {
             <form className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]" onSubmit={handleSubmit}>
               <div className="space-y-3">
                 <div className="rounded-3xl border border-sky-100 bg-sky-50/80 p-3.5">
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-sky-700">Basic Info</p>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-sky-700">{t('products.modal.basic_info')}</p>
                   <div className="space-y-2.5">
-                    <input value={values.name} onChange={(event) => updateValues("name", event.target.value)} className="w-full rounded-2xl border border-sky-100 bg-white px-4 py-2.5 text-sm outline-none" placeholder="Product Name" required />
-                    <input value={values.barcode} onChange={(event) => updateValues("barcode", event.target.value)} className="w-full rounded-2xl border border-sky-100 bg-white px-4 py-2.5 text-sm outline-none" placeholder="Barcode" />
+                    <input value={values.name} onChange={(event) => updateValues("name", event.target.value)} className="w-full rounded-2xl border border-sky-100 bg-white px-4 py-2.5 text-sm outline-none" placeholder={t('products.modal.name')} required />
+                    <input value={values.barcode} onChange={(event) => updateValues("barcode", event.target.value)} className="w-full rounded-2xl border border-sky-100 bg-white px-4 py-2.5 text-sm outline-none" placeholder={t('products.modal.barcode')} />
                   </div>
                 </div>
 
+
                 <div className="rounded-3xl border border-violet-100 bg-violet-50/80 p-3.5">
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-violet-700">Category & Unit</p>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-violet-700">{t('products.modal.category_unit')}</p>
                   <div className="grid gap-2.5 sm:grid-cols-[1fr_auto]">
                     <select value={values.category_id} onChange={(event) => updateValues("category_id", event.target.value)} className="rounded-2xl border border-violet-100 bg-white px-4 py-2.5 text-sm outline-none">
-                      <option value="">Select Category</option>
+                      <option value="">{t('products.modal.select_category')}</option>
                       {categories.map((category) => (
                         <option key={category.id} value={category.id}>{category.name}</option>
                       ))}
                     </select>
+
                     <button
                       type="button"
                       onClick={() => setShowCategoryModal(true)}
                       disabled={!canAddProducts}
-                      title={!canAddProducts ? "You don't have permission to add categories." : "Add Category"}
+                      title={!canAddProducts ? "You don't have permission to add categories." : t('products.modal.add_category')}
                       className="rounded-2xl border border-violet-200 bg-white px-4 py-2.5 text-sm font-semibold text-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      + Add Category
+                      {t('products.modal.add_category')}
                     </button>
+
                   </div>
 
                   <div className="mt-2.5">
-                    <label className="text-sm font-semibold text-violet-700">Measurement</label>
+                    <label className="text-sm font-semibold text-violet-700">{t('products.modal.measurement')}</label>
                     <div className="mt-2 flex gap-2.5">
                       {[
                         { value: "kg", label: "Kg" },
@@ -704,12 +766,13 @@ export function ProductsPage() {
                 </div>
 
                 <div className="rounded-3xl border border-emerald-100 bg-emerald-50/80 p-3.5">
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Pricing</p>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">{t('products.modal.pricing')}</p>
                   <div className="grid gap-2.5 sm:grid-cols-2">
-                    <input value={values.cost_price} onChange={(event) => handleCostOrProfitChange(event.target.value, profitPercent)} className="rounded-2xl border border-emerald-100 bg-white px-4 py-2.5 text-sm outline-none" placeholder="Purchase Price" type="number" min="0" step="0.01" required />
-                    <input value={values.selling_price} onChange={(event) => { setManualPrice(true); updateValues("selling_price", event.target.value); }} className="rounded-2xl border border-emerald-100 bg-white px-4 py-2.5 text-sm outline-none" placeholder="Selling Price" type="number" min="0" step="0.01" required />
+                    <input value={values.cost_price} onChange={(event) => handleCostOrProfitChange(event.target.value, profitPercent)} className="rounded-2xl border border-emerald-100 bg-white px-4 py-2.5 text-sm outline-none" placeholder={t('products.modal.cost_price')} type="number" min="0" step="0.01" required />
+                    <input value={values.selling_price} onChange={(event) => { setManualPrice(true); updateValues("selling_price", event.target.value); }} className="rounded-2xl border border-emerald-100 bg-white px-4 py-2.5 text-sm outline-none" placeholder={t('products.modal.selling_price')} type="number" min="0" step="0.01" required />
                   </div>
                 </div>
+
 
                 {/* --- Phase 4: Product Variants Section --- */}
                 <div className={`rounded-3xl border p-3.5 transition-all ${values.parent_id ? "border-brand-200 bg-brand-50/60" : "border-slate-100 bg-slate-50/40"}`}>
@@ -744,7 +807,7 @@ export function ProductsPage() {
                           onChange={(e) => updateValues("parent_id", e.target.value)}
                           className="w-full rounded-2xl border border-brand-100 bg-white px-4 py-2.5 text-sm outline-none"
                         >
-                          <option value="">Select Parent Product</option>
+                          <option value="">{t('products.modal.select_parent')}</option>
                           {products.filter(p => p.is_parent && p.id !== editingProduct?.id).map(p => (
                             <option key={p.id} value={p.id}>{p.name}</option>
                           ))}
@@ -779,15 +842,21 @@ export function ProductsPage() {
                   <div className={`rounded-3xl border p-3.5 transition-all duration-200 ${bulkEnabled ? "border-indigo-200 bg-indigo-50/80" : "border-slate-200 bg-slate-50/60"}`}>
                     <div className="flex items-center justify-between mb-2">
                       <div>
-                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-indigo-700">Bulk Pricing</p>
-                        <p className="text-[10px] text-slate-500 mt-0.5">Auto-apply package deals at checkout</p>
+                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-indigo-700">{t('products.modal.bulk_pricing')}</p>
+                        <p className="text-[10px] text-slate-500 mt-0.5">{t('products.modal.bulk_subtitle')}</p>
                       </div>
+
                       {/* Toggle switch */}
                       <button
                         type="button"
                         onClick={() => {
                           setBulkEnabled(!bulkEnabled);
-                          if (bulkEnabled) { setBulkQuantity(""); setBulkPrice(""); }
+                          if (!bulkEnabled) {
+                            setBulkQuantity("");
+                            setBulkPrice("");
+                            setBulkPricingMode('fixed');
+                            setBulkDiscountValue("");
+                          }
                         }}
                         className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${bulkEnabled ? "bg-indigo-600" : "bg-slate-300"}`}
                       >
@@ -796,10 +865,10 @@ export function ProductsPage() {
                     </div>
 
                     {bulkEnabled && (
-                      <div className="space-y-2.5 mt-3 animate-fade-in">
-                        <div className="grid gap-2.5 sm:grid-cols-2">
+                      <div className="space-y-4 mt-3 animate-fade-in">
+                        <div className="grid gap-3 sm:grid-cols-2">
                           <div>
-                            <label className="block text-[10px] font-bold uppercase tracking-wider text-indigo-600 mb-1">Items per Package</label>
+                            <label className="block text-[10px] font-bold uppercase tracking-wider text-indigo-600 mb-1">Package Quantity</label>
                             <input
                               type="number"
                               min="2"
@@ -807,33 +876,102 @@ export function ProductsPage() {
                               value={bulkQuantity}
                               onChange={(e) => setBulkQuantity(e.target.value)}
                               className="w-full rounded-2xl border border-indigo-100 bg-white px-4 py-2.5 text-sm outline-none focus:border-indigo-400 transition"
-                              placeholder="e.g. 12 (for a box of 12)"
+                              placeholder="e.g. 12"
                             />
                           </div>
                           <div>
-                            <label className="block text-[10px] font-bold uppercase tracking-wider text-indigo-600 mb-1">Package Price (RWF)</label>
+                            <label className="block text-[10px] font-bold uppercase tracking-wider text-indigo-600 mb-1">Pricing Mode</label>
+                            <select
+                              value={bulkPricingMode}
+                              onChange={(e) => setBulkPricingMode(e.target.value as any)}
+                              className="w-full rounded-2xl border border-indigo-100 bg-white px-4 py-2.5 text-sm outline-none focus:border-indigo-400 transition"
+                            >
+                              <option value="fixed">Fixed Price</option>
+                              <option value="discount_amount">Discount Amount</option>
+                              <option value="discount_percentage">Discount Percentage (%)</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <div>
+                            <label className="block text-[10px] font-bold uppercase tracking-wider text-indigo-600 mb-1">
+                              {bulkPricingMode === 'fixed' ? 'Fixed Package Price' : bulkPricingMode === 'discount_amount' ? 'Discount Amount' : 'Discount Percentage (%)'}
+                            </label>
                             <input
                               type="number"
                               min="0"
                               step="0.01"
-                              value={bulkPrice}
-                              onChange={(e) => setBulkPrice(e.target.value)}
+                              value={bulkPricingMode === 'fixed' ? bulkPrice : bulkDiscountValue}
+                              onChange={(e) => {
+                                if (bulkPricingMode === 'fixed') {
+                                  setBulkPrice(e.target.value);
+                                } else {
+                                  setBulkDiscountValue(e.target.value);
+                                }
+                              }}
                               className="w-full rounded-2xl border border-indigo-100 bg-white px-4 py-2.5 text-sm outline-none focus:border-indigo-400 transition"
-                              placeholder="e.g. 5500 per box"
+                              placeholder={bulkPricingMode === 'fixed' ? 'e.g. 5500' : bulkPricingMode === 'discount_amount' ? 'e.g. 500' : 'e.g. 10'}
                             />
                           </div>
+                          <div className="flex flex-col justify-end">
+                            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Effective Package Price</label>
+                            <div className="w-full rounded-2xl border border-slate-100 bg-slate-50 px-4 py-2.5 text-sm font-bold text-slate-700">
+                              {(() => {
+                                let calculated = Number(bulkPrice);
+                                const qty = Number(bulkQuantity || 0);
+                                const unit = Number(values.selling_price || 0);
+                                const discount = Number(bulkDiscountValue || 0);
+
+                                if (bulkPricingMode === 'discount_amount') {
+                                  calculated = (qty * unit) - discount;
+                                } else if (bulkPricingMode === 'discount_percentage') {
+                                  calculated = (qty * unit) * (1 - (discount / 100));
+                                }
+
+                                if (isNaN(calculated) || calculated <= 0) return "---";
+                                return Math.round(calculated).toLocaleString() + " RWF";
+                              })()}
+                            </div>
+                          </div>
                         </div>
-                        {/* Live preview */}
-                        {bulkQuantity && bulkPrice && Number(bulkQuantity) > 1 && Number(values.selling_price) > 0 && (() => {
-                          const normalTotal = Number(bulkQuantity) * Number(values.selling_price);
-                          const saving = normalTotal - Number(bulkPrice);
-                          const isCheaper = Number(bulkPrice) < normalTotal;
+
+                        {/* Live preview and validation */}
+                        {bulkQuantity && Number(bulkQuantity) > 1 && Number(values.selling_price) > 0 && (() => {
+                          const unitPrice = Number(values.selling_price);
+                          const qty = Number(bulkQuantity);
+                          const normalTotal = qty * unitPrice;
+                          
+                          let calculatedPrice = Number(bulkPrice);
+                          const discount = Number(bulkDiscountValue || 0);
+
+                          if (bulkPricingMode === 'discount_amount') {
+                            calculatedPrice = normalTotal - discount;
+                          } else if (bulkPricingMode === 'discount_percentage') {
+                            calculatedPrice = normalTotal * (1 - (discount / 100));
+                          }
+
+                          const saving = normalTotal - calculatedPrice;
+                          const isCheaper = calculatedPrice < normalTotal && calculatedPrice > 0;
+
                           return (
                             <div className={`rounded-2xl p-3 text-xs font-semibold ${isCheaper ? "bg-emerald-50 text-emerald-700 border border-emerald-100" : "bg-rose-50 text-rose-700 border border-rose-100"}`}>
                               {isCheaper ? (
-                                <>✅ Customer saves {saving.toLocaleString()} RWF when buying {bulkQuantity} units as a package</>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-lg">✅</span>
+                                  <div>
+                                    <p>Package pricing is valid.</p>
+                                    <p className="opacity-75">Customer saves {Math.round(saving).toLocaleString()} RWF ({( (saving/normalTotal)*100 ).toFixed(1)}%) per package.</p>
+                                  </div>
+                                </div>
                               ) : (
-                                <>⚠️ Package price must be less than {normalTotal.toLocaleString()} RWF to trigger bulk pricing</>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-lg">⚠️</span>
+                                  <div>
+                                    <p>Invalid Package Price!</p>
+                                    <p className="opacity-75">The package price must be less than the individual total of {normalTotal.toLocaleString()} RWF.</p>
+                                  </div>
+                                </div>
                               )}
                             </div>
                           );
@@ -847,8 +985,8 @@ export function ProductsPage() {
                   <div className="flex items-start gap-3">
                     <Tag size={18} className="mt-0.5 text-brand-600" />
                     <div className="flex-1">
-                      <p className="text-sm font-semibold text-brand-700">Default profit %</p>
-                      <p className="mt-1 text-xs text-brand-700/80">Auto-fills selling price, but you can still edit calculating manually.</p>
+                      <p className="text-sm font-semibold text-brand-700">{t('settings.finance.profit_label')}</p>
+                      <p className="mt-1 text-xs text-brand-700/80">{t('settings.finance.profit_applied')}</p>
                       <div className="mt-2.5 inline-block rounded-xl border border-brand-200 bg-white/50 px-3 py-2 text-sm font-medium text-brand-800">
                         {profitPercent}% (Set by Admin)
                       </div>
@@ -859,7 +997,7 @@ export function ProductsPage() {
 
               <div className="space-y-3">
                 <div className="rounded-3xl border border-amber-100 bg-amber-50/80 p-3.5">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">Image Upload</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">{t('settings.business.logo')}</p>
                   <input type="file" accept="image/*" onChange={handleImageUpload} className="mt-3 block w-full text-sm text-slate-500" />
                   <input value={values.image_url} onChange={(event) => { updateValues("image_url", event.target.value); setImagePreview(event.target.value); }} className="mt-2.5 w-full rounded-2xl border border-amber-100 bg-white px-4 py-2.5 text-sm outline-none" placeholder="Or paste image URL" />
                   <div className="mt-3 flex h-32 items-center justify-center overflow-hidden rounded-3xl bg-white ring-1 ring-amber-100">
@@ -868,15 +1006,15 @@ export function ProductsPage() {
                 </div>
 
                 <div className="rounded-3xl border border-indigo-100 bg-indigo-50/80 p-3.5">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-indigo-700">Smart Pricing</p>
-                  <p className="mt-2 text-sm text-slate-600">Selling Price = Purchase Price + (Purchase Price x Profit %)</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-indigo-700">{t('settings.finance.title')}</p>
+                  <p className="mt-2 text-sm text-slate-600">{t('products.modal.pricing_formula')}</p>
                   <p className="mt-2 text-lg font-bold text-indigo-700">{currency(Number(values.selling_price || 0))}</p>
                 </div>
 
                 <div className="flex gap-3">
-                  <button type="button" onClick={() => setShowModal(false)} className="flex-1 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700">Cancel</button>
+                  <button type="button" onClick={() => setShowModal(false)} className="flex-1 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700">{t('common.cancel')}</button>
                   <button type="submit" disabled={!supabaseConfigured || isSubmitting} className="flex-1 rounded-2xl bg-brand-500 px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300">
-                    {isSubmitting ? "Saving..." : "Save Product"}
+                    {isSubmitting ? t('common.saving') : t('products.modal.save_btn')}
                   </button>
                 </div>
               </div>
@@ -888,12 +1026,12 @@ export function ProductsPage() {
       {showCategoryModal ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 px-4 backdrop-blur-sm" onClick={() => setShowCategoryModal(false)}>
           <div className="w-full max-w-md rounded-[1.75rem] bg-white p-6 shadow-soft" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-xl font-bold text-ink">Add Category</h3>
+            <h3 className="text-xl font-bold text-ink">{t('products.modal.add_category_title')}</h3>
             <form className="mt-4 space-y-4" onSubmit={handleCreateCategory}>
-              <input value={categoryName} onChange={(event) => setCategoryName(event.target.value)} className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none" placeholder="Category name" required />
+              <input value={categoryName} onChange={(event) => setCategoryName(event.target.value)} className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none" placeholder={t('products.modal.cat_name')} required />
               <div className="flex gap-3">
-                <button type="button" onClick={() => setShowCategoryModal(false)} className="flex-1 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700">Cancel</button>
-                <button type="submit" className="flex-1 rounded-2xl bg-brand-500 px-4 py-3 text-sm font-semibold text-white">Save Category</button>
+                <button type="button" onClick={() => setShowCategoryModal(false)} className="flex-1 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700">{t('common.cancel')}</button>
+                <button type="submit" className="flex-1 rounded-2xl bg-brand-500 px-4 py-3 text-sm font-semibold text-white">{t('products.modal.save_category')}</button>
               </div>
             </form>
           </div>
@@ -905,8 +1043,8 @@ export function ProductsPage() {
           <div className="w-full max-w-5xl rounded-[2rem] bg-white p-6 shadow-soft" onClick={(e) => e.stopPropagation()}>
             <div className="mb-5 flex items-center justify-between">
               <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.22em] text-brand-600">Product Report</p>
-                <h2 className="mt-2 text-2xl font-bold text-ink">Product: {reportProduct.name}</h2>
+                <p className="text-sm font-semibold uppercase tracking-[0.22em] text-brand-600">{t('products.report.title')}</p>
+                <h2 className="mt-2 text-2xl font-bold text-ink">{t('products.products')}: {reportProduct.name}</h2>
               </div>
               <button onClick={() => setReportProduct(null)} className="rounded-full bg-slate-100 p-2 text-slate-600">
                 <X size={18} />
@@ -915,11 +1053,11 @@ export function ProductsPage() {
 
             <div className="grid gap-4 md:grid-cols-5">
               {[
-                ["Category", categoryMap.get(reportProduct.category_id ?? "") ?? "Uncategorized"],
-                ["Cost", currency(reportProduct.cost_price)],
-                ["Price", currency(reportProduct.selling_price)],
-                ["Current Stock", String(reportProduct.stock_quantity)],
-                ["Barcode", reportProduct.barcode ?? "N/A"],
+                [t('products.table.category'), categoryMap.get(reportProduct.category_id ?? "") ?? t('products.uncategorized')],
+                [t('products.table.cost'), currency(reportProduct.cost_price)],
+                [t('products.table.price'), currency(reportProduct.selling_price)],
+                [t('products.table.stock'), String(reportProduct.stock_quantity)],
+                [t('products.modal.barcode'), reportProduct.barcode ?? "N/A"],
               ].map(([label, value]) => (
                 <div key={label} className="rounded-2xl bg-slate-50 p-4">
                   <p className="text-sm text-slate-500">{label}</p>
@@ -930,25 +1068,25 @@ export function ProductsPage() {
 
             {reportAggregates && (
               <div className="mt-6 rounded-3xl border border-brand-100 bg-brand-50/50 p-6">
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-600 mb-4">Performance Summary</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-600 mb-4">{t('products.report.performance')}</p>
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                   <div className="rounded-2xl bg-white p-4 shadow-sm border border-brand-100">
-                    <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Total Sales Vol.</p>
-                    <p className="mt-2 text-2xl font-bold text-brand-600">{reportAggregates.total_sold} <span className="text-xs text-slate-400 font-normal">units</span></p>
+                    <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">{t('products.report.total_sold')}</p>
+                    <p className="mt-2 text-2xl font-bold text-brand-600">{reportAggregates.total_sold} <span className="text-xs text-slate-400 font-normal">{t('products.units.piece')}s</span></p>
                   </div>
                   <div className="rounded-2xl bg-white p-4 shadow-sm border border-brand-100">
-                    <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Total Revenue</p>
+                    <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">{t('products.report.total_revenue')}</p>
                     <p className="mt-2 text-2xl font-bold text-emerald-600">{currency(reportAggregates.total_revenue)}</p>
                   </div>
                   <div className="rounded-2xl bg-white p-4 shadow-sm border border-brand-100">
-                    <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Gross Profit</p>
+                    <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">{t('reports.profit')}</p>
                     <p className="mt-2 text-2xl font-bold text-indigo-600">
                       {currency(reportAggregates.total_revenue - (reportAggregates.total_sold * (Number(reportProduct.cost_price) || 0)))}
                     </p>
                   </div>
                   <div className="rounded-2xl bg-white p-4 shadow-sm border border-brand-100">
-                    <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Purchase Vol.</p>
-                    <p className="mt-2 text-2xl font-bold text-amber-600">{reportAggregates.total_purchased} <span className="text-xs text-slate-400 font-normal">units</span></p>
+                    <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">{t('products.report.purchase_vol')}</p>
+                    <p className="mt-2 text-2xl font-bold text-amber-600">{reportAggregates.total_purchased} <span className="text-xs text-slate-400 font-normal">{t('products.units.piece')}s</span></p>
                   </div>
                 </div>
               </div>
@@ -957,8 +1095,8 @@ export function ProductsPage() {
             <div className="mt-6 grid gap-6 xl:grid-cols-2">
               <div className="rounded-[2rem] border border-brand-100 bg-white p-6 shadow-sm">
                 <div className="mb-4 flex items-center justify-between">
-                  <h3 className="text-lg font-bold text-ink">Sales History</h3>
-                  <div className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700">Recent Sales</div>
+                  <h3 className="text-lg font-bold text-ink">{t('products.report.sales_history')}</h3>
+                  <div className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700">{t('products.report.recent_sales')}</div>
                 </div>
                 {reportLoading ? (
                   <div className="py-8 text-center text-slate-500">Loading sales history...</div>
@@ -967,7 +1105,7 @@ export function ProductsPage() {
                     <table className="min-w-full text-sm">
                       <thead>
                         <tr className="text-left text-slate-500 border-b border-slate-50">
-                          {["Date", "Qty", "Price", "Total", "Customer"].map((column) => (
+                          {[t('common.date'), t('sales.details.qty'), t('products.table.price'), t('common.total'), t('sales.details.customer')].map((column) => (
                             <th key={column} className="pb-3 text-xs font-semibold uppercase tracking-wider">{column}</th>
                           ))}
                         </tr>
@@ -986,7 +1124,7 @@ export function ProductsPage() {
                         ) : (
                           <tr>
                             <td colSpan={5} className="py-8 text-center text-slate-500">
-                              No sales history found
+                              {t('products.report.no_sales')}
                             </td>
                           </tr>
                         )}
@@ -998,8 +1136,8 @@ export function ProductsPage() {
 
               <div className="rounded-[2rem] border border-brand-100 bg-white p-6 shadow-sm">
                 <div className="mb-4 flex items-center justify-between">
-                  <h3 className="text-lg font-bold text-ink">Purchase History</h3>
-                  <div className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-700">Inventory Logs</div>
+                  <h3 className="text-lg font-bold text-ink">{t('products.report.purchase_history')}</h3>
+                  <div className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-700">{t('products.report.inventory_logs')}</div>
                 </div>
                 {reportLoading ? (
                   <div className="py-8 text-center text-slate-500">Loading purchase history...</div>
@@ -1008,7 +1146,7 @@ export function ProductsPage() {
                     <table className="min-w-full text-sm">
                       <thead>
                         <tr className="text-left text-slate-500 border-b border-slate-50">
-                          {["Date", "Qty", "Cost", "Supplier"].map((column) => (
+                          {[t('common.date'), t('sales.details.qty'), t('products.table.cost'), t('suppliers.title')].map((column) => (
                             <th key={column} className="pb-3 text-xs font-semibold uppercase tracking-wider">{column}</th>
                           ))}
                         </tr>
@@ -1026,7 +1164,7 @@ export function ProductsPage() {
                         ) : (
                           <tr>
                             <td colSpan={4} className="py-8 text-center text-slate-500">
-                              No purchase history found
+                              {t('products.report.no_purchases')}
                             </td>
                           </tr>
                         )}
@@ -1043,13 +1181,13 @@ export function ProductsPage() {
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-2">
                     <QrCode size={18} className="text-slate-600" />
-                    <h3 className="text-base font-bold text-ink">Barcode</h3>
+                    <h3 className="text-base font-bold text-ink">{t('products.modal.barcode')}</h3>
                   </div>
                   <button
                     onClick={() => { setShowBarcodeSheet(true); setTimeout(window.print, 300); }}
                     className="flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white hover:bg-slate-700 transition"
                   >
-                    <Printer size={14} /> Print Label
+                    <Printer size={14} /> {t('common.print')}
                   </button>
                 </div>
                 <div className="flex justify-center">
@@ -1067,7 +1205,7 @@ export function ProductsPage() {
             {/* ── Product Variants Panel ── */}
             <div className="mt-6 rounded-3xl border border-indigo-100 bg-indigo-50/40 p-6">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-base font-bold text-ink">Product Variants</h3>
+                <h3 className="text-base font-bold text-ink">{t('products.modal.variant_options')}</h3>
                 <span className="text-xs text-slate-400">{productVariants.length} variant(s)</span>
               </div>
 
@@ -1107,14 +1245,14 @@ export function ProductsPage() {
                         });
                         setProductVariants(prev => [...prev, v]);
                         setNewVariantLabel(""); setNewVariantSku(""); setNewVariantPrice("");
-                        showToast("success", "Variant added!");
+                        showToast("success", t('sales.success.updated'));
                       } catch (err: any) {
-                        showToast("error", err?.message || "Failed to add variant");
+                        showToast("error", err?.message || t('common.error'));
                       } finally { setSavingVariant(false); }
                     }}
                     className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-700 disabled:opacity-50 transition whitespace-nowrap"
                   >
-                    {savingVariant ? "Adding..." : "+ Add"}
+                    {savingVariant ? t('common.adding') : "+ " + t('common.update')}
                   </button>
                 </div>
               )}
@@ -1174,8 +1312,8 @@ export function ProductsPage() {
           <div className="w-full max-w-4xl overflow-hidden rounded-[2.5rem] bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between bg-brand-50 px-8 py-6">
               <div>
-                <h3 className="text-xl font-bold text-ink">Attribute Manager</h3>
-                <p className="text-sm text-slate-600">Define global product options like Size, Color, or Material</p>
+                <h3 className="text-xl font-bold text-ink">{t('products.modal.attr_manager')}</h3>
+                <p className="text-sm text-slate-600">{t('products.modal.attr_manager_subtitle')}</p>
               </div>
               <button onClick={() => setShowAttributeModal(false)} className="rounded-full bg-white p-2 text-slate-400 hover:text-ink shadow-sm">
                 <X size={20} />
@@ -1321,8 +1459,8 @@ export function ProductsPage() {
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm" onClick={() => setShowImportLocationModal(false)}>
           <div className="w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
             <div className="bg-brand-50 px-6 py-5">
-              <h3 className="text-lg font-bold text-ink">Select Import Location</h3>
-              <p className="mt-1 text-sm text-slate-600">Your CSV contains initial stock quantities. Where should this inventory be stored?</p>
+              <h3 className="text-lg font-bold text-ink">{t('products.modal.import_loc_title')}</h3>
+              <p className="mt-1 text-sm text-slate-600">{t('products.modal.import_loc_desc')}</p>
             </div>
             <div className="p-6">
               <select 
@@ -1351,7 +1489,7 @@ export function ProductsPage() {
                   disabled={isSubmitting || !selectedImportLocationId}
                   className="w-full shadow-soft rounded-2xl bg-brand-500 py-3 text-sm font-bold text-white hover:bg-brand-600 disabled:opacity-50"
                 >
-                  {isSubmitting ? "Importing..." : "Confirm & Import"}
+                  {isSubmitting ? t('products.loading') : t('products.modal.confirm_import')}
                 </button>
               </div>
             </div>

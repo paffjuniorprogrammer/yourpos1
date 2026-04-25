@@ -1,17 +1,27 @@
-import { Bell, LogOut, Search, Menu, X } from "lucide-react";
+import { Bell, LogOut, Search, Menu, X, Languages } from "lucide-react";
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { navItems } from "../../data/mockData";
 import { useAuth } from "../../context/AuthContext";
 import { useSettings } from "../../hooks/useSettings";
+import { useTranslation } from "react-i18next";
+
 
 export function AppShell() {
+  const { i18n, t } = useTranslation();
   const location = useLocation();
   const { authConfigured, hasRole, logout, profile, can, session } = useAuth();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const isPosRoute = location.pathname === "/pos";
   const currentPage =
-    navItems.find((item) => item.path === location.pathname)?.label ?? "Dashboard";
+    navItems.find((item) => item.path === location.pathname)?.label ?? t('menu.dashboard');
+
+
+  const changeLanguage = (lng: string) => {
+    i18n.changeLanguage(lng);
+    setIsMenuOpen(false);
+  };
+
   const visibleNavItems = navItems.filter((item) => {
     if (!authConfigured) return true;
     
@@ -69,8 +79,9 @@ export function AppShell() {
                 <div className="h-8 w-8 rounded-lg bg-brand-500 flex items-center justify-center text-white font-bold text-xs">
                   {settings?.shop_name?.charAt(0) || "B"}
                 </div>
-                <span className="text-xs font-black uppercase tracking-widest text-white">Menu</span>
+                <span className="text-xs font-black uppercase tracking-widest text-white">{t('menu.dashboard')}</span>
               </div>
+
               <button onClick={() => setIsMenuOpen(false)} className="text-slate-400 hover:text-white">
                 <X size={24} />
               </button>
@@ -84,20 +95,37 @@ export function AppShell() {
                   onClick={() => setIsMenuOpen(false)}
                   className={({ isActive }) =>
                     `flex items-center gap-3 rounded-2xl px-4 py-4 text-sm font-bold transition-all ${
-                      isActive
+                     isActive
                         ? "bg-white text-slate-950 shadow-lg"
                         : "text-slate-400 hover:bg-white/5 hover:text-white"
                     }`
                   }
                 >
                   <Icon size={20} />
-                  {label}
+                  {t(`menu.${label.toLowerCase()}`)}
                 </NavLink>
+
               ))}
             </nav>
 
             <div className="absolute bottom-6 left-6 right-6 pt-6 border-t border-white/10">
+              {/* Mobile Language Switcher */}
+              <div className="mb-6 flex gap-2">
+                {['en', 'rw', 'fr'].map((lng) => (
+                  <button
+                    key={lng}
+                    onClick={() => changeLanguage(lng)}
+                    className={`flex-1 rounded-xl py-2 text-[10px] font-black uppercase tracking-widest transition ${
+                      i18n.language === lng ? 'bg-white text-slate-950' : 'bg-white/5 text-slate-400 hover:bg-white/10'
+                    }`}
+                  >
+                    {lng}
+                  </button>
+                ))}
+              </div>
+
               <div className="flex items-center gap-3 mb-4">
+
                 <div className="h-10 w-10 rounded-xl bg-slate-800 flex items-center justify-center text-xs font-black text-white border border-white/10">
                   {profile?.full_name?.charAt(0) || "U"}
                 </div>
@@ -111,11 +139,12 @@ export function AppShell() {
                   setIsMenuOpen(false);
                   void logout();
                 }}
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-rose-500/10 py-3 text-xs font-bold text-rose-500 uppercase tracking-widest transition-all hover:bg-rose-500 hover:text-white"
+                 className="flex w-full items-center justify-center gap-2 rounded-xl bg-rose-500/10 py-3 text-xs font-bold text-rose-500 uppercase tracking-widest transition-all hover:bg-rose-500 hover:text-white"
               >
                 <LogOut size={16} />
-                Sign Out
+                {t('menu.sign_out')}
               </button>
+
             </div>
           </div>
         </div>
@@ -157,31 +186,68 @@ export function AppShell() {
                 }
               >
                 <Icon size={18} />
-                {label}
+                {t(`menu.${label.toLowerCase()}`)}
               </NavLink>
+
             ))}
           </nav>
 
           <div className="mt-auto rounded-3xl border border-white/10 bg-white/5 p-5">
-            <p className="text-sm font-semibold">Current Role</p>
+            <div className="mb-6">
+              <div className="flex items-center gap-2 mb-3 text-slate-400">
+                <Languages size={14} />
+                <span className="text-[10px] font-bold uppercase tracking-widest">{t('menu.language')}</span>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  onClick={() => i18n.changeLanguage('en')}
+                  className={`rounded-xl py-2 text-[10px] font-black uppercase tracking-widest transition ${
+                    i18n.language === 'en' ? 'bg-white text-slate-950' : 'bg-white/5 text-slate-400 hover:bg-white/10'
+                  }`}
+                >
+                  EN
+                </button>
+                <button
+                  onClick={() => i18n.changeLanguage('rw')}
+                  className={`rounded-xl py-2 text-[10px] font-black uppercase tracking-widest transition ${
+                    i18n.language === 'rw' ? 'bg-white text-slate-950' : 'bg-white/5 text-slate-400 hover:bg-white/10'
+                  }`}
+                >
+                  RW
+                </button>
+                <button
+                  onClick={() => i18n.changeLanguage('fr')}
+                  className={`rounded-xl py-2 text-[10px] font-black uppercase tracking-widest transition ${
+                    i18n.language === 'fr' ? 'bg-white text-slate-950' : 'bg-white/5 text-slate-400 hover:bg-white/10'
+                  }`}
+                >
+                  FR
+                </button>
+              </div>
+            </div>
+
+            <p className="text-sm font-semibold">{t('menu.role')}</p>
+
             <p className="mt-2 text-2xl font-bold uppercase tracking-tight">
               {profile?.role 
                 ? profile.role
                 : session 
-                  ? "Profile Missing" 
-                  : "Demo Mode"}
+                  ? t('menu.profile_missing') 
+                  : t('menu.demo_mode')}
             </p>
             <p className="mt-2 text-sm text-slate-300">
-              {profile?.full_name ?? (session ? session.user.email : "Connect Supabase auth to start selling.")}
+              {profile?.full_name ?? (session ? session.user.email : t('menu.connect_auth'))}
             </p>
             {authConfigured ? (
               <button
                 onClick={() => void logout()}
-                className="mt-4 flex items-center gap-2 rounded-2xl border border-white/10 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
+                 className="mt-4 flex items-center gap-2 rounded-2xl border border-white/10 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
               >
                 <LogOut size={16} />
-                Sign Out
+                {t('menu.sign_out')}
               </button>
+
             ) : null}
           </div>
         </aside>

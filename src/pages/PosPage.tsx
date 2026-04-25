@@ -1,4 +1,5 @@
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ChevronDown,
   Clock3,
@@ -38,9 +39,12 @@ import {
 import { createCustomer } from "../services/customerService";
 import { processReturn, type ReturnItemInput } from "../services/returnService";
 import { listSales, getSaleDetails } from "../services/saleService";
+
 import { usePosData } from "../context/PosDataContext";
-import { ShoppingBag, Tablet, CreditCard } from "lucide-react";
+import { ShoppingBag, Tablet, CreditCard, Printer } from "lucide-react";
 import type { PaymentMethod, PosCustomerRecord, PosProductRecord, ShopSettingsRecord } from "../types/database";
+import { createPortal } from "react-dom";
+import { Receipt80mm } from "../components/print/Receipt80mm";
 
 type BulkBreakdown = {
   bulkPackages: number;
@@ -82,6 +86,7 @@ const calcKeys = ["7", "8", "9", "/", "4", "5", "6", "*", "1", "2", "3", "-", "0
 const rwf = (value: number) => `${value.toLocaleString()} RWF`;
 
 export function PosPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { authConfigured, can, logout, profile, activeLocationId, assignedLocations, switchLocation } = useAuth();
   const searchRef = useRef<HTMLInputElement>(null);
@@ -101,7 +106,7 @@ export function PosPage() {
   const [query, setQuery] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [customerQuery, setCustomerQuery] = useState("");
-  const [selectedCustomer, setSelectedCustomer] = useState("Walk-in Customer");
+  const [selectedCustomer, setSelectedCustomer] = useState(t('pos.walk_in_customer'));
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [closeDayOpen, setCloseDayOpen] = useState(false);
   const [calculatorOpen, setCalculatorOpen] = useState(false);
@@ -140,6 +145,8 @@ export function PosPage() {
   const [returnRefundMethod, setReturnRefundMethod] = useState("cash");
   const [returnNotes, setReturnNotes] = useState("");
   const [processingReturn, setProcessingReturn] = useState(false);
+  const [autoPrint, setAutoPrint] = useState(false);
+  const [lastSaleForPrint, setLastSaleForPrint] = useState<any>(null);
   const PRODUCTS_PER_PAGE = 30;
 
   // Top-level permission check
@@ -149,16 +156,15 @@ export function PosPage() {
         <div className="rounded-full bg-rose-100 p-6 text-rose-600">
           <X size={48} strokeWidth={2.5} />
         </div>
-        <h1 className="text-3xl font-bold text-ink">Access Denied</h1>
+        <h1 className="text-3xl font-bold text-ink">{t('pos.denied.title')}</h1>
         <p className="max-w-md text-slate-600">
-          You do not have permission to access the POS system. 
-          Please contact your administrator if you believe this is an error.
+          {t('pos.denied.desc')}
         </p>
         <button
           onClick={() => navigate("/dashboard")}
           className="rounded-2xl bg-brand-500 px-8 py-3 font-semibold text-white shadow-soft transition hover:scale-105"
         >
-          Return to Dashboard
+          {t('pos.denied.return_btn')}
         </button>
       </div>
     );
@@ -170,7 +176,7 @@ export function PosPage() {
 
   function getErrorMessage(error: unknown) {
     if (!error) {
-      return "Failed to load POS data.";
+      return t('pos.errors.load_failed');
     }
     if (error instanceof Error) {
       return error.message;
@@ -181,21 +187,21 @@ export function PosPage() {
     try {
       return JSON.stringify(error);
     } catch {
-      return "Failed to load POS data.";
+      return t('pos.errors.load_failed');
     }
   }
 
   useEffect(() => {
     if (!supabaseConfigured) {
       setLoading(false);
-      setPageError("Supabase is not configured yet. Add your project keys to load real POS data.");
+      setPageError(t('menu.connect_auth'));
       return;
     }
 
     if (!authConfigured || !profile || !activeLocationId) {
       setLoading(false);
       setCheckingRegister(false);
-      setPageError("Please log in and ensure a location is assigned to access the POS system.");
+      setPageError(t('pos.errors.no_location_desc'));
       return;
     }
 
@@ -256,7 +262,7 @@ export function PosPage() {
 
   const filteredCustomers = useMemo(() => {
     const normalized = customerQuery.trim().toLowerCase();
-    const realCustomers = ["Walk-in Customer", ...customers.map((customer) => customer.full_name)];
+    const realCustomers = [t('pos.walk_in_customer'), ...customers.map((customer) => customer.full_name)];
     return realCustomers.filter((customer) => customer.toLowerCase().includes(normalized));
   }, [customerQuery, customers]);
 
@@ -471,9 +477,10 @@ export function PosPage() {
     setMomoAmount("");
     setCashAmount("");
     setPaymentError(null);
+    setAutoPrint(false);
   }
 
-  async function confirmPayment() {
+  async function confirmPayment(shouldPrint = false) {
     if (!profile?.id) {
       setPaymentError("No cashier profile found for this session.");
       return;
@@ -510,7 +517,7 @@ export function PosPage() {
     try {
       setSubmitting(true);
       setPaymentError(null);
-      await createPosSale({
+      const saleRes = await createPosSale({
         customer_id: selectedCustomerRecord?.id ?? null,
         cashier_id: profile.id,
         subtotal,
@@ -539,6 +546,42 @@ export function PosPage() {
         payments,
         location_id: activeLocationId,
       } as any);
+
+      if (shouldPrint) {
+        const saleDetails = {
+          sale_number: (saleRes as any).sale.sale_number,
+          created_at: (saleRes as any).sale.created_at,
+          customer_name: selectedCustomerRecord?.full_name || t('pos.walk_in_customer'),
+          cashier_name: profile.full_name,
+          items: cart.map(item => ({
+            name: item.name,
+            quantity: item.qty,
+            unit_price: item.price,
+            line_total: item.bulkBreakdown ? item.bulkBreakdown.lineTotal : item.qty * item.price,
+            discount_amount: item.discount_type === 'percentage' 
+              ? (item.bulkBreakdown ? item.bulkBreakdown.lineTotal : item.qty * item.price) * (item.discount_value / 100)
+              : (item.discount_type === 'fixed' ? item.discount_value : 0),
+            bulk_breakdown: item.bulkBreakdown ? {
+              bulkPackages: item.bulkBreakdown.bulkPackages,
+              bulkQty: item.bulkBreakdown.bulkQty,
+              bulkPrice: item.bulkBreakdown.bulkPrice,
+              remainingUnits: item.bulkBreakdown.remainingUnits,
+              unitPrice: item.bulkBreakdown.unitPrice,
+            } : undefined,
+          })),
+          subtotal,
+          tax_amount: taxAmount,
+          total_amount: finalTotal,
+          discount_amount: orderDiscountAmount,
+          payments,
+          settings: shopSettings
+        };
+        setLastSaleForPrint(saleDetails);
+        setTimeout(() => {
+          window.print();
+          setLastSaleForPrint(null);
+        }, 500);
+      }
 
       playSuccessSound();
 
@@ -718,23 +761,22 @@ export function PosPage() {
         <div className="rounded-full bg-slate-800 p-6 text-brand-400">
           <MapPin size={48} strokeWidth={2} />
         </div>
-        <h1 className="text-3xl font-bold tracking-tight">No Location Assigned</h1>
+        <h1 className="text-3xl font-bold tracking-tight">{t('pos.no_location.title')}</h1>
         <p className="max-w-md text-slate-400">
-          Your account is not currently assigned to any store location. 
-          Please contact your administrator to assign you to a branch before accessing the POS.
+          {t('pos.no_location.desc')}
         </p>
         <div className="flex gap-3">
           <button
             onClick={() => navigate("/dashboard")}
             className="rounded-2xl border border-slate-700 bg-slate-800 px-8 py-3 font-semibold text-white transition hover:bg-slate-700"
           >
-            Dashboard
+            {t('common.dashboard')}
           </button>
           <button
             onClick={() => void logout()}
             className="rounded-2xl bg-rose-500 px-8 py-3 font-semibold text-white shadow-soft transition hover:bg-rose-600"
           >
-            Logout
+            {t('common.logout')}
           </button>
         </div>
       </div>
@@ -748,14 +790,14 @@ export function PosPage() {
           <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-brand-50 text-brand-600">
             <Calculator size={32} />
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-ink">Start Shift</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-ink">{t('pos.shift.start_title')}</h1>
           <p className="mt-2 text-sm text-slate-500">
-            Please enter your starting cash float for this register before accessing the POS.
+            {t('pos.shift.start_desc')}
           </p>
           <div className="mt-8 space-y-4">
             <div>
               <label className="block text-left text-xs font-semibold uppercase tracking-wider text-slate-400">
-                Opening Cash Amount (RWF)
+                {t('pos.shift.opening_cash')}
               </label>
               <input
                 type="number"
@@ -772,13 +814,13 @@ export function PosPage() {
               disabled={startingAmountSubmitting}
               className="w-full rounded-2xl bg-brand-500 py-3.5 font-semibold text-white shadow-soft transition hover:bg-brand-600 disabled:opacity-50"
             >
-              {startingAmountSubmitting ? "Opening..." : "Open Register"}
+              {startingAmountSubmitting ? t('common.opening') : t('pos.shift.open_btn')}
             </button>
             <button
               onClick={() => navigate("/dashboard")}
               className="w-full rounded-2xl bg-slate-100 py-3.5 font-semibold text-slate-700 transition hover:bg-slate-200"
             >
-              Go to Dashboard
+              {t('common.go_to_dashboard')}
             </button>
           </div>
         </div>
@@ -790,7 +832,7 @@ export function PosPage() {
     return (
       <div className="flex h-screen items-center justify-center bg-slate-50">
         <div className="text-center font-medium text-slate-500">
-          Checking register status...
+          {t('pos.shift.checking_status')}
         </div>
       </div>
     );
@@ -804,28 +846,28 @@ export function PosPage() {
             <div className="order-1 grid gap-2 sm:grid-cols-4 xl:max-w-[200px]">
               <button
                 onClick={() => { setHistoryOpen(true); void loadRecentSales(); }}
-                title="Recent Sales"
+                title={t('pos.ui.recent_sales')}
                 className="flex h-10 items-center justify-center rounded-2xl bg-slate-100 px-3 text-slate-700 transition hover:bg-slate-200"
               >
                 <History size={14} />
               </button>
               <button
                 onClick={() => setCloseDayOpen(true)}
-                title="Close Day"
+                title={t('pos.ui.close_day')}
                 className="flex h-10 items-center justify-center rounded-2xl bg-rose-50 px-3 text-rose-700 transition hover:bg-rose-100"
               >
                 <Clock3 size={14} />
               </button>
               <button
                 onClick={() => setCalculatorOpen(true)}
-                title="Calculator"
+                title={t('pos.ui.calculator')}
                 className="flex h-10 items-center justify-center rounded-2xl bg-amber-50 px-3 text-amber-700 transition hover:bg-amber-100"
               >
                 <Calculator size={14} />
               </button>
               <button
                 onClick={() => navigate("/dashboard")}
-                title="Dashboard"
+                title={t('common.dashboard')}
                 className="flex h-10 items-center justify-center rounded-2xl bg-brand-50 px-3 text-brand-700 transition hover:bg-brand-100"
               >
                 <LayoutDashboard size={14} />
@@ -842,7 +884,7 @@ export function PosPage() {
               <div className="flex items-center gap-2">
                 <div className="flex flex-col items-end mr-1">
                    <p className="max-w-28 truncate text-xs font-semibold text-ink leading-tight">
-                     {profile?.full_name ?? "Active Cashier"}
+                     {profile?.full_name ?? t('pos.ui.active_cashier')}
                    </p>
                    <div className="relative">
                      <button
@@ -850,7 +892,7 @@ export function PosPage() {
                        className="flex items-center gap-1.5 text-[10px] font-bold text-brand-600 uppercase tracking-wider leading-tight hover:text-brand-800 hover:bg-brand-50 rounded-md px-2 py-1 -mx-2 transition-all active:scale-95"
                      >
                        <MapPin size={10} className="text-brand-500" />
-                       {assignedLocations.find(l => l.id === activeLocationId)?.name || "No Location"}
+                       {assignedLocations.find(l => l.id === activeLocationId)?.name || t('pos.ui.no_location')}
                        {assignedLocations.length > 1 && (
                          <ChevronDown 
                            size={10} 
@@ -892,14 +934,14 @@ export function PosPage() {
               {menuOpen ? (
                 <div className="absolute right-0 top-[calc(100%+0.5rem)] z-30 min-w-52 rounded-2xl border border-slate-200 bg-white p-2 shadow-soft">
                   <div className="rounded-xl px-3 py-2 text-xs uppercase tracking-[0.2em] text-slate-400">
-                    {profile?.role ?? "cashier"}
+                    {profile?.role ?? t('pos.ui.active_cashier')}
                   </div>
                   <button
                     onClick={() => void logout()}
                     className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-rose-600 hover:bg-rose-50"
                   >
                     <LogOut size={16} />
-                    Logout
+                    {t('common.logout')}
                   </button>
                   <div className="my-2 border-t border-slate-100" />
                   <button
@@ -907,7 +949,7 @@ export function PosPage() {
                     className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-slate-600 hover:bg-slate-50"
                   >
                     <Receipt size={16} className="text-emerald-500" />
-                    Test Success Sound
+                    {t('pos.ui.test_sound')}
                   </button>
                 </div>
               ) : null}
@@ -933,7 +975,7 @@ export function PosPage() {
                     onChange={(event) => setQuery(event.target.value)}
                     onKeyDown={onSearchKeyDown}
                     className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm outline-none focus:border-brand-300"
-                    placeholder="Scan or search product..."
+                    placeholder={t('pos.search_placeholder')}
                   />
                   {!!query && filteredProducts.length > 0 ? (
                     <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-20 rounded-2xl border border-slate-800 bg-slate-950 p-2 shadow-soft">
@@ -964,7 +1006,7 @@ export function PosPage() {
                 </div>
                 <button className="flex items-center justify-center gap-2 rounded-2xl border border-dashed border-brand-200 bg-brand-50 px-5 py-3 text-sm font-semibold text-brand-700 transition hover:bg-brand-100">
                   <Camera size={18} />
-                  Scan Barcode
+                  {t('pos.scan_barcode')}
                 </button>
               </div>
             </div>
@@ -972,9 +1014,9 @@ export function PosPage() {
             <div className="min-h-0 flex-1 overflow-hidden rounded-[22px] bg-white p-3 shadow-soft flex flex-col">
               <div className="mb-2 flex items-center justify-between gap-2">
                 <div>
-                  <h2 className="text-sm font-bold">Product Grid</h2>
+                  <h2 className="text-sm font-bold">{t('pos.product_grid')}</h2>
                   <p className="text-xs text-slate-400">
-                    {loading ? "Syncing..." : `${filteredProducts.length} products — Click to add`}
+                    {loading ? t('common.syncing') : `${filteredProducts.length} products — Click to add`}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -1015,7 +1057,7 @@ export function PosPage() {
                       </div>
                     ) : (
                       <div className="mb-2 flex h-[88px] w-full shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-slate-100 to-slate-50 text-slate-300">
-                        <span className="text-[9px] font-bold uppercase tracking-widest opacity-50">No Image</span>
+                        <span className="text-[9px] font-bold uppercase tracking-widest opacity-50">{t('pos.ui.no_image')}</span>
                       </div>
                     )}
                     <div className="flex w-full flex-1 flex-col justify-between px-1 pb-0.5">
@@ -1033,7 +1075,7 @@ export function PosPage() {
                 ))}
                 {!loading && !filteredProducts.length ? (
                   <div className="col-span-full rounded-3xl border border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">
-                    No products found.
+                    {t('pos.ui.no_products')}
                   </div>
                 ) : null}
               </div>
@@ -1050,7 +1092,7 @@ export function PosPage() {
                       value={customerQuery}
                       onChange={(event) => setCustomerQuery(event.target.value)}
                       className={`w-full rounded-2xl bg-slate-950 py-2.5 pl-10 pr-12 text-sm text-white outline-none ${
-                        selectedCustomer && selectedCustomer !== "Walk-in Customer"
+                        selectedCustomer && selectedCustomer !== t('pos.walk_in_customer')
                           ? "border border-brand-500"
                           : "border border-slate-700"
                       }`}
@@ -1059,7 +1101,7 @@ export function PosPage() {
                     <button 
                       onClick={() => setAddCustomerOpen(true)}
                       className="absolute right-2 top-1/2 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-xl bg-brand-500/10 text-brand-400 transition hover:bg-brand-500 hover:text-white"
-                      title="Add New Customer"
+                      title={t('pos.ui.add_customer_tooltip')}
                     >
                       <UserPlus size={16} />
                     </button>
@@ -1093,6 +1135,18 @@ export function PosPage() {
                       {/* 1. NAME (Increased Font) */}
                       <div className="flex-1 min-w-0">
                         <p className="truncate text-base font-bold text-white leading-tight">{item.name}</p>
+                        {item.bulkBreakdown && item.bulkBreakdown.bulkPackages > 0 && (
+                          <div className="mt-1 space-y-0.5">
+                            <p className="text-[10px] font-black text-brand-400 uppercase tracking-wider">
+                              📦 {item.bulkBreakdown.bulkPackages} {item.bulkBreakdown.bulkPackages > 1 ? 'Boxes' : 'Box'} ({item.bulkBreakdown.bulkQty} units each)
+                            </p>
+                            {item.bulkBreakdown.remainingUnits > 0 && (
+                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                🧩 {item.bulkBreakdown.remainingUnits} {item.bulkBreakdown.remainingUnits > 1 ? 'Units' : 'Unit'} (Loose)
+                              </p>
+                            )}
+                          </div>
+                        )}
                         {item.discount_value > 0 && (
                           <p className="text-[10px] font-black text-emerald-400 uppercase tracking-tighter">
                             {item.discount_type === 'percentage' ? `-${item.discount_value}%` : `-${item.discount_value} RWF`}
@@ -1110,7 +1164,7 @@ export function PosPage() {
                           item.discount_value > 0 ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" : "bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white"
                         }`}
                       >
-                        {item.discount_value > 0 ? "Disc" : "Add Disc"}
+                        {item.discount_value > 0 ? t('pos.ui.add_discount') : t('pos.ui.add_discount')}
                       </button>
 
                       {/* 3. QTY CONTROL */}
@@ -1150,7 +1204,7 @@ export function PosPage() {
                 ) : (
                   <div className="flex flex-1 flex-col items-center justify-center text-center opacity-30">
                     <ShoppingBag size={48} strokeWidth={1} />
-                    <p className="mt-4 text-sm font-semibold tracking-widest uppercase">Cart Empty</p>
+                    <p className="mt-4 text-sm font-semibold tracking-widest uppercase">{t('pos.cart_empty')}</p>
                   </div>
                 )}
               </div>
@@ -1158,22 +1212,22 @@ export function PosPage() {
               <div className="rounded-3xl bg-slate-900 p-5 space-y-4">
                 <div className="space-y-2.5">
                   <div className="flex justify-between text-xs font-bold uppercase tracking-widest text-slate-500">
-                    <span>Subtotal</span>
+                    <span>{t('pos.subtotal')}</span>
                     <span>{rwf(totalAmount)}</span>
                   </div>
                   {orderDiscount.value > 0 && (
                     <div className="flex justify-between text-xs font-bold text-emerald-400">
-                      <span>Order Discount ({orderDiscount.type === 'percentage' ? `${orderDiscount.value}%` : rwf(orderDiscount.value)})</span>
+                      <span>{t('pos.ui.order_discount')} ({orderDiscount.type === 'percentage' ? `${orderDiscount.value}%` : rwf(orderDiscount.value)})</span>
                       <span>-{rwf(orderDiscountAmount)}</span>
                     </div>
                   )}
                   <div className="flex justify-between text-xs font-bold uppercase tracking-widest text-slate-500">
-                    <span>Tax ({taxPercentage}%)</span>
+                    <span>{t('pos.tax')} ({taxPercentage}%)</span>
                     <span>{rwf(checkoutTaxAmount)}</span>
                   </div>
                   <div className="my-3 border-t border-slate-800 border-dashed" />
                   <div className="flex justify-between text-lg font-black text-white">
-                    <span className="uppercase tracking-tighter">Total RWF</span>
+                    <span className="uppercase tracking-tighter">{t('pos.total')} RWF</span>
                     <span className="text-brand-400">{rwf(checkoutTotalAmount)}</span>
                   </div>
                 </div>
@@ -1188,15 +1242,15 @@ export function PosPage() {
                     }`}
                   >
                     <Tag size={13} />
-                    {orderDiscount.value > 0 ? "Edit Disc" : "Disc"}
+                    {orderDiscount.value > 0 ? t('pos.ui.edit_discount') : t('pos.ui.add_discount')}
                   </button>
-                  <button
+                    <button
                     onClick={() => setCheckoutOpen(true)}
                     disabled={cart.length === 0}
                     className="flex items-center justify-center gap-2 rounded-2xl bg-brand-500 py-3.5 text-sm font-bold text-white shadow-soft transition-all hover:bg-brand-600 disabled:opacity-30 disabled:scale-100 active:scale-95"
                   >
                     <Receipt size={20} />
-                    Checkout
+                    {t('pos.checkout')}
                   </button>
                 </div>
               </div>
@@ -1212,14 +1266,14 @@ export function PosPage() {
             <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-brand-50 text-brand-600">
               <Calculator size={32} />
             </div>
-            <h1 className="text-2xl font-bold tracking-tight text-ink">Start Shift</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-ink">{t('pos.shift.start_title')}</h1>
             <p className="mt-2 text-sm text-slate-500">
-              Please enter your starting cash float for this register before accessing the POS.
+              {t('pos.shift.start_desc')}
             </p>
             <div className="mt-8 space-y-4">
               <div>
                 <label className="block text-left text-xs font-semibold uppercase tracking-wider text-slate-400">
-                  Opening Cash Amount (RWF)
+                  {t('pos.shift.opening_cash')}
                 </label>
                 <input
                   type="number"
@@ -1236,13 +1290,13 @@ export function PosPage() {
                 disabled={startingAmountSubmitting}
                 className="w-full rounded-2xl bg-brand-500 py-3.5 font-semibold text-white shadow-soft transition hover:bg-brand-600 disabled:opacity-50"
               >
-                {startingAmountSubmitting ? "Opening..." : "Open Register"}
+                {startingAmountSubmitting ? t('common.opening') : t('pos.shift.open_btn')}
               </button>
               <button
                 onClick={() => navigate("/dashboard")}
                 className="w-full rounded-2xl bg-slate-100 py-3.5 font-semibold text-slate-700 transition hover:bg-slate-200"
               >
-                Go to Dashboard
+                {t('common.go_to_dashboard')}
               </button>
             </div>
           </div>
@@ -1259,7 +1313,7 @@ export function PosPage() {
                   <button onClick={() => setCheckoutOpen(false)} className="rounded-full bg-white p-2.5 text-slate-400 shadow-sm hover:text-slate-600">
                     <X size={20} />
                   </button>
-                  <span className="text-xs font-bold uppercase tracking-widest text-slate-400">Order Summary</span>
+                  <span className="text-xs font-bold uppercase tracking-widest text-slate-400">{t('pos.order_summary')}</span>
                 </div>
 
                 <div className="max-h-[300px] space-y-4 overflow-y-auto pr-2">
@@ -1294,11 +1348,11 @@ export function PosPage() {
 
                 <div className="mt-10 space-y-3 rounded-3xl bg-white p-6 shadow-sm">
                   <div className="flex justify-between text-xs font-bold uppercase tracking-wider text-slate-400">
-                    <span>Subtotal</span>
+                    <span>{t('pos.ui.subtotal')}</span>
                     <span>{rwf(subtotalAmount)}</span>
                   </div>
                   <div className="flex justify-between text-xs font-bold uppercase tracking-wider text-slate-400">
-                    <span>Tax</span>
+                    <span>{t('pos.ui.tax')}</span>
                     <span>{rwf(checkoutTaxAmount)}</span>
                   </div>
                   <div className="my-4 border-t border-slate-100" />
@@ -1310,16 +1364,16 @@ export function PosPage() {
               </div>
 
               <div className="p-8 lg:p-10">
-                <h3 className="text-2xl font-black text-ink uppercase tracking-tight">Select Payment</h3>
-                <p className="mt-2 text-sm text-slate-500">Choose how the customer prefers to pay for this purchase.</p>
+                <h3 className="text-2xl font-black text-ink uppercase tracking-tight">{t('pos.select_payment')}</h3>
+                <p className="mt-2 text-sm text-slate-500">{t('pos.ui.checkout_desc')}</p>
 
                 <div className="mt-8 grid grid-cols-2 gap-3">
                   {[
-                    { id: "cash", label: "Cash", icon: Wallet, color: "emerald" },
-                    { id: "momo", label: "Momo", icon: Tablet, color: "amber" },
-                    { id: "bank", label: "Bank Card", icon: CreditCard, color: "sky" },
-                    { id: "multiple", label: "Multiple", icon: Receipt, color: "indigo" },
-                    { id: "credit", label: "Credit", icon: UserPlus, color: "rose" },
+                    { id: "cash", label: t('pos.cash'), icon: Wallet, color: "emerald" },
+                    { id: "momo", label: t('pos.momo'), icon: Tablet, color: "amber" },
+                    { id: "bank", label: t('pos.card'), icon: CreditCard, color: "sky" },
+                    { id: "multiple", label: t('pos.multiple'), icon: Receipt, color: "indigo" },
+                    { id: "credit", label: t('pos.credit'), icon: UserPlus, color: "rose" },
                   ].map((mode) => (
                     <button
                       key={mode.id}
@@ -1350,7 +1404,7 @@ export function PosPage() {
                 {paymentMode && paymentMode !== "multiple" && paymentMode !== "credit" && (
                   <div className="mt-8 animate-fade-in space-y-5">
                     <div>
-                      <label className="block text-xs font-bold uppercase tracking-wider text-slate-400">Amount Received (RWF)</label>
+                      <label className="block text-xs font-bold uppercase tracking-wider text-slate-400">{t('pos.amount_received')} (RWF)</label>
                       <div className="relative mt-2">
                         <Wallet className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
                         <input
@@ -1365,7 +1419,7 @@ export function PosPage() {
                     </div>
                     {Number(amountPaid) > checkoutTotalAmount && (
                       <div className="flex items-center justify-between rounded-2xl bg-emerald-50 p-4 text-emerald-700">
-                        <span className="text-sm font-bold uppercase tracking-widest">Change Due</span>
+                        <span className="text-sm font-bold uppercase tracking-widest">{t('pos.ui.change_due')}</span>
                         <span className="text-xl font-black">{rwf(change)}</span>
                       </div>
                     )}
@@ -1376,7 +1430,7 @@ export function PosPage() {
                   <div className="mt-8 animate-fade-in space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Momo Amount</label>
+                        <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">{t('pos.ui.momo_amount')}</label>
                         <input
                           type="number"
                           value={momoAmount}
@@ -1391,7 +1445,7 @@ export function PosPage() {
                         />
                       </div>
                       <div>
-                        <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Cash Amount</label>
+                        <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">{t('pos.ui.cash_amount')}</label>
                         <input
                           type="number"
                           value={cashAmount}
@@ -1407,7 +1461,7 @@ export function PosPage() {
                       </div>
                     </div>
                     <div className="flex items-center justify-between rounded-2xl border border-dashed border-slate-200 p-4">
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Remaining</span>
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">{t('pos.ui.remaining')}</span>
                       <span className={`text-lg font-black ${remaining === 0 ? "text-emerald-500" : remaining < 0 ? "text-rose-500" : "text-amber-500"}`}>
                         {rwf(remaining)}
                       </span>
@@ -1423,11 +1477,19 @@ export function PosPage() {
 
                 <div className="mt-8 flex gap-3">
                   <button
-                    onClick={confirmPayment}
+                    onClick={() => confirmPayment(false)}
                     disabled={submitting || !paymentMode || (paymentMode === "multiple" && remaining !== 0)}
-                    className="flex-1 rounded-2xl bg-slate-950 py-4 font-bold text-white shadow-xl transition hover:bg-black disabled:opacity-30 active:scale-95"
+                    className="flex-1 rounded-2xl bg-white border-2 border-slate-200 py-4 font-bold text-slate-600 transition hover:bg-slate-50 disabled:opacity-30 active:scale-95"
                   >
-                    {submitting ? "Processing..." : "Finish Receipt"}
+                    {submitting ? "..." : t('pos.finish_only')}
+                  </button>
+                  <button
+                    onClick={() => confirmPayment(true)}
+                    disabled={submitting || !paymentMode || (paymentMode === "multiple" && remaining !== 0)}
+                    className="flex-[2] rounded-2xl bg-slate-950 py-4 font-bold text-white shadow-xl transition hover:bg-black disabled:opacity-30 active:scale-95 flex items-center justify-center gap-2"
+                  >
+                    <Printer size={18} />
+                    {submitting ? t('common.processing') : t('pos.finish_print')}
                   </button>
                 </div>
               </div>
@@ -1441,7 +1503,7 @@ export function PosPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 px-4 backdrop-blur-sm">
           <div className="w-full max-w-[320px] animate-scale-in rounded-[2rem] bg-white p-6 shadow-2xl">
             <div className="mb-4 flex items-center justify-between">
-              <h3 className="font-bold text-slate-400 uppercase tracking-widest text-[10px]">Calculator</h3>
+              <h3 className="font-bold text-slate-400 uppercase tracking-widest text-[10px]">{t('pos.ui.calculator')}</h3>
               <button 
                 onClick={() => {
                   setCalculatorOpen(false);
@@ -1483,32 +1545,32 @@ export function PosPage() {
              <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-rose-50 text-rose-600">
                <Clock3 size={40} />
              </div>
-             <h2 className="text-center text-3xl font-black text-ink tracking-tight">Close Your Shift</h2>
-             <p className="mt-2 text-center text-sm text-slate-500">Review your final sales before logging out for the day.</p>
+             <h2 className="text-center text-3xl font-black text-ink tracking-tight">{t('pos.ui.close_shift')}</h2>
+             <p className="mt-2 text-center text-sm text-slate-500">{t('pos.ui.close_shift_desc')}</p>
 
              <div className="mt-8 space-y-3">
                <div className="grid grid-cols-2 gap-3">
                   <div className="rounded-3xl bg-slate-50 p-5">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Cash Sales</p>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">{t('pos.ui.cash_sales')}</p>
                     <p className="mt-1 text-lg font-black text-ink">{rwf(closeDaySummary.cash_amount)}</p>
                   </div>
                   <div className="rounded-3xl bg-slate-50 p-5">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Momo Sales</p>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">{t('pos.ui.momo_sales')}</p>
                     <p className="mt-1 text-lg font-black text-ink">{rwf(closeDaySummary.momo_amount)}</p>
                   </div>
                   <div className="rounded-3xl bg-slate-50 p-5">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Bank Sales</p>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">{t('pos.ui.bank_sales')}</p>
                     <p className="mt-1 text-lg font-black text-ink">{rwf(closeDaySummary.bank_amount)}</p>
                   </div>
                   <div className="rounded-3xl bg-slate-50 p-5">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Card Sales</p>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">{t('pos.ui.card_sales')}</p>
                     <p className="mt-1 text-lg font-black text-ink">{rwf(closeDaySummary.card_amount)}</p>
                   </div>
                </div>
                <div className="rounded-[2rem] bg-slate-950 p-6 text-white shadow-xl">
                   <div className="flex justify-between items-center">
                     <div>
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 opacity-60">Total Closed Sales</p>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 opacity-60">{t('pos.ui.total_closed_sales')}</p>
                       <p className="mt-1 text-2xl font-black text-brand-400">{rwf(closeDaySummary.total_amount)}</p>
                     </div>
                     <div className="h-12 w-12 rounded-2xl bg-white/10 flex items-center justify-center">
@@ -1523,13 +1585,13 @@ export function PosPage() {
                   onClick={() => setCloseDayOpen(false)}
                   className="rounded-2xl border border-slate-100 py-4 font-bold text-slate-400 hover:bg-slate-50 transition"
                 >
-                  Cancel
+                  {t('common.cancel')}
                 </button>
                 <button
                   onClick={confirmCloseDay}
                   className="rounded-2xl bg-rose-500 py-4 font-bold text-white shadow-soft hover:bg-rose-600 transition active:scale-95"
                 >
-                  End Shift & Logout
+                  {t('pos.ui.end_shift_logout')}
                 </button>
              </div>
           </div>
@@ -1541,8 +1603,8 @@ export function PosPage() {
           <div className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-[2.5rem] bg-white shadow-soft" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between border-b border-slate-100 px-5 py-6">
               <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-600">Quick Operations</p>
-                <h2 className="mt-1 text-2xl font-bold text-ink">New Customer Record</h2>
+                <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-600">{t('pos.ui.quick_ops')}</p>
+                <h2 className="mt-1 text-2xl font-bold text-ink">{t('pos.ui.new_customer_title')}</h2>
               </div>
               <button onClick={() => setAddCustomerOpen(false)} className="rounded-full bg-slate-100 p-2 text-slate-600">
                 <X size={18} />
@@ -1551,7 +1613,7 @@ export function PosPage() {
 
             <div className="grid gap-4 overflow-y-auto px-6 py-6 md:grid-cols-2">
               <label className="rounded-2xl bg-slate-50 p-4">
-                <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Customer Name</span>
+                <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{t('pos.ui.customer_name')}</span>
                 <input
                   type="text"
                   value={newCustomerName}
@@ -1937,6 +1999,22 @@ export function PosPage() {
             </div>
           </div>
         </div>
+      )}
+      {/* PRINT PORTAL */}
+      <style>{`
+        @media print {
+          body * { visibility: hidden !important; }
+          #receipt-80mm, #receipt-80mm * { visibility: visible !important; }
+          #receipt-80mm { position: fixed; left: 0; top: 0; width: 80mm !important; }
+          @page { size: 80mm auto; margin: 0; }
+        }
+      `}</style>
+      
+      {lastSaleForPrint && createPortal(
+        <Receipt80mm
+          {...lastSaleForPrint}
+        />,
+        document.body
       )}
     </div>
   );

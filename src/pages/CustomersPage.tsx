@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Printer, Pencil, Plus, Search, Trash2, X } from "lucide-react";
+
 import { useAuth } from "../context/AuthContext";
 import { useNotification } from "../context/NotificationContext";
 import { SectionCard } from "../components/ui/SectionCard";
@@ -32,7 +34,9 @@ const initialForm: CustomerForm = {
 };
 
 export function CustomersPage() {
+  const { t } = useTranslation();
   const { can } = useAuth();
+
   const { showToast, confirm } = useNotification();
   const [search, setSearch] = useState("");
   const [rows, setRows] = useState<CustomerRow[]>([]);
@@ -169,13 +173,13 @@ export function CustomersPage() {
 
     setSelectedCustomer(nextRow);
 
-    showToast("success", formValues.id ? "Customer updated successfully!" : "Customer created successfully!");
+    showToast("success", formValues.id ? t('customers.success.updated') : t('customers.success.created'));
     setFormOpen(false);
     setFormValues(initialForm);
   }
 
   async function deleteCustomer(id: string) {
-    const confirmed = await confirm("Delete Customer", "Are you sure you want to delete this customer? This will remove all their history from the registry.");
+    const confirmed = await confirm(t('customers.modal.delete_title'), t('customers.modal.delete_desc'));
     if (!confirmed) return;
 
     try {
@@ -185,7 +189,7 @@ export function CustomersPage() {
         if (selectedCustomer?.id === id) {
           setSelectedCustomer(null);
         }
-        showToast("success", "Customer deleted.");
+        showToast("success", t('customers.success.deleted'));
       });
     } catch (error) {
       console.error("Failed to delete customer:", error);
@@ -204,10 +208,11 @@ export function CustomersPage() {
   return (
     <div className="space-y-6">
       <div className="mb-2">
-        <p className="text-sm font-semibold uppercase tracking-[0.25em] text-brand-600">Operations</p>
-        <h2 className="mt-1 text-3xl font-bold text-ink">Customer Directory</h2>
+        <p className="text-sm font-semibold uppercase tracking-[0.25em] text-brand-600">{t('dashboard.stats.customers')}</p>
+        <h2 className="mt-1 text-3xl font-bold text-ink">{t('customers.title')}</h2>
       </div>
-      <SectionCard title="Customer directory" subtitle="Manage buyers, credit balances, and payment record details">
+
+      <SectionCard title={t('customers.title')} subtitle={t('customers.subtitle')}>
         <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <label className="flex w-full max-w-xl items-center gap-3 rounded-2xl border border-brand-100 bg-gradient-to-r from-brand-50 to-white px-4 py-3">
             <Search size={16} className="text-brand-500" />
@@ -215,17 +220,19 @@ export function CustomersPage() {
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               className="w-full border-none bg-transparent text-sm outline-none"
-              placeholder="Search customer, contact or address"
+              placeholder={t('customers.search_placeholder')}
             />
           </label>
+
           {can("Customers", "add") && (
             <button
               onClick={openCreateModal}
               className="flex items-center justify-center gap-2 rounded-2xl bg-brand-500 px-5 py-3 text-sm font-semibold text-white transition hover:bg-brand-600"
             >
               <Plus size={18} />
-              Create customer
+              {t('customers.new_customer')}
             </button>
+
           )}
         </div>
 
@@ -235,12 +242,12 @@ export function CustomersPage() {
               <thead className="bg-gradient-to-r from-slate-900 via-slate-800 to-brand-700 text-white">
                 <tr>
                   {[
-                    "Name",
-                    "Contact",
-                    "Total Purchase",
-                    "Unpaid",
-                    "Address",
-                    "Actions",
+                    t('customers.table.name'),
+                    t('customers.table.contact'),
+                    t('customers.table.total_purchase'),
+                    t('customers.table.unpaid'),
+                    t('customers.table.address'),
+                    t('common.actions'),
                   ].map((column) => (
                     <th
                       key={column}
@@ -251,6 +258,7 @@ export function CustomersPage() {
                   ))}
                 </tr>
               </thead>
+
               <tbody className="bg-white">
                 {paginatedRows.length > 0 ? (
                   paginatedRows.map((row) => (
@@ -281,7 +289,7 @@ export function CustomersPage() {
                             <button
                               onClick={() => openEditModal(row)}
                               className="rounded-xl bg-sky-50 p-2 text-sky-600 transition hover:bg-sky-100"
-                              title="Edit Customer"
+                              title={t('common.edit')}
                             >
                               <Pencil size={16} />
                             </button>
@@ -290,7 +298,7 @@ export function CustomersPage() {
                             <button
                               onClick={() => deleteCustomer(row.id)}
                               className="rounded-xl bg-rose-50 p-2 text-rose-600 transition hover:bg-rose-100"
-                              title="Delete Customer"
+                              title={t('common.delete')}
                             >
                               <Trash2 size={16} />
                             </button>
@@ -298,7 +306,7 @@ export function CustomersPage() {
                           <button
                             onClick={() => handlePrintCustomer(row)}
                             className="rounded-xl bg-orange-50 p-2 text-orange-600 transition hover:bg-orange-100"
-                            title="Print Statement"
+                            title={t('common.print')}
                           >
                             <Printer size={16} />
                           </button>
@@ -309,10 +317,11 @@ export function CustomersPage() {
                 ) : (
                   <tr>
                     <td colSpan={6} className="px-5 py-10 text-center text-slate-500">
-                      No customers found in the database.
+                      {t('customers.no_customers')}
                     </td>
                   </tr>
                 )}
+
               </tbody>
             </table>
           </div>
@@ -332,12 +341,13 @@ export function CustomersPage() {
             <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
               <div>
                 <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-600">
-                  {formValues.id ? "Edit Customer" : "Add Customer"}
+                  {formValues.id ? t('customers.modal.edit_title') : t('customers.modal.create_title')}
                 </p>
                 <h2 className="mt-1 text-2xl font-bold text-ink">
-                  {formValues.id ? formValues.name : "Create customer record"}
+                  {formValues.id ? formValues.name : t('customers.modal.subtitle')}
                 </h2>
               </div>
+
               <button onClick={() => setFormOpen(false)} className="rounded-full bg-slate-100 p-2 text-slate-600">
                 <X size={18} />
               </button>
@@ -345,42 +355,45 @@ export function CustomersPage() {
 
             <div className="grid gap-3 overflow-y-auto px-5 py-4 md:grid-cols-2">
               <label className="rounded-2xl bg-slate-50 p-3">
-                <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Customer Name</span>
+                <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{t('customers.modal.name')}</span>
                 <input
                   value={formValues.name}
                   onChange={(event) => setFormValues((current) => ({ ...current, name: event.target.value }))}
                   className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none"
-                  placeholder="Full name"
+                  placeholder={t('customers.modal.name_placeholder')}
                 />
               </label>
 
+
               <label className="rounded-2xl bg-sky-50 p-3">
-                <span className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-700">Contact</span>
+                <span className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-700">{t('customers.modal.contact')}</span>
                 <input
                   value={formValues.contact}
                   onChange={(event) => setFormValues((current) => ({ ...current, contact: event.target.value }))}
                   className="mt-2 w-full rounded-xl border border-sky-100 bg-white px-3 py-2.5 text-sm outline-none"
-                  placeholder="Phone or email"
+                  placeholder={t('customers.modal.contact_placeholder')}
                 />
               </label>
 
+
               <label className="rounded-2xl bg-slate-50 p-3">
-                <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Address</span>
+                <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{t('customers.modal.address')}</span>
                 <input
                   value={formValues.address}
                   onChange={(event) => setFormValues((current) => ({ ...current, address: event.target.value }))}
                   className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none"
-                  placeholder="Street, city"
+                  placeholder={t('customers.modal.address_placeholder')}
                 />
               </label>
+
             </div>
 
             <div className="flex items-center justify-end gap-3 border-t border-slate-100 px-5 py-4">
               <button onClick={() => setFormOpen(false)} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100">
-                Cancel
+                {t('common.cancel')}
               </button>
               <button onClick={saveCustomer} className="rounded-2xl bg-brand-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-brand-700">
-                Save Customer
+                {t('customers.modal.save_btn')}
               </button>
             </div>
           </div>
@@ -394,29 +407,29 @@ export function CustomersPage() {
             <div className="max-w-4xl mx-auto">
                <div className="flex justify-between items-start mb-10 border-b-2 border-slate-900 pb-8">
                   <div>
-                     <h1 className="text-4xl font-black text-slate-900 mb-2 uppercase tracking-tighter">Customer Statement</h1>
-                     <p className="text-slate-500 font-bold">Generated on: {new Date().toLocaleDateString()}</p>
+                     <h1 className="text-4xl font-black text-slate-900 mb-2 uppercase tracking-tighter">{t('customers.print.title')}</h1>
+                     <p className="text-slate-500 font-bold">{t('customers.print.generated_on')} {new Date().toLocaleDateString()}</p>
                      <p className="text-slate-950 mt-4 text-xl font-black">{selectedCustomer.name}</p>
                      <p className="text-slate-600">{selectedCustomer.contact}</p>
                      <p className="text-slate-600">{selectedCustomer.address}</p>
                   </div>
                   <div className="text-right">
                      <div className="bg-slate-900 text-white p-6 rounded-2xl">
-                        <p className="text-xs font-bold uppercase tracking-widest opacity-70 mb-1">Total Outstanding</p>
+                        <p className="text-xs font-bold uppercase tracking-widest opacity-70 mb-1">{t('customers.print.outstanding')}</p>
                         <p className="text-3xl font-black">{formatCurrency(selectedCustomer.unpaidAmount)}</p>
                      </div>
                   </div>
                </div>
 
                <div className="mb-10">
-                  <h3 className="text-sm font-bold uppercase tracking-widest text-slate-400 mb-4 px-2">Purchase History</h3>
+                  <h3 className="text-sm font-bold uppercase tracking-widest text-slate-400 mb-4 px-2">{t('customers.print.history')}</h3>
                   <table className="w-full text-sm border-collapse">
                      <thead>
                         <tr className="bg-slate-50 border-y border-slate-200">
-                           <th className="px-4 py-3 text-left font-bold text-slate-700">Date</th>
-                           <th className="px-4 py-3 text-left font-bold text-slate-700">Sale ID</th>
-                           <th className="px-4 py-3 text-right font-bold text-slate-700">Total Amount</th>
-                           <th className="px-4 py-3 text-center font-bold text-slate-700">Status</th>
+                           <th className="px-4 py-3 text-left font-bold text-slate-700">{t('common.date')}</th>
+                           <th className="px-4 py-3 text-left font-bold text-slate-700">{t('pos.order_summary')} ID</th>
+                           <th className="px-4 py-3 text-right font-bold text-slate-700">{t('common.amount')}</th>
+                           <th className="px-4 py-3 text-center font-bold text-slate-700">{t('common.status')}</th>
                         </tr>
                      </thead>
                      <tbody>
@@ -430,7 +443,7 @@ export function CustomersPage() {
                         ))}
                         {selectedCustomer.sales.length === 0 && (
                            <tr>
-                              <td colSpan={4} className="px-4 py-8 text-center text-slate-400 italic">No purchase history found for this customer.</td>
+                              <td colSpan={4} className="px-4 py-8 text-center text-slate-400 italic">{t('customers.print.no_history')}</td>
                            </tr>
                         )}
                      </tbody>
@@ -439,13 +452,13 @@ export function CustomersPage() {
 
                <div className="grid grid-cols-2 gap-8 pt-8 border-t border-slate-100">
                   <div>
-                     <p className="text-xs font-bold uppercase text-slate-400 mb-1">Total Purchases</p>
+                     <p className="text-xs font-bold uppercase text-slate-400 mb-1">{t('customers.print.total_purchases')}</p>
                      <p className="text-lg font-black text-slate-950">{formatCurrency(selectedCustomer.totalPurchase)}</p>
                   </div>
                </div>
 
                <div className="mt-20 text-center border-t border-slate-100 pt-8">
-                  <p className="text-xs text-slate-400 italic">Thank you for your business. This is a computer-generated statement.</p>
+                  <p className="text-xs text-slate-400 italic">{t('customers.print.footer')}</p>
                </div>
             </div>
          )}

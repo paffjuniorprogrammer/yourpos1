@@ -31,6 +31,7 @@ export type UserProfile = {
   locations?: { name: string } | null;
   assigned_locations?: LocationRecord[];
   business?: BusinessRecord;
+  language?: string | null;
 };
 
 export type LocationRecord = {
@@ -71,6 +72,8 @@ export type ProductRecord = {
   created_at: string;
   bulk_quantity: number | null;
   bulk_price: number | null;
+  bulk_pricing_mode: 'fixed' | 'discount_amount' | 'discount_percentage' | null;
+  bulk_discount_value: number | null;
   parent_id: string | null;
   is_parent: boolean;
   variant_combination: any | null;
@@ -190,6 +193,8 @@ export type PosProductRecord = {
   category_name: string | null;
   bulk_quantity: number | null;
   bulk_price: number | null;
+  bulk_pricing_mode: 'fixed' | 'discount_amount' | 'discount_percentage' | null;
+  bulk_discount_value: number | null;
   parent_id: string | null;
   is_parent: boolean;
   variant_combination: any | null;
@@ -225,6 +230,8 @@ export type ProductFormValues = {
   image_url: string;
   bulk_quantity?: string | number | null;
   bulk_price?: string | number | null;
+  bulk_pricing_mode?: 'fixed' | 'discount_amount' | 'discount_percentage' | null;
+  bulk_discount_value?: string | number | null;
   parent_id?: string | null;
   is_parent?: boolean;
   variant_combination?: any | null;

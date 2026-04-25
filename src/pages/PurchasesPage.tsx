@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { CalendarClock, CreditCard, Pencil, Plus, Printer, Search, Trash2, X } from "lucide-react";
+
 import { useAuth } from "../context/AuthContext";
 import { useNotification } from "../context/NotificationContext";
 import { SectionCard } from "../components/ui/SectionCard";
@@ -75,7 +77,9 @@ function lineTotal(item: PurchaseLine) {
 }
 
 export function PurchasesPage() {
+  const { t } = useTranslation();
   const { can } = useAuth();
+
   const { showToast, confirm } = useNotification();
   const { settings } = useSettings();
   const [search, setSearch] = useState("");
@@ -142,9 +146,9 @@ export function PurchasesPage() {
       setNewSupplierName("");
       setNewSupplierPhone("");
       setNewSupplierContact("");
-      showToast("success", `Supplier "${created.name}" added!`);
+      showToast("success", t('suppliers.success.created'));
     } catch (err: any) {
-      showToast("error", err?.message || "Failed to create supplier.");
+      showToast("error", t('common.error'));
     } finally {
       setSavingSupplier(false);
     }
@@ -267,16 +271,16 @@ export function PurchasesPage() {
       await run(async () => {
         await updatePurchaseStatus(id, "delivery_status", status.toLowerCase());
         setRows((current) => current.map((row) => (row.id === id ? { ...row, deliveryStatus: status } : row)));
-        showToast("success", `Order marked as ${status}.`);
+        showToast("success", t('purchases.success.delivery_marked', { status: t(`purchases.delivery.${status.toLowerCase()}`) }));
       });
     } catch (error) {
       console.error("Failed to update delivery status:", error);
-      showToast("error", "Failed to update delivery status.");
+      showToast("error", t('purchases.errors.delivery_failed'));
     }
   }
 
   async function handleDeletePurchase(id: string) {
-    const confirmed = await confirm("Delete Purchase", "Are you sure you want to delete this purchase order? This action cannot be undone and will reverse stock levels.");
+    const confirmed = await confirm(t('purchases.modal.delete_title'), t('purchases.modal.delete_desc'));
     if (!confirmed) return;
 
     try {
@@ -286,7 +290,7 @@ export function PurchasesPage() {
         if (selectedPurchase?.id === id) {
           setSelectedPurchase(null);
         }
-        showToast("success", "Purchase order deleted.");
+        showToast("success", t('purchases.success.deleted'));
       });
     } catch (error) {
       console.error("Failed to delete purchase:", error);
@@ -396,13 +400,13 @@ export function PurchasesPage() {
 
     const supplierId = supplierObjects.find(s => s.name === purchaseForm.supplier)?.id;
     if (!supplierId) {
-      showToast("warning", "Please select a valid supplier.");
+      showToast("warning", t('purchases.errors.select_supplier'));
       return;
     }
 
     const locationId = locationOptions.find(l => l.name === purchaseForm.location)?.id;
     if (!locationId) {
-      showToast("warning", "Please select a valid location.");
+      showToast("warning", t('purchases.errors.select_location'));
       return;
     }
 
@@ -433,14 +437,12 @@ export function PurchasesPage() {
         const purchases = await listPurchases({ page: currentPage, pageSize: ITEMS_PER_PAGE, search: search });
         setRows(purchases.data);
         setTotalCount(purchases.count);
-        showToast("success", purchaseForm.id ? "Purchase order updated!" : "Purchase order created!");
+        showToast("success", purchaseForm.id ? t('purchases.success.updated') : t('purchases.success.created'));
         setPurchaseModalOpen(false);
         setPurchaseForm(createEmptyForm());
       } catch (error: any) {
         const msg = error?.message || JSON.stringify(error);
-        const hint = error?.hint ? `\nHint: ${error.hint}` : "";
-        const detail = error?.details ? `\nDetail: ${error.details}` : "";
-        showToast("error", `Failed to save purchase: ${msg}${hint}${detail}`);
+        showToast("error", t('purchases.errors.save_failed', { error: msg }));
         console.error("Failed to save purchase:", error);
       }
     });
@@ -452,18 +454,20 @@ export function PurchasesPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.25em] text-brand-600">Purchases</p>
-          <h1 className="mt-3 text-3xl font-bold text-ink">Purchase orders</h1>
-          <p className="mt-2 text-sm text-slate-500">Manage purchase orders, supplier invoices, and delivery updates from the database.</p>
+          <p className="text-sm font-semibold uppercase tracking-[0.25em] text-brand-600">{t('purchases.title')}</p>
+          <h1 className="mt-3 text-3xl font-bold text-ink">{t('purchases.title')}</h1>
+          <p className="mt-2 text-sm text-slate-500">{t('purchases.subtitle')}</p>
         </div>
+
         {can("Purchases", "add") && (
           <button onClick={openCreateModal} className="inline-flex items-center gap-2 rounded-2xl bg-brand-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-brand-700">
-            <Plus size={18} /> Create purchase
+            <Plus size={18} /> {t('purchases.new_purchase')}
           </button>
         )}
       </div>
 
-      <SectionCard title="Purchase orders" subtitle="Review the latest supplier invoices and manage status updates.">
+
+      <SectionCard title={t('purchases.title')} subtitle={t('purchases.subtitle')}>
         <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <label className="flex w-full max-w-xl items-center gap-3 rounded-2xl border border-brand-100 bg-gradient-to-r from-brand-50 to-white px-4 py-3">
             <Search size={16} className="text-brand-500" />
@@ -471,10 +475,11 @@ export function PurchasesPage() {
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               className="w-full border-none bg-transparent text-sm outline-none"
-              placeholder="Search supplier, order ID or date"
+              placeholder={t('purchases.search_placeholder')}
             />
           </label>
         </div>
+
 
         <div className="overflow-hidden rounded-3xl border border-brand-100 shadow-[0_20px_50px_rgba(37,99,235,0.08)]">
           <div className="overflow-x-auto">
@@ -482,29 +487,31 @@ export function PurchasesPage() {
               <thead className="bg-gradient-to-r from-slate-900 via-slate-800 to-brand-700 text-white">
                 <tr>
                   {[
-                    "Order",
-                    "Supplier",
-                    "Location",
-                    "Amount",
-                    "Status",
-                    "Delivery",
-                    "Date",
-                    "Actions",
+                    t('purchases.table.order'),
+                    t('purchases.table.supplier'),
+                    t('purchases.table.location'),
+                    t('purchases.table.amount'),
+                    t('purchases.table.status'),
+                    t('purchases.table.delivery'),
+                    t('purchases.table.date'),
+                    t('common.actions'),
                   ].map((column) => (
-                    <th key={column} className="border-b border-white/10 px-6 py-5 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-100">
+                    <th key={column} className="border-b border-white/10 px-5 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-100">
                       {column}
                     </th>
                   ))}
+
                 </tr>
               </thead>
               <tbody className="bg-white">
                 {noResults ? (
                   <tr>
                     <td colSpan={8} className="px-5 py-10 text-center text-slate-500">
-                      No purchase records found in the database.
+                      {t('purchases.no_purchases')}
                     </td>
                   </tr>
                 ) : (
+
                   paginatedRows.map((row) => (
                     <tr key={row.id} className="transition hover:bg-brand-50/40">
                       <td className="border-b border-slate-100 px-4 py-3">
@@ -517,8 +524,8 @@ export function PurchasesPage() {
                             </p>
                          </div>
                       </td>
-                      <td className="border-b border-slate-100 px-4 py-3 text-slate-700 font-medium text-sm">{row.supplier}</td>
-                      <td className="border-b border-slate-100 px-4 py-3 text-slate-500 text-sm">{row.location}</td>
+                      <td className="border-b border-slate-100 px-4 py-3 text-slate-700 font-medium text-sm truncate max-w-[150px]" title={row.supplier}>{row.supplier}</td>
+                      <td className="border-b border-slate-100 px-4 py-3 text-slate-500 text-sm truncate max-w-[120px]" title={row.location}>{row.location}</td>
                       <td className="border-b border-slate-100 px-4 py-3 font-bold text-brand-600 text-sm">{row.amount}</td>
                       <td className="border-b border-slate-100 px-4 py-3">
                         <button
@@ -529,8 +536,11 @@ export function PurchasesPage() {
                             'bg-amber-50 text-amber-600 ring-amber-100'
                           }`}
                         >
-                          {row.paymentStatus} ▾
+                          {row.paymentStatus === "Paid" ? t('purchases.status.paid') :
+                           row.paymentStatus === "Partially Paid" ? t('purchases.status.partial') :
+                           t('purchases.status.due')} ▾
                         </button>
+
                       </td>
                       <td className="border-b border-slate-100 px-4 py-3">
                         <button
@@ -540,8 +550,9 @@ export function PurchasesPage() {
                             'bg-slate-50 text-slate-500 ring-slate-100'
                           }`}
                         >
-                          {row.deliveryStatus} ▾
+                          {row.deliveryStatus === "Received" ? t('purchases.delivery.received') : t('purchases.delivery.pending')} ▾
                         </button>
+
                       </td>
                       <td className="border-b border-slate-100 px-4 py-3 text-slate-500 text-sm">{row.date}</td>
                       <td className="border-b border-slate-100 px-4 py-3">
@@ -601,12 +612,13 @@ export function PurchasesPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-slate-400 px-1">
-              {statusPopup.type === "payment" ? "Payment Status" : "Delivery Status"}
+              {statusPopup.type === "payment" ? t('purchases.table.status') : t('purchases.table.delivery')}
             </p>
+
             {statusPopup.type === "payment" ? (
               <div className="grid gap-1">
                 {(["paid", "unpaid", "partial"] as const).map((val) => {
-                  const label = val === "paid" ? "Paid" : val === "partial" ? "Partially Paid" : "Due (Unpaid)";
+                  const label = t(`purchases.status.${val}`);
                   const colors = val === "paid" ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100" : val === "partial" ? "bg-sky-50 text-sky-700 hover:bg-sky-100" : "bg-amber-50 text-amber-700 hover:bg-amber-100";
                   return (
                     <button
@@ -626,7 +638,7 @@ export function PurchasesPage() {
             ) : (
               <div className="grid gap-1">
                 {(["pending", "received"] as const).map((val) => {
-                  const label = val === "received" ? "Received" : "Pending";
+                  const label = val === "received" ? t('purchases.delivery.received') : t('purchases.delivery.pending');
                   const colors = val === "received" ? "bg-indigo-50 text-indigo-700 hover:bg-indigo-100" : "bg-slate-50 text-slate-600 hover:bg-slate-100";
                   return (
                     <button
@@ -643,6 +655,7 @@ export function PurchasesPage() {
                   );
                 })}
               </div>
+
             )}
           </div>
         </div>
@@ -655,10 +668,11 @@ export function PurchasesPage() {
             <div className="mb-6 flex items-center justify-between">
               <div>
                 <h2 className="text-2xl font-bold text-ink">
-                  {purchaseForm.id ? "Edit Purchase Order" : "New Purchase Order"}
+                  {purchaseForm.id ? t('purchases.modal.edit_title') : t('purchases.modal.create_title')}
                 </h2>
-                <p className="text-sm text-slate-500 mt-1">Create a new stock entry and update inventory levels.</p>
+                <p className="text-sm text-slate-500 mt-1">{t('purchases.modal.subtitle')}</p>
               </div>
+
               <button
                 onClick={() => setPurchaseModalOpen(false)}
                 className="rounded-full bg-slate-100 p-2 text-slate-600 transition hover:bg-slate-200"
@@ -671,7 +685,7 @@ export function PurchasesPage() {
             <div className="grid gap-3 md:grid-cols-6 mb-4">
               {/* Supplier */}
               <div className="relative md:col-span-2">
-                <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">Supplier</label>
+                <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">{t('purchases.modal.supplier')}</label>
                 <div className="relative">
                   <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input
@@ -679,10 +693,11 @@ export function PurchasesPage() {
                     value={supplierSearch}
                     onChange={(e) => { setSupplierSearch(e.target.value); setSupplierMenuOpen(true); }}
                     onFocus={() => setSupplierMenuOpen(true)}
-                    placeholder="Search supplier..."
+                    placeholder={t('purchases.modal.search_suppliers')}
                     className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-sm outline-none focus:border-brand-500 transition"
                   />
                 </div>
+
                 {supplierMenuOpen && (
                   <div className="absolute left-0 right-0 top-full z-[70] mt-1 max-h-40 overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-xl">
                     {filteredSuppliers.length > 0 ? (
@@ -696,13 +711,13 @@ export function PurchasesPage() {
                     ) : (
                       <div className="px-3 py-2">
                         <p className="text-xs text-slate-400 mb-2">
-                          No supplier found for &ldquo;{supplierSearch}&rdquo;
+                          {t('purchases.modal.no_supplier_found', { query: supplierSearch })}
                         </p>
                         <button
                           onMouseDown={(e) => { e.preventDefault(); setNewSupplierName(supplierSearch); setQuickSupplierOpen(true); setSupplierMenuOpen(false); }}
                           className="flex w-full items-center gap-2 rounded-lg bg-brand-50 px-3 py-2 text-sm font-semibold text-brand-700 hover:bg-brand-100 transition"
                         >
-                          <Plus size={14} /> Add &ldquo;{supplierSearch}&rdquo; as supplier
+                          <Plus size={14} /> {t('purchases.modal.add_as_supplier', { query: supplierSearch })}
                         </button>
                       </div>
                     )}
@@ -712,13 +727,14 @@ export function PurchasesPage() {
 
               {/* Location */}
               <div>
-                <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">Location</label>
+                <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">{t('purchases.modal.location')}</label>
                 <select
                   value={purchaseForm.location}
                   onChange={(e) => setPurchaseForm({ ...purchaseForm, location: e.target.value })}
                   className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2 px-3 text-sm outline-none focus:border-brand-500 transition"
                 >
-                  <option value="" disabled>Select</option>
+                  <option value="" disabled>{t('common.select')}</option>
+
                   {locationOptions.map((location) => (
                     <option key={location.id} value={location.name}>{location.name}</option>
                   ))}
@@ -727,7 +743,8 @@ export function PurchasesPage() {
 
               {/* Date */}
               <div>
-                <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">Date</label>
+                <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">{t('purchases.modal.date')}</label>
+
                 <input
                   type="date"
                   value={purchaseForm.date}
@@ -738,36 +755,39 @@ export function PurchasesPage() {
 
               {/* Payment */}
               <div>
-                <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">Payment</label>
+                <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">{t('purchases.modal.payment')}</label>
                 <select
                   value={purchaseForm.paymentStatus}
                   onChange={(e) => setPurchaseForm({ ...purchaseForm, paymentStatus: e.target.value as PaymentStatus })}
                   className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2 px-3 text-sm outline-none focus:border-brand-500 transition"
                 >
-                  <option value="Paid">Paid</option>
-                  <option value="Due">Due</option>
-                  <option value="Partially Paid">Partial</option>
+                  <option value="Paid">{t('purchases.status.paid')}</option>
+                  <option value="Due">{t('purchases.status.due')}</option>
+                  <option value="Partially Paid">{t('purchases.status.partial')}</option>
                 </select>
               </div>
 
+
               {/* Delivery */}
               <div>
-                <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">Delivery</label>
+                <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">{t('purchases.modal.delivery')}</label>
                 <select
                   value={purchaseForm.deliveryStatus}
                   onChange={(e) => setPurchaseForm({ ...purchaseForm, deliveryStatus: e.target.value as DeliveryStatus })}
                   className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2 px-3 text-sm outline-none focus:border-brand-500 transition"
                 >
-                  <option value="Pending">Pending</option>
-                  <option value="Received">Received</option>
+                  <option value="Pending">{t('purchases.delivery.pending')}</option>
+                  <option value="Received">{t('purchases.delivery.received')}</option>
                 </select>
               </div>
+
             </div>
 
             {/* Product search bar */}
             <div className="mb-3">
                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">Add Product</label>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">{t('purchases.modal.add_product')}</label>
+
                   <div className="relative flex gap-2">
                     <div className="relative flex-1">
                       <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -779,9 +799,10 @@ export function PurchasesPage() {
                         onFocus={() => setProductFocus(true)}
                         onBlur={() => setTimeout(() => setProductFocus(false), 200)}
                         onKeyDown={handleProductKeyDown}
-                        placeholder="Search name or barcode..."
+                        placeholder={t('purchases.modal.search_products')}
                         className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm outline-none focus:border-brand-500 transition shadow-sm"
                       />
+
                     </div>
                     <button
                       type="button"
@@ -805,7 +826,8 @@ export function PurchasesPage() {
                             >
                               <div className="min-w-0 flex-1 pr-4">
                                 <p className="font-semibold text-slate-800 truncate text-sm">{p.product}</p>
-                                <p className="text-xs text-slate-400">{p.barcode || "No barcode"}</p>
+                                <p className="text-xs text-slate-400">{p.barcode || t('common.no_barcode')}</p>
+
                               </div>
                               <div className="text-right shrink-0">
                                 <span className="text-sm font-bold text-brand-600">
@@ -816,8 +838,9 @@ export function PurchasesPage() {
                           ))
                         ) : (
                           <div className="px-4 py-6 text-center">
-                            <p className="text-slate-400 text-sm">No products found for "{productSearch}"</p>
+                            <p className="text-slate-400 text-sm">{t('purchases.modal.no_products_found', { query: productSearch })}</p>
                           </div>
+
                         )}
                       </div>
                     )}
@@ -829,7 +852,14 @@ export function PurchasesPage() {
                <table className="min-w-full border-separate border-spacing-0 text-sm">
                   <thead className="bg-gradient-to-r from-slate-900 via-slate-800 to-brand-700 text-white">
                      <tr>
-                        {["Product Infomation", "Quantity", "Cost Price", "Profit %", "Selling Price", ""].map((col) => (
+                        {[
+                          t('purchases.modal.table.product'),
+                          t('purchases.modal.table.qty'),
+                          t('purchases.modal.table.cost'),
+                          t('purchases.modal.table.profit'),
+                          t('purchases.modal.table.selling'),
+                          ""
+                        ].map((col) => (
                            <th key={col} className="px-5 py-4 text-left text-[10px] font-bold uppercase tracking-wider text-slate-100">
                               {col}
                            </th>
@@ -841,7 +871,7 @@ export function PurchasesPage() {
                         <tr>
                            <td colSpan={6} className="px-5 py-12 text-center text-slate-400">
                               <Search size={24} className="mx-auto mb-3 opacity-20" />
-                              Search or scan products to add them to this purchase.
+                              {t('purchases.empty_search')}
                            </td>
                         </tr>
                      ) : (
@@ -916,7 +946,7 @@ export function PurchasesPage() {
 
             <div className="mt-8 pt-6 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-6">
               <div>
-                <p className="text-sm font-medium text-slate-500">Order Summary</p>
+                <p className="text-sm font-medium text-slate-500">{t('purchases.modal.order_summary')}</p>
                 <h3 className="text-3xl font-black text-ink">{formatMoney(purchaseTotal)}</h3>
               </div>
               <div className="flex gap-3 w-full sm:w-auto">
@@ -924,14 +954,16 @@ export function PurchasesPage() {
                   onClick={() => setPurchaseModalOpen(false)}
                   className="flex-1 sm:flex-none py-4 px-8 rounded-2xl border border-slate-200 font-bold text-slate-600 transition hover:bg-slate-50"
                 >
-                  Cancel
+                  {t('common.cancel')}
+
                 </button>
                 <button
                   onClick={savePurchase}
                   disabled={!purchaseForm.items.length || !purchaseForm.supplier}
                   className="flex-1 sm:flex-none py-4 px-8 rounded-2xl bg-brand-600 font-bold text-white transition hover:bg-brand-700 shadow-xl shadow-brand-100 disabled:opacity-50"
                 >
-                  Save Purchase
+                  {t('purchases.modal.save_purchase')}
+
                 </button>
               </div>
             </div>
@@ -952,7 +984,7 @@ export function PurchasesPage() {
             <div id="purchase-invoice">
               <div className="mb-8 flex flex-col sm:flex-row justify-between gap-6 items-start">
                 <div>
-                  <h2 className="text-3xl font-black text-brand-600">INVOICE</h2>
+                  <h2 className="text-3xl font-black text-brand-600">{t('purchases.invoice.title')}</h2>
                   <p className="text-slate-500 mt-1">ID: {selectedPurchase.id}</p>
                 </div>
                 <div className="text-right">
@@ -964,18 +996,18 @@ export function PurchasesPage() {
 
               <div className="grid gap-8 md:grid-cols-2 mb-10 pb-8 border-b border-slate-100">
                 <div className="rounded-3xl bg-slate-50 p-6">
-                  <h4 className="text-xs font-bold uppercase tracking-[0.2em] text-slate-400 mb-4">Supplier Information</h4>
+                  <h4 className="text-xs font-bold uppercase tracking-[0.2em] text-slate-400 mb-4">{t('purchases.invoice.supplier_info')}</h4>
                   <p className="text-xl font-bold text-ink">{selectedPurchase.supplier}</p>
-                  <p className="text-sm text-slate-500 mt-2">Delivery Status: {selectedPurchase.deliveryStatus}</p>
+                  <p className="text-sm text-slate-500 mt-2">{t('purchases.invoice.delivery_status')}: {selectedPurchase.deliveryStatus}</p>
                 </div>
                 <div className="rounded-3xl bg-brand-50 p-6">
-                  <h4 className="text-xs font-bold uppercase tracking-[0.2em] text-brand-600 mb-4">Order Details</h4>
+                  <h4 className="text-xs font-bold uppercase tracking-[0.2em] text-brand-600 mb-4">{t('purchases.invoice.order_details')}</h4>
                   <div className="flex justify-between items-center mb-2">
-                    <span className="text-sm text-slate-600 font-medium">Purchase Date:</span>
+                    <span className="text-sm text-slate-600 font-medium">{t('purchases.invoice.purchase_date')}:</span>
                     <span className="text-sm font-bold text-ink">{selectedPurchase.date}</span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-slate-600 font-medium">Payment Status:</span>
+                    <span className="text-sm text-slate-600 font-medium">{t('purchases.invoice.payment_status')}:</span>
                     <span className="text-sm font-bold text-ink">{selectedPurchase.paymentStatus}</span>
                   </div>
                 </div>
@@ -985,10 +1017,10 @@ export function PurchasesPage() {
                 <table className="w-full text-left text-sm border-separate border-spacing-0">
                   <thead className="bg-slate-900 text-white">
                     <tr>
-                      <th className="px-6 py-4 font-bold uppercase tracking-wider">Product</th>
-                      <th className="px-6 py-4 font-bold uppercase tracking-wider text-right">Price</th>
-                      <th className="px-6 py-4 font-bold uppercase tracking-wider text-center">Qty</th>
-                      <th className="px-6 py-4 font-bold uppercase tracking-wider text-right">Total</th>
+                      <th className="px-6 py-4 font-bold uppercase tracking-wider">{t('purchases.invoice.product')}</th>
+                      <th className="px-6 py-4 font-bold uppercase tracking-wider text-right">{t('purchases.invoice.price')}</th>
+                      <th className="px-6 py-4 font-bold uppercase tracking-wider text-center">{t('purchases.invoice.qty')}</th>
+                      <th className="px-6 py-4 font-bold uppercase tracking-wider text-right">{t('purchases.invoice.total')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1007,11 +1039,11 @@ export function PurchasesPage() {
               <div className="flex justify-end pt-6 border-t border-slate-100">
                 <div className="w-full max-w-xs space-y-3">
                   <div className="flex justify-between items-center">
-                    <span className="text-slate-500 font-medium">Subtotal</span>
+                    <span className="text-slate-500 font-medium">{t('purchases.invoice.subtotal')}</span>
                     <span className="font-bold text-ink">{selectedPurchase.amount}</span>
                   </div>
                   <div className="flex justify-between items-center pt-3 border-t-2 border-slate-200">
-                    <span className="text-lg font-black text-ink uppercase">Grand Total</span>
+                    <span className="text-lg font-black text-ink uppercase">{t('purchases.invoice.grand_total')}</span>
                     <span className="text-2xl font-black text-brand-600">{selectedPurchase.amount}</span>
                   </div>
                 </div>
@@ -1023,7 +1055,7 @@ export function PurchasesPage() {
                 onClick={() => window.print()}
                 className="inline-flex items-center gap-2 rounded-2xl bg-brand-600 px-6 py-3 font-bold text-white transition hover:bg-brand-700 shadow-xl shadow-brand-100"
               >
-                <Printer size={18} /> Print Invoice
+                <Printer size={18} /> {t('purchases.invoice.print')}
               </button>
             </div>
           </div>
@@ -1045,8 +1077,8 @@ export function PurchasesPage() {
           <div className="w-full max-w-md rounded-[2rem] bg-white p-8 shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="mb-6 flex items-center justify-between">
               <div>
-                <p className="text-xs font-bold uppercase tracking-widest text-brand-600 mb-1">Quick Action</p>
-                <h2 className="text-2xl font-bold text-ink">Add New Supplier</h2>
+                <p className="text-xs font-bold uppercase tracking-widest text-brand-600 mb-1">{t('purchases.quick_supplier.label')}</p>
+                <h2 className="text-2xl font-bold text-ink">{t('purchases.quick_supplier.title')}</h2>
               </div>
               <button onClick={() => setQuickSupplierOpen(false)} className="rounded-full bg-slate-100 p-2 text-slate-500 hover:bg-slate-200">
                 <X size={18} />
@@ -1054,22 +1086,22 @@ export function PurchasesPage() {
             </div>
             <div className="space-y-4">
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Supplier Name *</label>
-                <input type="text" value={newSupplierName} onChange={(e) => setNewSupplierName(e.target.value)} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none focus:border-brand-500 transition" placeholder="e.g. Rwanda Coffee Ltd" autoFocus />
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">{t('purchases.quick_supplier.name')} *</label>
+                <input type="text" value={newSupplierName} onChange={(e) => setNewSupplierName(e.target.value)} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none focus:border-brand-500 transition" placeholder={t('purchases.quick_supplier.name_placeholder')} autoFocus />
               </div>
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Contact Name</label>
-                <input type="text" value={newSupplierContact} onChange={(e) => setNewSupplierContact(e.target.value)} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none focus:border-brand-500 transition" placeholder="Contact person name" />
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">{t('purchases.quick_supplier.contact')}</label>
+                <input type="text" value={newSupplierContact} onChange={(e) => setNewSupplierContact(e.target.value)} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none focus:border-brand-500 transition" placeholder={t('purchases.quick_supplier.contact_placeholder')} />
               </div>
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Phone</label>
-                <input type="text" value={newSupplierPhone} onChange={(e) => setNewSupplierPhone(e.target.value)} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none focus:border-brand-500 transition" placeholder="+250 7xx xxx xxx" />
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">{t('purchases.quick_supplier.phone')}</label>
+                <input type="text" value={newSupplierPhone} onChange={(e) => setNewSupplierPhone(e.target.value)} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none focus:border-brand-500 transition" placeholder={t('purchases.quick_supplier.phone_placeholder')} />
               </div>
             </div>
             <div className="mt-6 flex gap-3">
-              <button onClick={() => setQuickSupplierOpen(false)} className="flex-1 rounded-2xl border border-slate-200 py-3 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition">Cancel</button>
+              <button onClick={() => setQuickSupplierOpen(false)} className="flex-1 rounded-2xl border border-slate-200 py-3 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition">{t('common.cancel')}</button>
               <button onClick={handleQuickAddSupplier} disabled={savingSupplier || !newSupplierName.trim()} className="flex-1 rounded-2xl bg-brand-600 py-3 text-sm font-bold text-white shadow-soft hover:bg-brand-700 transition disabled:opacity-50">
-                {savingSupplier ? "Saving..." : "Create & Select"}
+                {savingSupplier ? t('purchases.quick_supplier.saving') : t('purchases.quick_supplier.save_btn')}
               </button>
             </div>
           </div>
@@ -1082,8 +1114,8 @@ export function PurchasesPage() {
           <div className="w-full max-w-md rounded-[2rem] bg-white p-8 shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="mb-6 flex items-center justify-between">
               <div>
-                <p className="text-xs font-bold uppercase tracking-widest text-amber-600 mb-1">Payment Schedule</p>
-                <h2 className="text-xl font-bold text-ink">Schedule Supplier Payment</h2>
+                <p className="text-xs font-bold uppercase tracking-widest text-amber-600 mb-1">{t('purchases.schedule.label')}</p>
+                <h2 className="text-xl font-bold text-ink">{t('purchases.schedule.title')}</h2>
                 <p className="text-sm text-slate-500 mt-1">{schedulePurchase.supplier}</p>
               </div>
               <button onClick={() => setScheduleModalOpen(false)} className="rounded-full bg-slate-100 p-2 text-slate-500 hover:bg-slate-200">
@@ -1092,16 +1124,16 @@ export function PurchasesPage() {
             </div>
             <div className="space-y-4">
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Amount Due (RWF) *</label>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">{t('purchases.schedule.amount')} *</label>
                 <input
                   type="number" min="0" value={scheduleAmount}
                   onChange={(e) => setScheduleAmount(e.target.value)}
                   className="w-full rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-bold outline-none focus:border-amber-400 transition"
-                  placeholder="Amount to pay"
+                  placeholder={t('purchases.schedule.amount_placeholder')}
                 />
               </div>
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Due Date *</label>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">{t('purchases.schedule.due_date')} *</label>
                 <input
                   type="date" value={scheduleDate}
                   onChange={(e) => setScheduleDate(e.target.value)}
@@ -1109,17 +1141,17 @@ export function PurchasesPage() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Notes</label>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">{t('purchases.schedule.notes')}</label>
                 <textarea
                   value={scheduleNotes} onChange={(e) => setScheduleNotes(e.target.value)}
                   rows={2}
                   className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none focus:border-amber-400 transition"
-                  placeholder="Payment terms, batch number..."
+                  placeholder={t('purchases.schedule.notes_placeholder')}
                 />
               </div>
             </div>
             <div className="mt-6 flex gap-3">
-              <button onClick={() => setScheduleModalOpen(false)} className="flex-1 rounded-2xl border border-slate-200 py-3 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
+              <button onClick={() => setScheduleModalOpen(false)} className="flex-1 rounded-2xl border border-slate-200 py-3 text-sm font-semibold text-slate-600 hover:bg-slate-50">{t('common.cancel')}</button>
               <button
                 disabled={savingSchedule || !scheduleAmount || !scheduleDate}
                 onClick={async () => {
@@ -1133,14 +1165,14 @@ export function PurchasesPage() {
                     });
                     setSchedules(prev => [...prev, newSched]);
                     setScheduleModalOpen(false);
-                    showToast("success", "Payment scheduled!");
+                    showToast("success", t('purchases.schedule.success'));
                   } catch (err: any) {
-                    showToast("error", err?.message || "Failed to schedule payment");
+                    showToast("error", err?.message || t('purchases.schedule.error'));
                   } finally { setSavingSchedule(false); }
                 }}
                 className="flex-1 rounded-2xl bg-amber-500 py-3 text-sm font-bold text-white hover:bg-amber-600 disabled:opacity-50 transition"
               >
-                {savingSchedule ? "Saving..." : "Schedule Payment"}
+                {savingSchedule ? t('purchases.schedule.saving') : t('purchases.schedule.save_btn')}
               </button>
             </div>
           </div>
@@ -1153,13 +1185,13 @@ export function PurchasesPage() {
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <CalendarClock size={18} className="text-amber-600" />
-              <h3 className="text-sm font-bold text-ink">Upcoming Supplier Payments</h3>
+              <h3 className="text-sm font-bold text-ink">{t('purchases.schedule.upcoming_title')}</h3>
               <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-bold text-amber-700">
                 {schedules.filter(s => s.status !== "paid").length}
               </span>
             </div>
             <button onClick={() => setShowScheduleList(v => !v)} className="text-xs font-semibold text-brand-600 hover:underline">
-              {showScheduleList ? "Hide" : "Show all"}
+              {showScheduleList ? t('purchases.schedule.hide') : t('purchases.schedule.show_all')}
             </button>
           </div>
           {showScheduleList && (
@@ -1169,8 +1201,8 @@ export function PurchasesPage() {
                   sched.status === "overdue" ? "bg-rose-50" : "bg-amber-50/40"
                 }`}>
                   <div>
-                    <p className="font-semibold text-ink text-sm">{sched.suppliers?.name || "Supplier"}</p>
-                    <p className="text-xs text-slate-500">Due: {new Date(sched.due_date).toLocaleDateString()}</p>
+                    <p className="font-semibold text-ink text-sm">{sched.suppliers?.name || t('purchases.modal.supplier')}</p>
+                    <p className="text-xs text-slate-500">{t('purchases.modal.date')}: {new Date(sched.due_date).toLocaleDateString()}</p>
                     {sched.notes && <p className="text-xs text-slate-400 italic">{sched.notes}</p>}
                   </div>
                   <div className="flex items-center gap-3">
@@ -1184,15 +1216,15 @@ export function PurchasesPage() {
                       onClick={async () => {
                         await markSchedulePaid(sched.id);
                         setSchedules(prev => prev.map(s => s.id === sched.id ? { ...s, status: "paid" } : s));
-                        showToast("success", "Marked as paid!");
+                        showToast("success", t('purchases.schedule.mark_paid_success'));
                       }}
                       className="rounded-xl bg-emerald-500 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-600 transition"
                     >
-                      Mark Paid
+                      {t('purchases.schedule.mark_paid')}
                     </button>
                     <button
                       onClick={async () => {
-                        const ok = await confirm("Delete Schedule", "Remove this payment schedule?");
+                        const ok = await confirm(t('purchases.schedule.delete_title'), t('purchases.schedule.delete_desc'));
                         if (!ok) return;
                         await deletePaymentSchedule(sched.id);
                         setSchedules(prev => prev.filter(s => s.id !== sched.id));

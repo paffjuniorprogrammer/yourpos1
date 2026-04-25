@@ -6,6 +6,8 @@ import { AuthProvider } from "./context/AuthContext";
 import { NotificationProvider } from "./context/NotificationContext";
 import { PosDataProvider } from "./context/PosDataContext";
 import "./styles/index.css";
+import "./i18n";
+
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

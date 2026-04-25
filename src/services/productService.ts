@@ -11,6 +11,8 @@ export type ProductFormValues = {
   image_url: string;
   bulk_quantity?: string | number | null;
   bulk_price?: string | number | null;
+  bulk_pricing_mode?: 'fixed' | 'discount_amount' | 'discount_percentage' | null;
+  bulk_discount_value?: string | number | null;
   parent_id?: string | null;
   is_parent?: boolean;
   variant_combination?: any;
@@ -48,6 +50,8 @@ function mapProductPayload(values: ProductFormValues) {
     image_url: (values.image_url || '').trim() || null,
     bulk_quantity: bulkQty,
     bulk_price: bulkPrice,
+    bulk_pricing_mode: values.bulk_pricing_mode || 'fixed',
+    bulk_discount_value: values.bulk_discount_value !== undefined && values.bulk_discount_value !== null && values.bulk_discount_value !== '' ? Number(values.bulk_discount_value) : 0,
     parent_id: values.parent_id || null,
     is_parent: values.is_parent || false,
     variant_combination: values.variant_combination || null,

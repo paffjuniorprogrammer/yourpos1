@@ -1,4 +1,5 @@
 import type { ShopSettingsRecord } from "../../types/database";
+import { useTranslation } from "react-i18next";
 
 interface InvoiceItem {
   name: string;
@@ -29,6 +30,7 @@ export function InvoiceA4({
   items, subtotal, tax_amount, total_amount, discount_amount = 0,
   payments, payment_status, settings,
 }: InvoiceA4Props) {
+  const { t } = useTranslation();
   const fmt = (v: number) =>
     v.toLocaleString("fr-RW", { minimumFractionDigits: 0 }) + " RWF";
   const date = new Date(created_at);
@@ -57,7 +59,7 @@ export function InvoiceA4({
           fontSize: "80pt", fontWeight: 900, color: "rgba(16,185,129,0.08)",
           letterSpacing: "4px", userSelect: "none", pointerEvents: "none",
           zIndex: 0,
-        }}>PAID</div>
+        }}>{t('sales.status.paid').toUpperCase()}</div>
       )}
 
       {/* Header */}
@@ -78,22 +80,22 @@ export function InvoiceA4({
             background: "#1e3a8a", color: "#fff",
             padding: "8px 20px", borderRadius: "8px",
             fontSize: "14pt", fontWeight: 900, marginBottom: "8px",
-          }}>INVOICE</div>
+          }}>{t('sales.receipt.invoice_title')}</div>
           <div style={{ fontSize: "10pt", color: "#475569" }}>
-            <div><strong>Invoice #:</strong> {sale_number}</div>
-            <div><strong>Date:</strong> {date.toLocaleDateString()}</div>
-            <div><strong>Time:</strong> {date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>
+            <div><strong>{t('sales.receipt.invoice_num')}</strong> {sale_number}</div>
+            <div><strong>{t('common.date')}:</strong> {date.toLocaleDateString()}</div>
+            <div><strong>{t('common.time')}:</strong> {date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>
           </div>
           {paid ? (
             <div style={{
               marginTop: "8px", background: "#d1fae5", color: "#065f46",
               padding: "4px 12px", borderRadius: "20px", fontSize: "9pt", fontWeight: 700, display: "inline-block",
-            }}>✓ PAID</div>
+            }}>✓ {t('sales.status.paid').toUpperCase()}</div>
           ) : (
             <div style={{
               marginTop: "8px", background: "#fef3c7", color: "#92400e",
               padding: "4px 12px", borderRadius: "20px", fontSize: "9pt", fontWeight: 700, display: "inline-block",
-            }}>UNPAID</div>
+            }}>{t('sales.status.unpaid').toUpperCase()}</div>
           )}
         </div>
       </div>
@@ -104,12 +106,12 @@ export function InvoiceA4({
         marginBottom: "24px", background: "#f8fafc", padding: "14px 18px", borderRadius: "10px",
       }}>
         <div>
-          <div style={{ fontSize: "8pt", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "6px" }}>Bill To</div>
-          <div style={{ fontWeight: 700, fontSize: "12pt" }}>{customer_name || "Walk-in Customer"}</div>
+          <div style={{ fontSize: "8pt", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "6px" }}>{t('sales.receipt.bill_to')}</div>
+          <div style={{ fontWeight: 700, fontSize: "12pt" }}>{customer_name || t('sales.walk_in_customer')}</div>
           {customer_phone && <div style={{ fontSize: "10pt", color: "#64748b" }}>{customer_phone}</div>}
         </div>
         <div>
-          <div style={{ fontSize: "8pt", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "6px" }}>Served By</div>
+          <div style={{ fontSize: "8pt", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "6px" }}>{t('sales.receipt.served_by')}</div>
           <div style={{ fontWeight: 700, fontSize: "12pt" }}>{cashier_name || "—"}</div>
         </div>
       </div>
@@ -118,7 +120,7 @@ export function InvoiceA4({
       <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "20px" }}>
         <thead>
           <tr style={{ background: "#1e3a8a", color: "#fff" }}>
-            {["#", "Product", "Qty", "Unit Price", "Discount", "Total"].map((h) => (
+            {["#", t('sales.details.product'), t('sales.details.qty'), t('products.table.price'), t('sales.details.discount'), t('common.total')].map((h) => (
               <th key={h} style={{
                 padding: "10px 12px", textAlign: h === "#" || h === "Qty" ? "center" : h === "Total" || h === "Unit Price" || h === "Discount" ? "right" : "left",
                 fontSize: "9pt", fontWeight: 700, letterSpacing: "0.5px",
@@ -146,16 +148,16 @@ export function InvoiceA4({
       <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "24px" }}>
         <div style={{ width: "240px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", color: "#64748b", fontSize: "10pt" }}>
-            <span>Subtotal</span><span>{fmt(subtotal)}</span>
+            <span>{t('sales.details.subtotal')}</span><span>{fmt(subtotal)}</span>
           </div>
           {discount_amount > 0 && (
             <div style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", color: "#dc2626", fontSize: "10pt" }}>
-              <span>Discount</span><span>-{fmt(discount_amount)}</span>
+              <span>{t('sales.details.discount')}</span><span>-{fmt(discount_amount)}</span>
             </div>
           )}
           {tax_amount > 0 && (
             <div style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", color: "#64748b", fontSize: "10pt" }}>
-              <span>Tax ({settings?.tax_percentage ?? 0}%)</span><span>{fmt(tax_amount)}</span>
+              <span>{t('sales.details.tax')} ({settings?.tax_percentage ?? 0}%)</span><span>{fmt(tax_amount)}</span>
             </div>
           )}
           <div style={{
@@ -164,7 +166,7 @@ export function InvoiceA4({
             background: "#1e3a8a", color: "#fff", borderRadius: "8px",
             fontSize: "13pt", fontWeight: 900,
           }}>
-            <span>TOTAL</span><span>{fmt(total_amount)}</span>
+            <span>{t('common.total').toUpperCase()}</span><span>{fmt(total_amount)}</span>
           </div>
         </div>
       </div>
@@ -172,7 +174,7 @@ export function InvoiceA4({
       {/* Payment details */}
       {payments && payments.length > 0 && (
         <div style={{ marginBottom: "20px", background: "#f0fdf4", padding: "12px 18px", borderRadius: "8px" }}>
-          <div style={{ fontSize: "8pt", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "8px" }}>Payment Details</div>
+          <div style={{ fontSize: "8pt", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "8px" }}>{t('sales.payments.modal_title')}</div>
           {payments.map((p, i) => (
             <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: "10pt" }}>
               <span style={{ textTransform: "capitalize" }}>{p.payment_method}</span>
@@ -189,8 +191,8 @@ export function InvoiceA4({
         display: "flex", justifyContent: "space-between", alignItems: "center",
         fontSize: "9pt", color: "#94a3b8",
       }}>
-        <span>Thank you for your business!</span>
-        <span>Printed: {new Date().toLocaleString()}</span>
+        <span>{t('sales.receipt.footer1')}</span>
+        <span>{t('sales.receipt.printed_at')} {new Date().toLocaleString()}</span>
       </div>
     </div>
   );
