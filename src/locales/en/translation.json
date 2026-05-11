@@ -57,8 +57,217 @@
     "syncing": "Syncing...",
     "time": "Time",
     "dashboard": "Dashboard",
-    "logout": "Logout",
-    "confirm": "Confirm"
+    "logout": "Logout"
+  },
+  "login": {
+    "brand": "Your POS",
+    "title_part1": "Control",
+    "title_part2": "Every",
+    "title_part3": "Shift.",
+    "subtitle": "A premium retail experience powered by extreme speed and reliability.",
+    "secure_login": "Secure Login",
+    "welcome": "Welcome back",
+    "welcome_desc": "Use the same email and password stored in Supabase Auth.",
+    "no_auth_env": "Add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` in your local env file to enable sign-in.",
+    "email": "Email Address",
+    "password": "Secret Password",
+    "entering": "Entering System...",
+    "sign_in": "Sign Into Your POS",
+    "error_failed": "Login failed. Please check your credentials.",
+    "error_unable": "Unable to sign in.",
+    "assistance": "Need Assistance?",
+    "assistance_desc": "If you meet with any problem call"
+  },
+  "super_admin": {
+    "dashboard": "Super Admin Dashboard",
+    "stats": {
+      "ecosystem": "Total Ecosystem",
+      "ecosystem_meta": "Integrated business nodes",
+      "active_admins": "Active Admins",
+      "active_admins_meta": "Verified business owners",
+      "integrity": "System Integrity",
+      "integrity_meta": "Node validation status",
+      "integrity_stable": "STABLE"
+    },
+    "command_center": "Command Center Live",
+    "global_node_interaction": "Global Node Interaction Table",
+    "tabs": {
+      "businesses": "Businesses",
+      "owners": "Owners"
+    },
+    "monitoring_failed": "Failed to connect to monitoring heartbeat.",
+    "businesses": {
+      "title": "Business Ecosystem",
+      "subtitle": "Real-time control center",
+      "register_btn": "Register Business",
+      "no_records": "No businesses records found matching criteria.",
+      "table": {
+        "name": "Business Name",
+        "status": "Status",
+        "plan": "Plan",
+        "expiry": "Expiry Date",
+        "users": "Users",
+        "actions": "Actions"
+      },
+      "status": {
+        "active": "Active",
+        "suspended": "Suspended",
+        "expired": "Expired"
+      },
+      "actions": {
+        "suspend": "Suspend Access",
+        "enable": "Enable Access",
+        "on": "ON",
+        "off": "OFF",
+        "reset_password": "Reset Admin Password",
+        "extend": "+30 Days"
+      },
+      "modal_register": {
+        "title": "Register New Business",
+        "core_identity": "Core Identity",
+        "name_placeholder": "Business Name Ex: Fresh Market",
+        "owner_email": "Owner Email",
+        "password": "Password",
+        "plan_config": "Plan Configuration",
+        "start_date": "Start Date",
+        "end_date": "Expring Date",
+        "finalize_btn": "Finalize & Launch Node"
+      },
+      "modal_plan": {
+        "title": "Set Plan:",
+        "select_tier": "Select Subscription Tier",
+        "update_btn": "Update Subscription Term"
+      },
+      "modal_delete": {
+        "title": "Delete Business Account",
+        "caution_title": "Extreme Caution",
+        "caution_desc": "This action will permanently wipe all business data including Sales, Products, and Users.",
+        "backup": "Optional: Backup Data",
+        "download_btn": "Download Files (CSV Bundle)",
+        "type_confirm": "Type \"{{name}}\" to confirm",
+        "matching_required": "Matching name required...",
+        "wiping": "Wiping Node...",
+        "destroy_btn": "Destroy Business Permanent"
+      },
+      "modal_details": {
+        "title": "Business Details",
+        "id": "ID:",
+        "owner": "Owner",
+        "not_set": "Not Set",
+        "created": "Created",
+        "days_left": "Subscription Days Left",
+        "expired": "Expired",
+        "critical": "Critical",
+        "close_btn": "Close Dashboard",
+        "lifetime": "Lifetime"
+      }
+    },
+    "subscriptions": {
+      "title": "Plan Governance",
+      "subtitle": "Cross-Tenant Pricing Logic",
+      "card": {
+        "duration": "Duration Control",
+        "pricing_tier": "Pricing Tier",
+        "users_max": "Users Max",
+        "unlimited": "Unlimited",
+        "edit_btn": "Edit Plan Logic"
+      },
+      "modal_edit": {
+        "title": "Edit Plan:",
+        "primary_label": "Primary Label",
+        "price_monthly": "Price (Monthly)",
+        "update_btn": "Update Plan Global"
+      }
+    },
+    "owners": {
+      "no_records": "No administrator accounts discovered.",
+      "table": {
+        "admin": "Administrator",
+        "node": "Business Node",
+        "email": "Email Identity",
+        "created": "Created",
+        "actions": "Actions"
+      },
+      "system_admin": "System Admin",
+      "global": "Global",
+      "modal_reset": {
+        "title": "Overwrite Administrator Auth",
+        "error_length": "Password must be at least 6 characters long.",
+        "success": "Password Overwritten & Secured!",
+        "reset_btn": "Reset Admin Password",
+        "desc": "Force set a new password for this administrator.",
+        "new_password": "New Password",
+        "update_btn": "Update Admin Access",
+        "updating": "Updating..."
+      }
+    },
+    "audit_logs": {
+      "title": "System Audit Logs",
+      "subtitle": "Global history of all system-wide modifications.",
+      "export_btn": "Export Logs",
+      "search_placeholder": "Filter by action, table, or business...",
+      "all_tables": "All Tables",
+      "table": {
+        "event": "Event",
+        "business": "Business",
+        "user": "User",
+        "time": "Time",
+        "details": "Details"
+      },
+      "view_diff": "View Diff",
+      "system": "SYSTEM"
+    },
+    "global_settings": {
+      "title": "Global Configuration",
+      "subtitle": "Control the identity and behavior of the entire platform.",
+      "saving": "SAVING...",
+      "save_btn": "SAVE CHANGES",
+      "success_msg": "Global configuration updated successfully!",
+      "error_msg": "Failed to update settings.",
+      "settings_suffix": "Settings",
+      "active": "Active",
+      "disabled": "Disabled",
+      "danger_zone": "Danger Zone",
+      "danger_desc": "Actions here are irreversible. Modifying global parameters can disrupt service for all business tenants.",
+      "reset_btn": "Reset All Global Settings"
+    },
+    "global_users": {
+      "title": "Global User Monitoring",
+      "subtitle": "Search and manage users across all business tenants.",
+      "search_placeholder": "Search by name, email, or business...",
+      "business_label": "Business",
+      "unassigned": "Unassigned",
+      "joined_label": "Joined",
+      "disable": "Disable",
+      "enable": "Enable",
+      "no_auth": "This user does not have a linked authentication account.",
+      "enter_password": "Enter new password for",
+      "password_length": "Password must be at least 6 characters long.",
+      "reset_success": "Password reset successfully! The user can now log in with the new password.",
+      "reset_failed": "Failed to reset password:"
+    },
+    "support": {
+      "title": "Support & Debug Tools",
+      "subtitle": "Tools to troubleshoot and fix tenant issues.",
+      "impersonation": {
+        "title": "Business Impersonation",
+        "subtitle": "Access data as a tenant",
+        "desc": "Select a business to view their dashboard, products, and sales exactly as they see it. This is a <strong>Read-Only</strong> view to help you debug problems without asking for credentials.",
+        "search_placeholder": "Search business to impersonate...",
+        "active": "Active Impersonation",
+        "stop_btn": "Stop",
+        "alert": "Now impersonating {{name}}. Accessing data in Read-Only mode."
+      },
+      "system_tools": {
+        "title": "System Level Controls",
+        "cache_title": "Clear System Cache",
+        "cache_desc": "Force refresh all user sessions",
+        "db_title": "Database Maintenance",
+        "db_desc": "Reindex and vacuum tables",
+        "lock_title": "Global Feature Lock",
+        "lock_desc": "Toggle POS or Reports globally"
+      }
+    }
   },
   "dashboard": {
     "greeting_morning": "Good morning",
@@ -149,7 +358,11 @@
     },
     "units": {
       "kg": "Kg",
-      "piece": "Piece"
+      "piece": "Piece",
+      "boxes": "Boxes",
+      "box": "Box",
+      "units": "Units",
+      "unit": "Unit"
     },
     "errors": {
       "name_required": "Product name is required.",
@@ -217,17 +430,24 @@
       "title": "Sale Details",
       "walk_in": "Walk-in Customer",
       "shop": "Shop",
+      "customer": "Customer",
+      "cashier_label": "Cashier:",
+      "date_label": "Date:",
       "product": "Product",
       "qty": "Qty",
       "price": "Price",
       "total": "Total",
       "subtotal": "Subtotal",
       "tax": "Tax",
+      "discount": "Discount",
       "record_payment": "Record Payment",
       "return_refund": "Return / Refund",
       "receipt_80mm": "80mm Receipt",
       "invoice_a4": "A4 Invoice",
-      "edit_btn": "Edit Sale"
+      "edit_btn": "Edit Sale",
+      "payments_breakdown": "Payment Breakdown",
+      "no_payments": "No payments recorded",
+      "print_summary": "Print Summary"
     },
     "returns": {
       "title": "Returns & Refunds",
@@ -319,6 +539,7 @@
     "amount_received": "Amount Received",
     "change_due": "Change Due",
     "order_summary": "Order Summary",
+    "walk_in_customer": "Walk-in Customer",
     "denied": {
       "title": "Access Denied",
       "desc": "You do not have permission to access the POS system. Please contact your administrator if you believe this is an error.",
@@ -339,7 +560,9 @@
       "start_desc": "Please enter your starting cash float for this register before accessing the POS.",
       "opening_cash": "Opening Cash Amount (RWF)",
       "start_btn": "Open Register & Start Selling",
-      "starting": "Starting..."
+      "starting": "Starting...",
+      "open_btn": "Open Register & Start Selling",
+      "checking_status": "Checking register status..."
     },
     "ui": {
       "scan_barcode": "Scan Barcode",
@@ -385,7 +608,22 @@
       "momo_sales": "Momo Sales",
       "bank_sales": "Bank Sales",
       "card_sales": "Card Sales",
-      "total_closed_sales": "Total Closed Sales"
+      "total_closed_sales": "Total Closed Sales",
+      "recent_transactions": "Recent Transactions",
+      "last_20_sales": "Last 20 sales at this store",
+      "loading_history": "Loading history...",
+      "process_refund": "Process Refund",
+      "no_recent_transactions": "No recent transactions found",
+      "transaction_refund": "Transaction Refund",
+      "restock_inventory": "Restock Inventory",
+      "max_qty": "/ {{max}} max",
+      "total_refund_due": "Total Refund Due",
+      "refund_method": "Refund Method",
+      "reason": "Reason",
+      "select_reason": "Select Reason",
+      "damaged_item": "Damaged Item",
+      "wrong_item": "Wrong Item",
+      "changed_mind": "Changed Mind"
     },
     "no_location": {
       "title": "No Location Assigned",
@@ -416,7 +654,21 @@
     "refresh": "Refresh reports",
     "daily_sales": "Daily Sales",
     "wastage": "Wastage Loss",
-    "returns": "Daily Returns",
+    "returns": {
+      "title": "Recent returns history",
+      "subtitle": "Last 10 processed refunds and item returns",
+      "sale_num": "Sale #",
+      "cashier": "Cashier",
+      "reason": "Reason",
+      "method": "Method",
+      "status": "Status",
+      "approved": "Approved",
+      "pending": "Pending",
+      "approve_btn": "Approve",
+      "no_records": "No recent returns recorded.",
+      "success_approved": "Refund approved and restocked!",
+      "error_failed": "Approval failed: "
+    },
     "net_paid": "Net Paid Sales",
     "profit": "Gross Profit",
     "tax_collected": "Tax Collected",
@@ -428,9 +680,11 @@
       "apply": "Apply Range",
       "sales": "Date Range Sales",
       "cost": "Purchase Cost",
-      "gross": "Gross Profit",
+      "gross": "Profit (Sales - Cost)",
       "tax": "Tax Amount",
-      "net": "Net Income After Tax"
+      "net": "Net Profit (After Tax)",
+      "net_sales": "Net Sales (Excl. Tax)",
+      "tax_collected": "Tax Collected (Payable)"
     },
     "daily": {
       "title": "Daily sales report",
@@ -448,26 +702,49 @@
       "location": "Location",
       "from": "From",
       "to": "To",
-      "opening": "Opening",
+      "opening": "Opening Cash",
       "cash_sales": "Cash Sales",
       "total_revenue": "Total Revenue",
-      "no_records": "No recent shift records found."
+      "no_records": "No recent shift records found.",
+      "cash_payments": "Cash Sales",
+      "grand_total": "Total Revenue",
+      "net_cash": "Net Cash",
+      "detail_title": "Shift Summary",
+      "opened": "Shift Opened",
+      "closed": "Shift Closed",
+      "payment_breakdown": "Payment Breakdown",
+      "no_closure_data": "No detailed closure data found for this shift.",
+      "print_title": "Shift Settlement Report",
+      "method": "Payment Method",
+      "footer_generated": "Report generated on"
     },
-    "returns": {
-      "title": "Recent returns history",
-      "subtitle": "Last 10 processed refunds and item returns",
-      "sale_num": "Sale #",
-      "cashier": "Cashier",
-      "reason": "Reason",
-      "method": "Method",
-      "status": "Status",
-      "approved": "Approved",
-      "pending": "Pending",
-      "approve_btn": "Approve",
-      "no_records": "No recent returns recorded.",
-      "success_approved": "Refund approved and restocked!",
-      "error_failed": "Approval failed: "
-    }
+    "print": {
+      "button": "Print Detailed Report",
+      "title": "Detailed Business Report",
+      "date_range": "Date Range: {{start}} to {{end}}",
+      "products_sold_title": "Products Sold Summary",
+      "col_product": "Product Name",
+      "col_quantity": "Quantity Sold",
+      "col_revenue": "Total Revenue",
+      "debt_payments_title": "Client Debt Payments",
+      "col_client": "Client Name",
+      "col_amount": "Amount Paid",
+      "col_cashier": "Received By",
+      "col_date": "Payment Date",
+      "col_sale_num": "Sale #",
+      "no_data": "No data available for this period."
+    },
+    "debt_payments": {
+      "title": "Customer Payment Log",
+      "subtitle": "History of payments made by customers towards their balances",
+      "col_client": "Customer Name",
+      "col_amount": "Amount Paid",
+      "col_cashier": "Recorded By",
+      "col_date": "Payment Date",
+      "col_sale": "Reference Sale",
+      "no_records": "No payment records found for this period"
+    },
+    "net_sales": "Net Sales (Excl. Tax)"
   },
   "settings": {
     "title": "System Settings",
@@ -666,7 +943,8 @@
       "volume": "Purchase Vol.",
       "unpaid": "Unpaid Debt",
       "email": "Email",
-      "phone": "Phone"
+      "phone": "Phone",
+      "total_purchase": "Total Purchase"
     },
     "modal": {
       "create_title": "NEW SUPPLIER",
@@ -716,16 +994,17 @@
           "system_qty": "System Qty",
           "counted_qty": "Counted Qty",
           "mode": "Adjustment Mode",
-          "reason": "Reason"
+          "reason": "Reason",
+          "final": "Final Qty"
         },
+        "add_products": "Add Products",
         "reasons": {
           "correction": "Correction",
           "expired": "Expired",
           "damaged": "Damaged",
           "stolen": "Stolen",
           "other": "Other"
-        },
-        "add_products": "Add Products"
+        }
       },
       "read_only_info": "Viewing previously completed counts is read-only.",
       "no_records": "No stock count records available."
@@ -740,7 +1019,8 @@
         "from": "From",
         "to": "To",
         "status": "Status",
-        "date": "Date"
+        "date": "Date",
+        "recorder": "Recorded By"
       },
       "status": {
         "pending": "Pending",
@@ -774,6 +1054,8 @@
     "title": "Purchases",
     "subtitle": "Track stocks and incoming inventory",
     "new_purchase": "New Stock Purchase",
+    "search_placeholder": "Search by supplier, PO number...",
+    "no_purchases": "No purchases found.",
     "table": {
       "order": "PO #",
       "supplier": "Supplier",
@@ -783,86 +1065,96 @@
       "delivery": "Delivery",
       "date": "Date"
     },
+    "invoice": {
+      "title": "PURCHASE INVOICE",
+      "supplier_info": "Supplier Information",
+      "delivery_status": "Delivery Status",
+      "order_details": "Order Details",
+      "purchase_date": "Purchase Date",
+      "payment_status": "Payment Status",
+      "product": "Product",
+      "price": "Unit Cost",
+      "qty": "Qty",
+      "total": "Total",
+      "subtotal": "Subtotal",
+      "grand_total": "GRAND TOTAL",
+      "print": "Print Invoice",
+      "location": "Location",
+      "po_number": "PO #"
+    },
     "modal": {
+      "create_title": "New Purchase Order",
+      "edit_title": "Edit Purchase Order",
       "title": "New Stock Entry",
       "subtitle": "Record inventory received from a supplier",
       "search_items": "Search items to add...",
+      "search_products": "Search or scan products...",
       "select_supplier": "Select Supplier",
       "summary": "Purchase Summary",
+      "order_summary": "Order Total",
       "total_cost": "Total Cost",
       "amount_paid": "Amount Paid",
       "balance": "Outstanding Balance",
       "save_btn": "Complete Purchase",
+      "save_purchase": "Save Purchase",
       "supplier": "Supplier",
+      "location": "Location",
       "search_suppliers": "Search suppliers...",
       "no_supplier_found": "No supplier found for \"{{query}}\"",
       "add_as_supplier": "Add \"{{query}}\" as supplier",
       "date": "Date",
       "payment": "Payment",
       "delivery": "Delivery",
-      "table": {
-        "product": "Product",
-        "qty": "Qty",
-        "cost": "Cost",
-        "profit": "Profit",
-        "selling": "Selling"
-      },
       "add_product": "Add Product",
       "no_products_found": "No products found for \"{{query}}\"",
       "delete_title": "Delete Purchase",
       "delete_desc": "Are you sure you want to delete this purchase order? This action cannot be undone and will reverse stock levels.",
       "empty_search": "Search or scan products to add them to this purchase.",
-      "invoice": {
-        "title": "INVOICE",
-        "supplier_info": "Supplier Information",
-        "delivery_status": "Delivery Status",
-        "order_details": "Order Details",
-        "purchase_date": "Purchase Date",
-        "payment_status": "Payment Status",
+      "table": {
         "product": "Product",
-        "price": "Price",
         "qty": "Qty",
-        "total": "Total",
-        "subtotal": "Subtotal",
-        "grand_total": "Grand Total",
-        "print": "Print Invoice"
-      },
-      "quick_supplier": {
-        "label": "Quick Action",
-        "title": "Add New Supplier",
-        "name": "Supplier Name",
-        "name_placeholder": "e.g. Rwanda Coffee Ltd",
-        "contact": "Contact Name",
-        "contact_placeholder": "Contact person name",
-        "phone": "Phone",
-        "phone_placeholder": "+250 7xx xxx xxx",
-        "saving": "Saving...",
-        "save_btn": "Create & Select"
-      },
-      "schedule": {
-        "label": "Payment Schedule",
-        "title": "Schedule Supplier Payment",
-        "amount": "Amount Due (RWF)",
-        "amount_placeholder": "Amount to pay",
-        "due_date": "Due Date",
-        "notes": "Notes",
-        "notes_placeholder": "Payment terms, batch number...",
-        "success": "Payment scheduled!",
-        "error": "Failed to schedule payment",
-        "save_btn": "Schedule Payment",
-        "upcoming_title": "Upcoming Supplier Payments",
-        "show_all": "Show all",
-        "hide": "Hide",
-        "mark_paid": "Mark Paid",
-        "mark_paid_success": "Marked as paid!",
-        "delete_title": "Delete Schedule",
-        "delete_desc": "Remove this payment schedule?"
+        "cost": "Cost",
+        "profit": "Profit %",
+        "selling": "Selling Price"
       }
+    },
+    "quick_supplier": {
+      "label": "Quick Action",
+      "title": "Add New Supplier",
+      "name": "Supplier Name",
+      "name_placeholder": "e.g. Rwanda Coffee Ltd",
+      "contact": "Contact Name",
+      "contact_placeholder": "Contact person name",
+      "phone": "Phone",
+      "phone_placeholder": "+250 7xx xxx xxx",
+      "saving": "Saving...",
+      "save_btn": "Create & Select"
+    },
+    "schedule": {
+      "label": "Payment Schedule",
+      "title": "Schedule Supplier Payment",
+      "amount": "Amount Due (RWF)",
+      "amount_placeholder": "Amount to pay",
+      "due_date": "Due Date",
+      "notes": "Notes",
+      "notes_placeholder": "Payment terms, batch number...",
+      "success": "Payment scheduled!",
+      "error": "Failed to schedule payment",
+      "save_btn": "Schedule Payment",
+      "saving": "Scheduling...",
+      "upcoming_title": "Upcoming Supplier Payments",
+      "show_all": "Show all",
+      "hide": "Hide",
+      "mark_paid": "Mark Paid",
+      "mark_paid_success": "Marked as paid!",
+      "delete_title": "Delete Schedule",
+      "delete_desc": "Remove this payment schedule?"
     },
     "status": {
       "paid": "Paid",
       "partial": "Partially Paid",
-      "due": "Due"
+      "due": "Due",
+      "unpaid": "Unpaid"
     },
     "delivery": {
       "received": "Received",

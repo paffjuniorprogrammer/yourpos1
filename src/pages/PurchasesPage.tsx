@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { CalendarClock, CreditCard, Pencil, Plus, Printer, Search, Trash2, X } from "lucide-react";
+import { formatCurrency } from "../lib/format";
 
 import { useAuth } from "../context/AuthContext";
 import { useNotification } from "../context/NotificationContext";
@@ -59,14 +61,6 @@ const createEmptyForm = (): PurchaseFormState => ({
   date: new Date().toISOString().split("T")[0],
   items: [],
 });
-
-const formatCurrency = (amount: number) => {
-  return new Intl.NumberFormat('en-RW', {
-    style: 'currency',
-    currency: 'RWF',
-    minimumFractionDigits: 0,
-  }).format(amount);
-};
 
 function formatMoney(value: number) {
   return formatCurrency(value);
@@ -971,92 +965,193 @@ export function PurchasesPage() {
         </div>
       )}
 
+      {/* Print portal: renders print styles + invoice clone OUTSIDE #root so window.print() works */}
+      {selectedPurchase && createPortal(
+        <>
+          <style dangerouslySetInnerHTML={{ __html: `
+            @media print {
+              body > #root { display: none !important; }
+              body { margin: 0 !important; padding: 0 !important; background: white !important; }
+              #purchase-invoice-print { display: block !important; width: 210mm; padding: 15mm; box-sizing: border-box; font-family: system-ui, sans-serif; }
+              @page { size: A4; margin: 0; }
+            }
+            @media screen { #purchase-invoice-print { display: none; } }
+          `}} />
+          <div id="purchase-invoice-print">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px', borderBottom: '2px solid #e2e8f0', paddingBottom: '16px' }}>
+              <div>
+                <p style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.15em', color: '#94a3b8', marginBottom: '4px' }}>{t('purchases.invoice.title')}</p>
+                <p style={{ fontSize: '20px', fontWeight: 900, color: '#0f172a' }}>{selectedPurchase.purchaseNumber ? `#${selectedPurchase.purchaseNumber}` : selectedPurchase.id.substring(0,8)}</p>
+                <p style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>{selectedPurchase.date}</p>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <p style={{ fontSize: '16px', fontWeight: 900, color: '#0f172a', textTransform: 'uppercase' }}>{settings?.shop_name || 'RETAIL POS'}</p>
+                <p style={{ fontSize: '11px', color: '#64748b' }}>{settings?.address || ''}</p>
+                <p style={{ fontSize: '11px', color: '#64748b' }}>{settings?.contact_phone || ''}</p>
+              </div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
+              <div style={{ background: '#f8fafc', borderRadius: '8px', padding: '12px' }}>
+                <p style={{ fontSize: '9px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#94a3b8', marginBottom: '8px' }}>{t('purchases.invoice.supplier_info')}</p>
+                <p style={{ fontSize: '15px', fontWeight: 800, color: '#0f172a' }}>{selectedPurchase.supplier}</p>
+                <p style={{ fontSize: '11px', color: '#64748b', marginTop: '4px' }}>{t('purchases.invoice.delivery_status')}: {selectedPurchase.deliveryStatus}</p>
+                <p style={{ fontSize: '11px', color: '#64748b' }}>{t('purchases.invoice.location')}: {selectedPurchase.location}</p>
+              </div>
+              <div style={{ background: '#eff6ff', borderRadius: '8px', padding: '12px' }}>
+                <p style={{ fontSize: '9px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#93c5fd', marginBottom: '8px' }}>{t('purchases.invoice.payment_status')}</p>
+                <p style={{ fontSize: '13px', fontWeight: 700, color: selectedPurchase.paymentStatus === 'Paid' ? '#059669' : selectedPurchase.paymentStatus === 'Partially Paid' ? '#0284c7' : '#d97706' }}>
+                  {selectedPurchase.paymentStatus === 'Paid' ? t('purchases.status.paid') : selectedPurchase.paymentStatus === 'Partially Paid' ? t('purchases.status.partial') : t('purchases.status.due')}
+                </p>
+                <p style={{ fontSize: '20px', fontWeight: 900, color: '#1d4ed8', marginTop: '4px' }}>{selectedPurchase.amount}</p>
+              </div>
+            </div>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', marginBottom: '20px' }}>
+              <thead>
+                <tr style={{ background: '#0f172a', color: 'white' }}>
+                  <th style={{ padding: '10px 12px', textAlign: 'left', fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{t('purchases.invoice.product')}</th>
+                  <th style={{ padding: '10px 12px', textAlign: 'right', fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{t('purchases.invoice.price')}</th>
+                  <th style={{ padding: '10px 12px', textAlign: 'center', fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{t('purchases.invoice.qty')}</th>
+                  <th style={{ padding: '10px 12px', textAlign: 'right', fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{t('purchases.invoice.total')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {selectedPurchase.items.map((item, idx) => (
+                  <tr key={idx} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                    <td style={{ padding: '10px 12px', fontWeight: 600, color: '#0f172a' }}>{item.product}</td>
+                    <td style={{ padding: '10px 12px', textAlign: 'right', color: '#475569' }}>{formatMoney(item.purchasePrice)}</td>
+                    <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700 }}>{item.quantity}</td>
+                    <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 800, color: '#1d4ed8' }}>{formatMoney(item.purchasePrice * item.quantity)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <div style={{ width: '240px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderTop: '2px solid #0f172a', marginTop: '4px' }}>
+                  <span style={{ fontSize: '13px', fontWeight: 900, textTransform: 'uppercase', color: '#0f172a' }}>{t('purchases.invoice.grand_total')}</span>
+                  <span style={{ fontSize: '18px', fontWeight: 900, color: '#1d4ed8' }}>{selectedPurchase.amount}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>,
+        document.body
+      )}
+
       {/* View/Print Invoice Modal */}
       {selectedPurchase && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4 overflow-y-auto py-8 backdrop-blur-sm" onClick={() => setSelectedPurchase(null)}>
-          <div className="w-full max-w-4xl rounded-[2rem] bg-white p-8 shadow-2xl relative" onClick={(e) => e.stopPropagation()}>
-            <button
-              onClick={() => setSelectedPurchase(null)}
-              className="absolute right-6 top-6 rounded-full bg-slate-100 p-2 text-slate-600 transition hover:bg-slate-200"
-            >
-              <X size={20} />
-            </button>
-            <div id="purchase-invoice">
-              <div className="mb-8 flex flex-col sm:flex-row justify-between gap-6 items-start">
+          <div className="w-full max-w-4xl rounded-[2rem] bg-white shadow-2xl relative" onClick={(e) => e.stopPropagation()}>
+            {/* Header bar */}
+            <div className="flex items-center justify-between px-8 pt-8 pb-4 border-b border-slate-100">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-widest text-brand-600">{t('purchases.invoice.title')}</p>
+                <h2 className="text-2xl font-black text-ink mt-1">{selectedPurchase.purchaseNumber ? `#${selectedPurchase.purchaseNumber}` : selectedPurchase.id.substring(0,8)}</h2>
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => window.print()}
+                  className="inline-flex items-center gap-2 rounded-2xl bg-brand-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-brand-700 shadow-lg"
+                >
+                  <Printer size={16} /> {t('purchases.invoice.print')}
+                </button>
+                <button onClick={() => setSelectedPurchase(null)} className="rounded-full bg-slate-100 p-2 text-slate-600 transition hover:bg-slate-200">
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+
+            {/* Invoice body (scrollable on screen) */}
+            <div id="purchase-invoice" className="overflow-y-auto max-h-[75vh] p-8">
+              {/* Business header */}
+              <div className="mb-8 flex justify-between items-start">
                 <div>
-                  <h2 className="text-3xl font-black text-brand-600">{t('purchases.invoice.title')}</h2>
-                  <p className="text-slate-500 mt-1">ID: {selectedPurchase.id}</p>
+                  <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-1">{t('purchases.invoice.supplier_info')}</p>
+                  <p className="text-xl font-black text-ink">{selectedPurchase.supplier}</p>
+                  <div className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1">
+                    <span className="text-xs font-semibold text-slate-600">{t('purchases.invoice.delivery_status')}: {selectedPurchase.deliveryStatus}</span>
+                  </div>
                 </div>
                 <div className="text-right">
-                  <p className="font-bold text-ink uppercase">{settings?.shop_name || "RETAIL POS"}</p>
+                  <p className="text-lg font-black text-ink uppercase tracking-wide">{settings?.shop_name || "RETAIL POS"}</p>
                   <p className="text-sm text-slate-500">{settings?.address || ""}</p>
                   <p className="text-sm text-slate-500">{settings?.contact_phone || ""}</p>
                 </div>
               </div>
 
-              <div className="grid gap-8 md:grid-cols-2 mb-10 pb-8 border-b border-slate-100">
-                <div className="rounded-3xl bg-slate-50 p-6">
-                  <h4 className="text-xs font-bold uppercase tracking-[0.2em] text-slate-400 mb-4">{t('purchases.invoice.supplier_info')}</h4>
-                  <p className="text-xl font-bold text-ink">{selectedPurchase.supplier}</p>
-                  <p className="text-sm text-slate-500 mt-2">{t('purchases.invoice.delivery_status')}: {selectedPurchase.deliveryStatus}</p>
+              {/* Two-column info cards */}
+              <div className="grid md:grid-cols-2 gap-4 mb-8">
+                <div className="rounded-2xl bg-slate-50 p-5">
+                  <h4 className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">{t('purchases.invoice.order_details')}</h4>
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-sm text-slate-500">{t('purchases.invoice.po_number')}</span>
+                      <span className="text-sm font-bold text-ink">{selectedPurchase.purchaseNumber ? `#${selectedPurchase.purchaseNumber}` : '—'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-slate-500">{t('purchases.invoice.purchase_date')}</span>
+                      <span className="text-sm font-bold text-ink">{selectedPurchase.date}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-slate-500">{t('purchases.invoice.location')}</span>
+                      <span className="text-sm font-bold text-ink">{selectedPurchase.location}</span>
+                    </div>
+                  </div>
                 </div>
-                <div className="rounded-3xl bg-brand-50 p-6">
-                  <h4 className="text-xs font-bold uppercase tracking-[0.2em] text-brand-600 mb-4">{t('purchases.invoice.order_details')}</h4>
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-sm text-slate-600 font-medium">{t('purchases.invoice.purchase_date')}:</span>
-                    <span className="text-sm font-bold text-ink">{selectedPurchase.date}</span>
+                <div className="rounded-2xl bg-brand-50 p-5">
+                  <h4 className="text-xs font-bold uppercase tracking-widest text-brand-400 mb-3">{t('purchases.invoice.payment_status')}</h4>
+                  <div className="flex items-center gap-3 mt-2">
+                    <span className={`rounded-full px-4 py-1.5 text-sm font-black ${
+                      selectedPurchase.paymentStatus === 'Paid' ? 'bg-emerald-100 text-emerald-700' :
+                      selectedPurchase.paymentStatus === 'Partially Paid' ? 'bg-sky-100 text-sky-700' :
+                      'bg-amber-100 text-amber-700'
+                    }`}>
+                      {selectedPurchase.paymentStatus === "Paid" ? t('purchases.status.paid') :
+                       selectedPurchase.paymentStatus === "Partially Paid" ? t('purchases.status.partial') :
+                       t('purchases.status.due')}
+                    </span>
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-slate-600 font-medium">{t('purchases.invoice.payment_status')}:</span>
-                    <span className="text-sm font-bold text-ink">{selectedPurchase.paymentStatus}</span>
-                  </div>
+                  <p className="mt-3 text-2xl font-black text-brand-700">{selectedPurchase.amount}</p>
                 </div>
               </div>
 
-              <div className="mb-10 overflow-hidden rounded-[2rem] border border-slate-100">
+              {/* Items table */}
+              <div className="overflow-hidden rounded-2xl border border-slate-100 mb-6">
                 <table className="w-full text-left text-sm border-separate border-spacing-0">
-                  <thead className="bg-slate-900 text-white">
+                  <thead className="bg-gradient-to-r from-slate-900 via-slate-800 to-brand-700 text-white">
                     <tr>
-                      <th className="px-6 py-4 font-bold uppercase tracking-wider">{t('purchases.invoice.product')}</th>
-                      <th className="px-6 py-4 font-bold uppercase tracking-wider text-right">{t('purchases.invoice.price')}</th>
-                      <th className="px-6 py-4 font-bold uppercase tracking-wider text-center">{t('purchases.invoice.qty')}</th>
-                      <th className="px-6 py-4 font-bold uppercase tracking-wider text-right">{t('purchases.invoice.total')}</th>
+                      <th className="px-5 py-4 font-semibold uppercase tracking-wider text-xs">{t('purchases.invoice.product')}</th>
+                      <th className="px-5 py-4 font-semibold uppercase tracking-wider text-xs text-right">{t('purchases.invoice.price')}</th>
+                      <th className="px-5 py-4 font-semibold uppercase tracking-wider text-xs text-center">{t('purchases.invoice.qty')}</th>
+                      <th className="px-5 py-4 font-semibold uppercase tracking-wider text-xs text-right">{t('purchases.invoice.total')}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {selectedPurchase.items.map((item, idx) => (
-                      <tr key={idx} className="border-b border-slate-100 last:border-0">
-                        <td className="px-6 py-4 font-bold text-ink">{item.product}</td>
-                        <td className="px-6 py-4 text-right">{formatMoney(item.purchasePrice)}</td>
-                        <td className="px-6 py-4 text-center font-medium">{item.quantity}</td>
-                        <td className="px-6 py-4 text-right font-bold text-brand-600">{formatMoney(item.purchasePrice * item.quantity)}</td>
+                      <tr key={idx} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/60 transition">
+                        <td className="px-5 py-4 font-semibold text-ink">{item.product}</td>
+                        <td className="px-5 py-4 text-right text-slate-600">{formatMoney(item.purchasePrice)}</td>
+                        <td className="px-5 py-4 text-center font-bold text-slate-700">{item.quantity}</td>
+                        <td className="px-5 py-4 text-right font-black text-brand-600">{formatMoney(item.purchasePrice * item.quantity)}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
 
-              <div className="flex justify-end pt-6 border-t border-slate-100">
-                <div className="w-full max-w-xs space-y-3">
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-500 font-medium">{t('purchases.invoice.subtotal')}</span>
+              {/* Totals */}
+              <div className="flex justify-end">
+                <div className="w-72 space-y-2">
+                  <div className="flex justify-between items-center py-2">
+                    <span className="text-sm text-slate-500">{t('purchases.invoice.subtotal')}</span>
                     <span className="font-bold text-ink">{selectedPurchase.amount}</span>
                   </div>
-                  <div className="flex justify-between items-center pt-3 border-t-2 border-slate-200">
-                    <span className="text-lg font-black text-ink uppercase">{t('purchases.invoice.grand_total')}</span>
+                  <div className="flex justify-between items-center py-3 border-t-2 border-slate-200 mt-1">
+                    <span className="text-base font-black text-ink uppercase tracking-wide">{t('purchases.invoice.grand_total')}</span>
                     <span className="text-2xl font-black text-brand-600">{selectedPurchase.amount}</span>
                   </div>
                 </div>
               </div>
-            </div>
-
-            <div className="mt-10 flex justify-end gap-3">
-              <button
-                onClick={() => window.print()}
-                className="inline-flex items-center gap-2 rounded-2xl bg-brand-600 px-6 py-3 font-bold text-white transition hover:bg-brand-700 shadow-xl shadow-brand-100"
-              >
-                <Printer size={18} /> {t('purchases.invoice.print')}
-              </button>
             </div>
           </div>
         </div>

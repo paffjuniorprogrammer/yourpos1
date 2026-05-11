@@ -186,12 +186,15 @@ export function InvoiceA4({
 
       {/* Footer */}
       <div style={{
-        position: "absolute", bottom: "15mm", left: "18mm", right: "18mm",
         borderTop: "1px solid #e2e8f0", paddingTop: "12px",
+        marginTop: "32px",
         display: "flex", justifyContent: "space-between", alignItems: "center",
         fontSize: "9pt", color: "#94a3b8",
       }}>
         <span>{t('sales.receipt.footer1')}</span>
+        <div style={{ padding: "8px", border: "1px dashed #cbd5e1", borderRadius: "4px", textAlign: "center", fontSize: "8pt" }}>
+           [ QR CODE ]
+        </div>
         <span>{t('sales.receipt.printed_at')} {new Date().toLocaleString()}</span>
       </div>
     </div>

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { useNotification } from "../context/NotificationContext";
 
@@ -409,11 +410,7 @@ export function StockPage() {
   }
 
   function handlePrint() {
-    setIsPrinting(true);
-    setTimeout(() => {
-      window.print();
-      setIsPrinting(false);
-    }, 500);
+    setTimeout(() => window.print(), 300);
   }
 
   return (
@@ -559,6 +556,7 @@ export function StockPage() {
                     t('stock.transfers.table.from'),
                     t('stock.transfers.table.to'),
                     t('stock.transfers.table.status'),
+                    t('stock.transfers.table.recorder'),
                     t('stock.transfers.table.date'),
                     t('common.actions'),
                   ].map((column) => (
@@ -616,7 +614,12 @@ export function StockPage() {
 
                           </button>
                         </td>
-                        <td className="border-b border-slate-100 px-5 py-4 text-slate-500">{transfer.createdAt}</td>
+                        <td className="border-b border-slate-100 px-5 py-4 text-slate-500 font-medium">
+                          {transfer.createdBy}
+                        </td>
+                        <td className="border-b border-slate-100 px-5 py-4 text-slate-500">
+                          {transfer.createdAt}
+                        </td>
                         <td className="border-b border-slate-100 px-5 py-4">
                           <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                             {transfer.status === "Pending" && can("Stock", "edit") ? (
@@ -1231,15 +1234,104 @@ export function StockPage() {
         </div>
       )}
 
-      {/* Global Print Overlay for professional reports */}
-      <style>{`
-        @media print {
-          body * { visibility: hidden; }
-          .print\\:contents, .print\\:contents * { visibility: visible; }
-          .print\\:contents { position: absolute; left: 0; top: 0; width: 100%; }
-          .print\\:hidden { display: none !important; }
-        }
-      `}</style>
+      {/* ── STOCK COUNT PRINT PORTAL ── */}
+      {selectedCount && createPortal(
+        <div className="print-doc" style={{ padding: '18mm', fontFamily: 'system-ui, sans-serif' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '2px solid #0f172a', paddingBottom: '12px', marginBottom: '20px' }}>
+            <div>
+              <p style={{ fontSize: '9px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.2em', color: '#94a3b8' }}>STOCK REPORT</p>
+              <h1 style={{ fontSize: '26px', fontWeight: 900, color: '#1d4ed8', margin: '4px 0' }}>Stock Count</h1>
+              <p style={{ fontSize: '12px', color: '#64748b' }}>Ref: #{selectedCount.countNumber || selectedCount.id.slice(0,5)}</p>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <p style={{ fontSize: '14px', fontWeight: 700 }}>Inventory POS</p>
+              <p style={{ fontSize: '11px', color: '#64748b' }}>Official Stock Document</p>
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px', fontSize: '12px' }}>
+            <div style={{ background: '#f8fafc', borderRadius: '8px', padding: '12px' }}>
+              <p style={{ fontSize: '9px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.15em', color: '#94a3b8', marginBottom: '6px' }}>INVENTORY LOGIC</p>
+              <p style={{ fontWeight: 600 }}>Location: {selectedCount.stockName}</p>
+              <p style={{ color: '#64748b' }}>Recorded by: {selectedCount.createdBy}</p>
+            </div>
+            <div style={{ textAlign: 'right', background: '#f8fafc', borderRadius: '8px', padding: '12px' }}>
+              <p style={{ fontSize: '9px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.15em', color: '#94a3b8', marginBottom: '6px' }}>TIMING</p>
+              <p style={{ fontWeight: 600 }}>{selectedCount.createdAt}</p>
+            </div>
+          </div>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+            <thead>
+              <tr style={{ background: '#0f172a', color: 'white' }}>
+                {['Product Name','System Qty','Counted Qty','Adjustment Mode','Reason','Final Qty'].map(h => (
+                  <th key={h} style={{ padding: '10px 12px', textAlign: h === 'Final Qty' ? 'right' : 'left', fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {selectedCount.lines.map((line) => (
+                <tr key={line.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                  <td style={{ padding: '9px 12px', fontWeight: 600 }}>{line.name}</td>
+                  <td style={{ padding: '9px 12px', color: '#64748b' }}>{line.stockQty}</td>
+                  <td style={{ padding: '9px 12px', fontWeight: 700, color: line.mode === 'Add' ? '#059669' : '#dc2626' }}>{line.mode === 'Add' ? `+${line.countedQty}` : `-${line.countedQty}`}</td>
+                  <td style={{ padding: '9px 12px', textTransform: 'uppercase', fontSize: '10px', fontWeight: 700 }}>{line.reason}</td>
+                  <td style={{ padding: '9px 12px' }}>{line.reason}</td>
+                  <td style={{ padding: '9px 12px', textAlign: 'right', fontWeight: 900, color: '#1d4ed8' }}>{line.stockQty + (line.mode === 'Add' ? line.countedQty : -line.countedQty)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p style={{ fontSize: '10px', color: '#94a3b8', textAlign: 'center', marginTop: '24px', borderTop: '1px solid #e2e8f0', paddingTop: '12px' }}>Computer-generated stock document · {new Date().toLocaleString()}</p>
+        </div>,
+        document.body
+      )}
+
+      {/* ── TRANSFER PRINT PORTAL ── */}
+      {selectedTransfer && createPortal(
+        <div className="print-doc" style={{ padding: '18mm', fontFamily: 'system-ui, sans-serif' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '2px solid #1d4ed8', paddingBottom: '12px', marginBottom: '20px' }}>
+            <div>
+              <p style={{ fontSize: '9px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.2em', color: '#93c5fd' }}>TRANSFER SLIP</p>
+              <h1 style={{ fontSize: '26px', fontWeight: 900, color: '#1d4ed8', margin: '4px 0' }}>Transfer Voucher</h1>
+              <p style={{ fontSize: '12px', color: '#64748b' }}>Voucher: #{selectedTransfer.transferNumber || selectedTransfer.id.slice(0,5)}</p>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <p style={{ fontSize: '14px', fontWeight: 700 }}>Inventory POS</p>
+              <p style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: selectedTransfer.status === 'Completed' ? '#059669' : '#0284c7', marginTop: '4px' }}>{selectedTransfer.status}</p>
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: '16px', marginBottom: '24px', background: '#f8fafc', borderRadius: '8px', padding: '16px', textAlign: 'center' }}>
+            <div>
+              <p style={{ fontSize: '9px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.15em', color: '#94a3b8', marginBottom: '4px' }}>SOURCE LOCATION</p>
+              <p style={{ fontSize: '16px', fontWeight: 800 }}>{selectedTransfer.fromStock}</p>
+            </div>
+            <div style={{ fontSize: '20px', color: '#94a3b8', display: 'flex', alignItems: 'center' }}>→</div>
+            <div>
+              <p style={{ fontSize: '9px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.15em', color: '#94a3b8', marginBottom: '4px' }}>DESTINATION</p>
+              <p style={{ fontSize: '16px', fontWeight: 800 }}>{selectedTransfer.toStock}</p>
+            </div>
+          </div>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+            <thead>
+              <tr style={{ background: '#0f172a', color: 'white' }}>
+                <th style={{ padding: '10px 12px', textAlign: 'left', fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.1em' }}>ITEM DESCRIPTION</th>
+                <th style={{ padding: '10px 12px', textAlign: 'right', fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.1em' }}>QTY SENT</th>
+              </tr>
+            </thead>
+            <tbody>
+              {selectedTransfer.lines.map((line) => (
+                <tr key={line.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                  <td style={{ padding: '10px 12px', fontWeight: 600 }}>{line.name}</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 800, color: '#1d4ed8' }}>{line.sendQty} units</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p style={{ textAlign: 'right', fontSize: '11px', color: '#64748b', fontWeight: 600, marginTop: '16px' }}>Authorized By: {selectedTransfer.createdBy}</p>
+          <p style={{ textAlign: 'right', fontSize: '11px', color: '#94a3b8', fontStyle: 'italic', marginTop: '4px' }}>Issued on: {selectedTransfer.createdAt}</p>
+          <p style={{ fontSize: '10px', color: '#94a3b8', textAlign: 'center', marginTop: '24px', borderTop: '1px solid #e2e8f0', paddingTop: '12px' }}>Computer-generated transfer document · {new Date().toLocaleString()}</p>
+        </div>,
+        document.body
+      )}
       {/* QUICK ADD PRODUCT MODAL */}
       <QuickAddProductModal 
         isOpen={quickProductOpen}

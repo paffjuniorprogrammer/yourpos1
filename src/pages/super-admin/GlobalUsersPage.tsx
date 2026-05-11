@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { 
   Users, 
   Search, 
@@ -15,6 +16,7 @@ import { superAdminService } from "../../services/superAdminService";
 import { LoadingPOS } from "../../components/ui/LoadingPOS";
 
 export function GlobalUsersPage() {
+  const { t } = useTranslation();
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -37,24 +39,24 @@ export function GlobalUsersPage() {
 
   const handleResetPassword = async (user: any) => {
     if (!user.auth_user_id) {
-      alert("This user does not have a linked authentication account.");
+      alert(t('super_admin.global_users.no_auth'));
       return;
     }
 
-    const newPassword = window.prompt(`Enter new password for ${user.full_name}:`);
+    const newPassword = window.prompt(`${t('super_admin.global_users.enter_password')} ${user.full_name}:`);
     if (!newPassword) return;
 
     if (newPassword.length < 6) {
-      alert("Password must be at least 6 characters long.");
+      alert(t('super_admin.global_users.password_length'));
       return;
     }
 
     try {
       await superAdminService.resetUserPassword(user.auth_user_id, newPassword);
-      alert("Password reset successfully! The user can now log in with the new password.");
+      alert(t('super_admin.global_users.reset_success'));
     } catch (err: any) {
       console.error("Reset failed:", err);
-      alert(`Failed to reset password: ${err.message || "Unknown error"}`);
+      alert(`${t('super_admin.global_users.reset_failed')} ${err.message || "Unknown error"}`);
     }
   };
 
@@ -75,8 +77,8 @@ export function GlobalUsersPage() {
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Global User Monitoring</h1>
-          <p className="text-slate-500 font-medium">Search and manage users across all business tenants.</p>
+          <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">{t('super_admin.global_users.title')}</h1>
+          <p className="text-slate-500 font-medium">{t('super_admin.global_users.subtitle')}</p>
         </div>
       </div>
 
@@ -84,7 +86,7 @@ export function GlobalUsersPage() {
         <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
         <input 
           type="text"
-          placeholder="Search by name, email, or business..."
+          placeholder={t('super_admin.global_users.search_placeholder')}
           className="w-full rounded-2xl border-none bg-white py-4 pl-12 pr-4 shadow-sm outline-none ring-primary/20 transition-all focus:ring-4 placeholder:text-slate-400 font-medium"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
@@ -121,28 +123,28 @@ export function GlobalUsersPage() {
               <div className="flex items-center gap-2 rounded-xl bg-slate-50 p-3">
                 <Building2 size={14} className="text-slate-400" />
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 leading-none mb-1">Business</p>
-                  <p className="text-xs font-bold text-slate-700 truncate">{user.business?.name || 'Unassigned'}</p>
+                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 leading-none mb-1">{t('super_admin.global_users.business_label')}</p>
+                  <p className="text-xs font-bold text-slate-700 truncate">{user.business?.name || t('super_admin.global_users.unassigned')}</p>
                 </div>
               </div>
               <div className="flex items-center gap-2 rounded-xl bg-slate-50 p-3">
                 <Calendar size={14} className="text-slate-400" />
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 leading-none mb-1">Joined</p>
+                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 leading-none mb-1">{t('super_admin.global_users.joined_label')}</p>
                   <p className="text-xs font-bold text-slate-700">{new Date(user.created_at).toLocaleDateString()}</p>
                 </div>
               </div>
             </div>
 
             <div className="flex items-center gap-2 pt-4 border-t border-slate-100">
-               <button 
+              <button 
                 onClick={() => handleToggleActive(user)}
                 className={`flex-1 flex items-center justify-center gap-2 rounded-xl py-3 text-xs font-black uppercase tracking-widest transition-colors ${
                   user.is_active ? 'bg-error/10 text-error hover:bg-error/20' : 'bg-success/10 text-success hover:bg-success/20'
                 }`}
               >
                 {user.is_active ? <UserX size={14} /> : <UserCheck size={14} />}
-                {user.is_active ? 'Disable' : 'Enable'}
+                {user.is_active ? t('super_admin.global_users.disable') : t('super_admin.global_users.enable')}
               </button>
               <button 
                 onClick={() => handleResetPassword(user)}

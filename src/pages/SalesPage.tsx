@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowLeftRight, CreditCard, Eye, FileText, Minus, Pencil, Plus, Printer, Search, Trash2, X } from "lucide-react";
+import { ArrowLeftRight, CreditCard, DollarSign, Eye, FileText, Minus, Pencil, Plus, Printer, Search, Trash2, X } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useNotification } from "../context/NotificationContext";
 import { SectionCard } from "../components/ui/SectionCard";
@@ -18,6 +18,7 @@ import { Receipt80mm } from "../components/print/Receipt80mm";
 import { InvoiceA4 } from "../components/print/InvoiceA4";
 import { useTranslation } from "react-i18next";
 import type { PaymentMethod, PosProductRecord, SaleRecord } from "../types/database";
+import { formatCurrency } from "../lib/format";
 
 
 type SaleWithDetails = SaleRecord & {
@@ -240,9 +241,6 @@ export function SalesPage() {
     setTimeout(() => window.print(), 300);
   }
 
-  const formatCurrency = (val: number) =>
-    val.toLocaleString("fr-RW", { minimumFractionDigits: 0 }) + " RWF";
-
   useEffect(() => {
     if (showEditModal && availableProducts.length === 0) {
       void listPosProducts(null, 500).then(setAvailableProducts);
@@ -273,9 +271,36 @@ export function SalesPage() {
         </div>
       </div>
 
-      {/* Hidden print portals */}
+      {/* Print portals with correct @media print CSS */}
       {selectedSale && createPortal(
         <>
+          {/* Print styles - injected into body via portal */}
+          <style dangerouslySetInnerHTML={{ __html: printMode === "receipt" ? `
+            @media print {
+              body > #root { display: none !important; }
+              body { margin: 0 !important; padding: 0 !important; background: white !important; }
+              #receipt-80mm { display: block !important; width: 80mm; }
+              #invoice-a4 { display: none !important; }
+              @page { size: 80mm auto; margin: 0; }
+            }
+            @media screen {
+              #receipt-80mm { display: none; }
+            }
+          ` : `
+            @media print {
+              body > #root { display: none !important; }
+              body { margin: 0 !important; padding: 0 !important; background: white !important; }
+              #invoice-a4 { display: block !important; width: 210mm; }
+              #receipt-80mm { display: none !important; }
+              @page { size: A4; margin: 0; }
+            }
+            @media screen {
+              #invoice-a4 { display: none; }
+              #receipt-80mm { display: none; }
+            }
+          `}} />
+
+          {/* 80mm Receipt */}
           <Receipt80mm
             sale_number={selectedSale.sale_number}
             created_at={selectedSale.created_at}
@@ -289,6 +314,8 @@ export function SalesPage() {
             payments={paymentsList}
             settings={settings}
           />
+
+          {/* A4 Invoice */}
           {printMode === "invoice" && (
             <InvoiceA4
               sale_number={selectedSale.sale_number}
@@ -413,8 +440,8 @@ export function SalesPage() {
       {/* ── SALE DETAIL MODAL ── */}
       {selectedSale && !showEditModal && !showReturnModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4 backdrop-blur-sm" onClick={() => { setSelectedSale(null); setSaleDetails(null); }}>
-          <div className="w-full max-w-4xl rounded-[2rem] bg-white p-6 shadow-soft" onClick={(e) => e.stopPropagation()}>
-            <div className="mb-5 flex items-center justify-between">
+          <div className="w-full max-w-4xl max-h-[90vh] flex flex-col rounded-[2rem] bg-white shadow-soft" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-4 flex items-center justify-between px-6 pt-6">
               <div>
                 <p className="text-sm font-semibold uppercase tracking-[0.22em] text-brand-600">{t('sales.details.title')}</p>
                 <h2 className="mt-1 text-2xl font-bold text-ink">{selectedSale.sale_number}</h2>
@@ -422,7 +449,8 @@ export function SalesPage() {
               <button onClick={() => { setSelectedSale(null); setSaleDetails(null); }} className="rounded-full bg-slate-100 p-2 text-slate-600"><X size={18} /></button>
             </div>
 
-
+            {/* Scrollable body */}
+            <div className="overflow-y-auto flex-1 px-6 pb-4">
             {detailsLoading ? (
               <div className="py-8 text-center text-slate-500">{t('common.loading')}</div>
             ) : (
@@ -473,38 +501,37 @@ export function SalesPage() {
                     <p className="text-2xl font-black text-brand-700">{formatCurrency(Number(selectedSale.total_amount))}</p>
                   </div>
                 </div>
-
-
-                <div className="mt-5 flex flex-wrap justify-end gap-3">
-                  {can("Sales", "edit") && (
-                    <>
-                      <button onClick={() => setShowEditModal(true)} className="flex items-center gap-2 rounded-2xl bg-sky-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-sky-600">
-                        <Pencil size={15} /> {t('sales.details.edit_btn')}
-                      </button>
-                      <button onClick={() => setShowReturnModal(true)} className="flex items-center gap-2 rounded-2xl bg-amber-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-amber-600">
-                        <ArrowLeftRight size={15} /> {t('sales.details.return_refund')}
-                      </button>
-                      <button disabled={selectedSale.payment_status === "paid"} onClick={() => { 
-                        const paid = (saleDetails?.sale_payments || []).reduce((s: number, p: any) => s + Number(p.amount), 0);
-                        const remaining = Number(selectedSale.total_amount) - paid;
-                        setPaymentAmount(String(Math.max(0, remaining))); 
-                        setShowPaymentModal(true); 
-                      }} className={`flex items-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-semibold text-white ${selectedSale.payment_status === "paid" ? "bg-slate-300" : "bg-emerald-500 hover:bg-emerald-600"}`}>
-                        <CreditCard size={15} /> {selectedSale.payment_status === "paid" ? t('sales.status.paid') : t('sales.details.record_payment')}
-                      </button>
-
-                    </>
-                  )}
-                  <button onClick={() => handlePrint("receipt")} className="flex items-center gap-2 rounded-2xl bg-orange-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-orange-600">
-                    <Printer size={15} /> {t('sales.details.receipt_80mm')}
-                  </button>
-                  <button onClick={() => handlePrint("invoice")} className="flex items-center gap-2 rounded-2xl bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-600">
-                    <FileText size={15} /> {t('sales.details.invoice_a4')}
-                  </button>
-
-                </div>
               </>
             )}
+            </div>
+
+            {/* Sticky bottom action bar */}
+            <div className="border-t border-slate-100 px-6 py-4 flex flex-wrap justify-end gap-2 bg-white rounded-b-[2rem]">
+              {can("Sales", "edit") && (
+                <>
+                  <button onClick={() => setShowEditModal(true)} className="flex items-center gap-2 rounded-2xl bg-sky-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-sky-600">
+                    <Pencil size={15} /> {t('sales.details.edit_btn')}
+                  </button>
+                  <button onClick={() => setShowReturnModal(true)} className="flex items-center gap-2 rounded-2xl bg-amber-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-amber-600">
+                    <ArrowLeftRight size={15} /> {t('sales.details.return_refund')}
+                  </button>
+                  <button disabled={selectedSale.payment_status === "paid"} onClick={() => {
+                    const paid = (saleDetails?.sale_payments || []).reduce((s: number, p: any) => s + Number(p.amount), 0);
+                    const remaining = Number(selectedSale.total_amount) - paid;
+                    setPaymentAmount(String(Math.max(0, remaining)));
+                    setShowPaymentModal(true);
+                  }} className={`flex items-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-semibold text-white ${selectedSale.payment_status === "paid" ? "bg-slate-300 cursor-not-allowed" : "bg-emerald-500 hover:bg-emerald-600"}`}>
+                    <CreditCard size={15} /> {selectedSale.payment_status === "paid" ? t('sales.status.paid') : t('sales.details.record_payment')}
+                  </button>
+                </>
+              )}
+              <button onClick={() => handlePrint("receipt")} className="flex items-center gap-2 rounded-2xl bg-orange-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-orange-600">
+                <Printer size={15} /> {t('sales.details.receipt_80mm')}
+              </button>
+              <button onClick={() => handlePrint("invoice")} className="flex items-center gap-2 rounded-2xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700">
+                <FileText size={15} /> {t('sales.details.invoice_a4')}
+              </button>
+            </div>
           </div>
         </div>
       )}

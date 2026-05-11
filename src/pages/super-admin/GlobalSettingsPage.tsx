@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { 
   Settings2, 
   Globe, 
@@ -13,6 +14,7 @@ import { supabase } from "../../lib/supabase";
 import { LoadingPOS } from "../../components/ui/LoadingPOS";
 
 export function GlobalSettingsPage() {
+  const { t } = useTranslation();
   const [settings, setSettings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -55,11 +57,11 @@ export function GlobalSettingsPage() {
           .eq('key', setting.key);
       }
 
-      setMessage({ type: 'success', text: 'Global configuration updated successfully!' });
+      setMessage({ type: 'success', text: t('super_admin.global_settings.success_msg') });
       setTimeout(() => setMessage(null), 3000);
     } catch (err) {
       console.error("Save failed:", err);
-      setMessage({ type: 'error', text: 'Failed to update settings.' });
+      setMessage({ type: 'error', text: t('super_admin.global_settings.error_msg') });
     } finally {
       setSaving(false);
     }
@@ -73,8 +75,8 @@ export function GlobalSettingsPage() {
     <div className="max-w-4xl space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Global Configuration</h1>
-          <p className="text-slate-500 font-medium">Control the identity and behavior of the entire platform.</p>
+          <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">{t('super_admin.global_settings.title')}</h1>
+          <p className="text-slate-500 font-medium">{t('super_admin.global_settings.subtitle')}</p>
         </div>
         <button 
           onClick={saveSettings}
@@ -82,7 +84,7 @@ export function GlobalSettingsPage() {
           className="flex items-center gap-2 rounded-2xl bg-slate-950 px-8 py-4 font-black text-white shadow-2xl transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 ring-4 ring-slate-950/10"
         >
           {saving ? <div className="h-5 w-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Save size={20} />}
-          {saving ? 'SAVING...' : 'SAVE CHANGES'}
+          {saving ? t('super_admin.global_settings.saving') : t('super_admin.global_settings.save_btn')}
         </button>
       </div>
 
@@ -102,7 +104,7 @@ export function GlobalSettingsPage() {
                 <div className="h-10 w-10 flex items-center justify-center rounded-xl bg-slate-100 text-slate-500 capitalize">
                   {category === 'general' ? <Globe size={20} /> : <Settings2 size={20} />}
                 </div>
-                <h3 className="text-xl font-black text-slate-900 leading-tight uppercase tracking-tight">{category} Settings</h3>
+                <h3 className="text-xl font-black text-slate-900 leading-tight uppercase tracking-tight">{category} {t('super_admin.global_settings.settings_suffix')}</h3>
              </div>
 
              <div className="space-y-8">
@@ -126,7 +128,7 @@ export function GlobalSettingsPage() {
                              }`} />
                            </button>
                            <span className={`text-xs font-black uppercase tracking-widest ${setting.value === 'true' ? 'text-error' : 'text-slate-400'}`}>
-                             {setting.value === 'true' ? 'Active' : 'Disabled'}
+                             {setting.value === 'true' ? t('super_admin.global_settings.active') : t('super_admin.global_settings.disabled')}
                            </span>
                         </div>
                       ) : (
@@ -153,13 +155,13 @@ export function GlobalSettingsPage() {
         <div className="rounded-[2.5rem] bg-error/5 p-10 border border-error/10">
            <div className="flex items-center gap-4 text-error mb-4">
               <ShieldAlert size={28} />
-              <h3 className="text-xl font-black italic">Danger Zone</h3>
+              <h3 className="text-xl font-black italic">{t('super_admin.global_settings.danger_zone')}</h3>
            </div>
            <p className="text-sm font-medium text-slate-600 mb-6 max-w-lg">
-             Actions here are irreversible. Modifying global parameters can disrupt service for all business tenants.
+             {t('super_admin.global_settings.danger_desc')}
            </p>
            <button className="rounded-xl border border-error/30 bg-white px-6 py-3 text-xs font-black uppercase tracking-widest text-error hover:bg-error hover:text-white transition-all">
-             Reset All Global Settings
+             {t('super_admin.global_settings.reset_btn')}
            </button>
         </div>
       </div>

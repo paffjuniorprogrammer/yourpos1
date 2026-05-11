@@ -34,6 +34,7 @@ export type StockTransferSummary = {
   toStock: string;
   status: "Pending" | "In Transit" | "Completed";
   createdAt: string;
+  createdBy: string;
   lines: StockTransferLine[];
 };
 
@@ -97,6 +98,7 @@ export async function listStockTransfers(): Promise<StockTransferSummary[]> {
       created_at,
       from_location_id,
       to_location_id,
+      users(full_name),
       stock_transfer_items(
         id,
         product_id,
@@ -118,6 +120,7 @@ export async function listStockTransfers(): Promise<StockTransferSummary[]> {
         created_at,
         from_location_id,
         to_location_id,
+        users(full_name),
         stock_transfer_items(
           id,
           product_id,
@@ -151,6 +154,7 @@ export async function listStockTransfers(): Promise<StockTransferSummary[]> {
     toStock: locationMap.get(transfer.to_location_id) || "Unknown Location",
     status: mapStockStatus(transfer.status),
     createdAt: transfer.created_at ? new Date(transfer.created_at).toLocaleDateString() : "N/A",
+    createdBy: transfer.users?.full_name || "Unknown",
     lines: (transfer.stock_transfer_items || []).map((item: any) => ({
       id: item.id,
       productId: item.product_id,

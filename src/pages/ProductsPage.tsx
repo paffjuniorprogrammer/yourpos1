@@ -43,6 +43,7 @@ import { BarcodeLabel, BarcodePrintSheet } from "../components/print/BarcodeLabe
 import { listProductVariants, createProductVariant, deleteProductVariant, type ProductVariant } from "../services/variantService";
 import type { Category, ProductFormValues, ProductRecord, ShopSettingsRecord } from "../types/database";
 import { useTranslation } from "react-i18next";
+import { formatCurrency } from "../lib/format";
 
 
 const DEFAULT_PROFIT = 30;
@@ -57,9 +58,9 @@ const initialValues: ProductFormValues = {
   image_url: "",
 };
 
-function currency(value: number) {
-  return value.toLocaleString();
-}
+const formatNumber = (value: number) => {
+  return formatCurrency(value);
+};
 
 function stockStatus(product: ProductRecord, t: any) {
   if (product.stock_quantity === 0) return t('products.out_of_stock');
@@ -638,7 +639,7 @@ export function ProductsPage() {
                               <div className="flex items-center gap-2">
                                 <p className="font-semibold text-ink">{product.name}</p>
                                 {product.bulk_quantity && product.bulk_quantity > 0 && (
-                                  <span className="rounded-md bg-indigo-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-indigo-700" title={`Bulk: ${product.bulk_quantity} units = ${product.bulk_price?.toLocaleString()} RWF`}>
+                                  <span className="rounded-md bg-indigo-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-indigo-700" title={`Bulk: ${product.bulk_quantity} units = ${formatCurrency(product.bulk_price || 0)}`}>
                                     Bulk
                                   </span>
                                 )}
@@ -930,7 +931,7 @@ export function ProductsPage() {
                                 }
 
                                 if (isNaN(calculated) || calculated <= 0) return "---";
-                                return Math.round(calculated).toLocaleString() + " RWF";
+                                return formatCurrency(Math.round(calculated));
                               })()}
                             </div>
                           </div>
@@ -961,7 +962,7 @@ export function ProductsPage() {
                                   <span className="text-lg">✅</span>
                                   <div>
                                     <p>Package pricing is valid.</p>
-                                    <p className="opacity-75">Customer saves {Math.round(saving).toLocaleString()} RWF ({( (saving/normalTotal)*100 ).toFixed(1)}%) per package.</p>
+                                    <p className="opacity-75">Customer saves {formatCurrency(Math.round(saving))} ({( (saving/normalTotal)*100 ).toFixed(1)}%) per package.</p>
                                   </div>
                                 </div>
                               ) : (
@@ -969,7 +970,7 @@ export function ProductsPage() {
                                   <span className="text-lg">⚠️</span>
                                   <div>
                                     <p>Invalid Package Price!</p>
-                                    <p className="opacity-75">The package price must be less than the individual total of {normalTotal.toLocaleString()} RWF.</p>
+                                    <p className="opacity-75">The package price must be less than the individual total of {formatCurrency(normalTotal)}.</p>
                                   </div>
                                 </div>
                               )}
@@ -1272,7 +1273,7 @@ export function ProductsPage() {
                       <div className="flex items-center gap-3">
                         {v.additional_price !== 0 && (
                           <span className={`text-sm font-bold ${v.additional_price > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                            {v.additional_price > 0 ? '+' : ''}{v.additional_price.toLocaleString()} RWF
+                            {v.additional_price > 0 ? '+' : ''}{formatCurrency(v.additional_price)}
                           </span>
                         )}
                         {canEditProducts && (

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { LoadingPOS } from "../../components/ui/LoadingPOS";
 import { superAdminService } from "../../services/superAdminService";
 import { 
@@ -20,6 +21,7 @@ import {
   Building2
 } from "lucide-react";
 import { useNotification } from "../../context/NotificationContext";
+import { formatCurrency } from "../../lib/format";
 
 // --- REUSABLE MODAL COMPONENT ---
 function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
@@ -46,6 +48,7 @@ function Modal({ title, children, onClose }: { title: string; children: React.Re
 
 // --- 📊 1. MAIN DASHBOARD (TABLE VIEW) ---
 export function BusinessesPage() {
+  const { t } = useTranslation();
   const [businesses, setBusinesses] = useState<any[]>([]);
   const [plans, setPlans] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -121,15 +124,15 @@ export function BusinessesPage() {
       {/* HEADER */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-3xl font-black text-slate-900 tracking-tight">Business Ecosystem</h2>
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Real-time control center</p>
+          <h2 className="text-3xl font-black text-slate-900 tracking-tight">{t('super_admin.businesses.title')}</h2>
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">{t('super_admin.businesses.subtitle')}</p>
         </div>
         <button 
           onClick={() => setShowRegisterModal(true)}
           className="flex items-center gap-3 rounded-2xl bg-slate-950 px-8 py-4 font-black text-white text-xs uppercase tracking-[0.2em] shadow-2xl transition-all hover:bg-slate-800 active:scale-95"
         >
           <Plus size={16} />
-          Register Business
+          {t('super_admin.businesses.register_btn')}
         </button>
       </div>
 
@@ -138,12 +141,12 @@ export function BusinessesPage() {
         <table className="w-full text-left border-collapse" style={{ minWidth: '1000px' }}>
           <thead className="bg-slate-50/50 border-b border-slate-100">
             <tr>
-              <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Business Name</th>
-              <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</th>
-              <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Plan</th>
-              <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Expiry Date</th>
-              <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Users</th>
-              <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right" style={{ minWidth: '340px' }}>Actions</th>
+              <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('super_admin.businesses.table.name')}</th>
+              <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('super_admin.businesses.table.status')}</th>
+              <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('super_admin.businesses.table.plan')}</th>
+              <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('super_admin.businesses.table.expiry')}</th>
+              <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">{t('super_admin.businesses.table.users')}</th>
+              <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right" style={{ minWidth: '340px' }}>{t('super_admin.businesses.table.actions')}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-50">
@@ -173,7 +176,7 @@ export function BusinessesPage() {
                       status === 'expired' ? 'bg-amber-50 text-amber-600' : 'bg-rose-50 text-rose-600'
                     }`}>
                       <div className={`h-1.5 w-1.5 rounded-full ${status === 'active' ? 'bg-emerald-500 animate-pulse' : 'bg-current'}`} />
-                      {status}
+                      {t(`super_admin.businesses.status.${status}`)}
                     </span>
                   </td>
                   <td className="px-8 py-6">
@@ -181,7 +184,7 @@ export function BusinessesPage() {
                   </td>
                   <td className="px-8 py-6">
                     <span className={`text-xs font-bold ${isExpired ? 'text-rose-500' : 'text-slate-600'}`}>
-                      {biz.subscription_end_date ? new Date(biz.subscription_end_date).toLocaleDateString() : 'Lifetime'}
+                      {biz.subscription_end_date ? new Date(biz.subscription_end_date).toLocaleDateString() : t('super_admin.businesses.modal_details.lifetime')}
                     </span>
                   </td>
                   <td className="px-8 py-6 text-center">
@@ -197,16 +200,16 @@ export function BusinessesPage() {
                           ? 'bg-slate-100 text-slate-400 hover:bg-rose-50 hover:text-rose-600' 
                           : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100 shadow-sm'
                         }`}
-                        title={biz.status === 'active' ? 'Suspend Access' : 'Enable Access'}
+                        title={biz.status === 'active' ? t('super_admin.businesses.actions.suspend') : t('super_admin.businesses.actions.enable')}
                       >
                          <Power size={14} />
-                         {biz.status === 'active' ? 'ON' : 'OFF'}
+                         {biz.status === 'active' ? t('super_admin.businesses.actions.on') : t('super_admin.businesses.actions.off')}
                       </button>
 
                       <button onClick={() => setShowDetails(biz)} className="p-2.5 rounded-xl bg-slate-100 text-slate-400 hover:bg-slate-900 hover:text-white transition-all shadow-sm"><Eye size={16} /></button>
-                      <button onClick={() => handleResetPassword(biz)} className="p-2.5 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-900 hover:text-white transition-all shadow-sm" title="Reset Admin Password"><Key size={16} /></button>
+                      <button onClick={() => handleResetPassword(biz)} className="p-2.5 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-900 hover:text-white transition-all shadow-sm" title={t('super_admin.businesses.actions.reset_password')}><Key size={16} /></button>
                       <button onClick={() => setShowPlanModal(biz)} className="p-2.5 rounded-xl bg-slate-100 text-slate-400 hover:bg-primary hover:text-white transition-all shadow-sm"><Zap size={16} /></button>
-                      <button onClick={() => handleExtend(biz)} className="p-2.5 rounded-xl bg-slate-100 text-slate-400 hover:bg-slate-900 hover:text-white transition-all shadow-sm" title="+30 Days"><Clock size={16} /></button>
+                      <button onClick={() => handleExtend(biz)} className="p-2.5 rounded-xl bg-slate-100 text-slate-400 hover:bg-slate-900 hover:text-white transition-all shadow-sm" title={t('super_admin.businesses.actions.extend')}><Clock size={16} /></button>
                       <button onClick={() => handleDelete(biz)} className="p-2.5 rounded-xl bg-slate-100 text-slate-400 hover:bg-rose-500 hover:text-white transition-all shadow-sm"><Trash2 size={16} /></button>
                     </div>
                   </td>
@@ -216,7 +219,7 @@ export function BusinessesPage() {
           </tbody>
         </table>
         {businesses.length === 0 && (
-          <div className="py-20 text-center text-slate-400 font-bold italic">No businesses records found matching criteria.</div>
+          <div className="py-20 text-center text-slate-400 font-bold italic">{t('super_admin.businesses.no_records')}</div>
         )}
       </div>
 
@@ -293,6 +296,7 @@ export function BusinessesPage() {
 // --- MODAL COMPONENTS ---
 
 function RegisterModal({ onClose, plans, onComplete }: any) {
+  const { t } = useTranslation();
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -327,16 +331,16 @@ function RegisterModal({ onClose, plans, onComplete }: any) {
   };
 
   return (
-    <Modal title="Register New Business" onClose={onClose}>
+    <Modal title={t('super_admin.businesses.modal_register.title')} onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="space-y-4">
            {/* Section 1: Business */}
            <div>
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Core Identity</p>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">{t('super_admin.businesses.modal_register.core_identity')}</p>
               <input 
                 required 
                 type="text" 
-                placeholder="Business Name Ex: Fresh Market" 
+                placeholder={t('super_admin.businesses.modal_register.name_placeholder')}
                 className="w-full h-14 px-6 rounded-2xl bg-slate-50 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-bold text-slate-900"
                 value={formData.name}
                 onChange={(e) => setFormData({...formData, name: e.target.value})}
@@ -346,7 +350,7 @@ function RegisterModal({ onClose, plans, onComplete }: any) {
            {/* Section 2: Admin */}
            <div className="grid grid-cols-2 gap-4">
               <div>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Owner Email</p>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">{t('super_admin.businesses.modal_register.owner_email')}</p>
                 <div className="relative">
                    <Mail className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                    <input 
@@ -360,7 +364,7 @@ function RegisterModal({ onClose, plans, onComplete }: any) {
                 </div>
               </div>
               <div>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Password</p>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">{t('super_admin.businesses.modal_register.password')}</p>
                 <div className="relative">
                    <Lock className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                    <input 
@@ -377,7 +381,7 @@ function RegisterModal({ onClose, plans, onComplete }: any) {
 
            {/* Section 3: Subscription */}
            <div className="pt-4 border-t border-slate-100">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Plan Configuration</p>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">{t('super_admin.businesses.modal_register.plan_config')}</p>
               <div className="grid grid-cols-2 gap-4">
                  <select 
                    className="w-full h-14 px-6 rounded-2xl bg-slate-50 border border-slate-100 font-black text-xs uppercase"
@@ -399,7 +403,7 @@ function RegisterModal({ onClose, plans, onComplete }: any) {
 
            <div className="grid grid-cols-2 gap-4">
               <div>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Start Date</p>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">{t('super_admin.businesses.modal_register.start_date')}</p>
                 <input 
                   type="date" 
                   className="w-full h-14 px-6 rounded-2xl bg-slate-50 border border-slate-100 font-bold"
@@ -408,7 +412,7 @@ function RegisterModal({ onClose, plans, onComplete }: any) {
                 />
               </div>
               <div>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Expring Date</p>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">{t('super_admin.businesses.modal_register.end_date')}</p>
                 <input 
                   type="date" 
                   className="w-full h-14 px-6 rounded-2xl bg-slate-50 border border-slate-100 font-bold"
@@ -426,7 +430,7 @@ function RegisterModal({ onClose, plans, onComplete }: any) {
         )}
 
         <button type="submit" className="w-full py-6 rounded-[2rem] bg-slate-950 text-white font-black text-xs uppercase tracking-[0.3em] flex items-center justify-center gap-3 hover:bg-slate-800 transition-all shadow-xl shadow-slate-900/20 active:scale-95">
-           Finalize & Launch Node
+           {t('super_admin.businesses.modal_register.finalize_btn')}
            <ArrowRight size={16} />
         </button>
       </form>
@@ -435,6 +439,7 @@ function RegisterModal({ onClose, plans, onComplete }: any) {
 }
 
 function SetPlanModal({ business, plans, onClose, onComplete }: any) {
+  const { t } = useTranslation();
   const [selectedPlanId, setSelectedPlanId] = useState(business.plan_id || plans[0]?.id);
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
   const [endDate, setEndDate] = useState(business.subscription_end_date ? new Date(business.subscription_end_date).toISOString().split('T')[0] : '');
@@ -459,10 +464,10 @@ function SetPlanModal({ business, plans, onClose, onComplete }: any) {
   };
 
   return (
-    <Modal title={`Set Plan: ${business.name}`} onClose={onClose}>
+    <Modal title={`${t('super_admin.businesses.modal_plan.title')} ${business.name}`} onClose={onClose}>
       <div className="space-y-6">
          <div>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Select Subscription Tier</p>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">{t('super_admin.businesses.modal_plan.select_tier')}</p>
             <div className="grid gap-3">
                {plans.map((p: any) => (
                  <button 
@@ -481,17 +486,17 @@ function SetPlanModal({ business, plans, onClose, onComplete }: any) {
 
          <div className="grid grid-cols-2 gap-4">
             <div>
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Start Date</p>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">{t('super_admin.businesses.modal_register.start_date')}</p>
               <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-full h-14 px-6 rounded-2xl bg-slate-50 border border-slate-100 font-bold" />
             </div>
             <div>
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Expiry Date</p>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">{t('super_admin.businesses.modal_register.end_date')}</p>
               <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-full h-14 px-6 rounded-2xl bg-slate-50 border border-slate-100 font-bold" />
             </div>
          </div>
 
          <button onClick={handleSave} className="w-full py-6 rounded-[2rem] bg-slate-950 text-white font-black text-xs uppercase tracking-[0.2em] shadow-xl hover:bg-slate-800 transition-all active:scale-95">
-           Update Subscription Term
+           {t('super_admin.businesses.modal_plan.update_btn')}
          </button>
       </div>
     </Modal>
@@ -500,6 +505,7 @@ function SetPlanModal({ business, plans, onClose, onComplete }: any) {
 
 // --- 💳 3. SUBSCRIPTION SETTINGS PAGE ---
 export function SubscriptionsPage() {
+  const { t } = useTranslation();
   const [plans, setPlans] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -526,8 +532,8 @@ export function SubscriptionsPage() {
   return (
     <div className="space-y-10 animate-in fade-in slide-in-from-bottom-6 duration-700">
       <div>
-        <h2 className="text-3xl font-black text-slate-900 tracking-tight">Plan Governance</h2>
-        <p className="text-xs font-black text-slate-400 uppercase tracking-widest mt-1">Cross-Tenant Pricing Logic</p>
+        <h2 className="text-3xl font-black text-slate-900 tracking-tight">{t('super_admin.subscriptions.title')}</h2>
+        <p className="text-xs font-black text-slate-400 uppercase tracking-widest mt-1">{t('super_admin.subscriptions.subtitle')}</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -541,6 +547,7 @@ export function SubscriptionsPage() {
 
 // --- 👥 4. BUSINESS OWNERS TABLE ---
 export function OwnersPage() {
+  const { t } = useTranslation();
   const [owners, setOwners] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [resetPasswordOwner, setResetPasswordOwner] = useState<any>(null);
@@ -574,11 +581,11 @@ export function OwnersPage() {
         <table className="w-full text-left border-collapse">
           <thead className="bg-slate-50/50 border-b border-slate-100">
             <tr>
-              <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Administrator</th>
-              <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Business Node</th>
-              <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Email Identity</th>
-              <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Created</th>
-              <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Actions</th>
+              <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('super_admin.owners.table.admin')}</th>
+              <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('super_admin.owners.table.node')}</th>
+              <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('super_admin.owners.table.email')}</th>
+              <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('super_admin.owners.table.created')}</th>
+              <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">{t('super_admin.owners.table.actions')}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-50">
@@ -591,12 +598,12 @@ export function OwnersPage() {
                     </div>
                     <div>
                       <p className="font-black text-slate-900">{owner.full_name}</p>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">System Admin</p>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{t('super_admin.owners.system_admin')}</p>
                     </div>
                   </div>
                 </td>
                 <td className="px-8 py-6">
-                  <span className="text-xs font-black text-primary uppercase tracking-wider">{owner.business?.name || "Global"}</span>
+                  <span className="text-xs font-black text-primary uppercase tracking-wider">{owner.business?.name || t('super_admin.owners.global')}</span>
                 </td>
                 <td className="px-8 py-6 text-slate-600 text-sm font-medium">{owner.email}</td>
                 <td className="px-8 py-6 text-slate-400 text-xs">{new Date(owner.created_at).toLocaleDateString()}</td>
@@ -614,7 +621,7 @@ export function OwnersPage() {
           </tbody>
         </table>
         {owners.length === 0 && (
-          <div className="py-20 text-center text-slate-400 font-bold italic">No administrator accounts discovered.</div>
+          <div className="py-20 text-center text-slate-400 font-bold italic">{t('super_admin.owners.no_records')}</div>
         )}
       </div>
 
@@ -629,6 +636,7 @@ export function OwnersPage() {
 }
 
 function DeleteBusinessModal({ business, onClose, onComplete }: any) {
+  const { t } = useTranslation();
   const [confirmName, setConfirmName] = useState('');
   const [isExporting, setIsExporting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -657,37 +665,37 @@ function DeleteBusinessModal({ business, onClose, onComplete }: any) {
   };
 
   return (
-    <Modal title="Delete Business Account" onClose={onClose}>
+    <Modal title={t('super_admin.businesses.modal_delete.title')} onClose={onClose}>
       <div className="space-y-6">
         <div className="p-6 rounded-2xl bg-rose-50 border border-rose-100 flex items-center gap-4">
           <div className="h-12 w-12 rounded-xl bg-rose-500 text-white flex items-center justify-center animate-pulse">
             <Trash2 size={24} />
           </div>
           <div>
-            <h4 className="text-sm font-black text-rose-900 uppercase">Extreme Caution</h4>
-            <p className="text-xs font-bold text-rose-600">This action will permanently wipe all business data including Sales, Products, and Users.</p>
+            <h4 className="text-sm font-black text-rose-900 uppercase">{t('super_admin.businesses.modal_delete.caution_title')}</h4>
+            <p className="text-xs font-bold text-rose-600">{t('super_admin.businesses.modal_delete.caution_desc')}</p>
           </div>
         </div>
 
         <div>
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Optional: Backup Data</p>
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">{t('super_admin.businesses.modal_delete.backup')}</p>
           <button 
             onClick={handleExport}
             disabled={isExporting}
             className="w-full h-14 rounded-2xl border-2 border-dashed border-slate-200 flex items-center justify-center gap-3 text-slate-600 font-black text-[10px] uppercase tracking-widest hover:border-primary hover:text-primary transition-all active:scale-95"
           >
-            {isExporting ? <div className="h-4 w-4 border-2 border-primary border-t-transparent rounded-full animate-spin" /> : "Download Files (CSV Bundle)"}
+            {isExporting ? <div className="h-4 w-4 border-2 border-primary border-t-transparent rounded-full animate-spin" /> : t('super_admin.businesses.modal_delete.download_btn')}
           </button>
         </div>
 
         <div className="space-y-3">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Type "{business.name}" to confirm</p>
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('super_admin.businesses.modal_delete.type_confirm', { name: business.name })}</p>
           <input 
             type="text" 
             value={confirmName}
             onChange={(e) => setConfirmName(e.target.value)}
             className="w-full h-14 px-6 rounded-2xl bg-slate-50 border border-slate-100 font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-rose-500/20"
-            placeholder="Matching name required..."
+            placeholder={t('super_admin.businesses.modal_delete.matching_required')}
           />
         </div>
 
@@ -696,7 +704,7 @@ function DeleteBusinessModal({ business, onClose, onComplete }: any) {
           disabled={confirmName !== business.name || isDeleting}
           className="w-full py-6 rounded-[2rem] bg-rose-600 text-white font-black text-xs uppercase tracking-[0.2em] shadow-xl shadow-rose-200 disabled:opacity-50 disabled:grayscale transition-all active:scale-95"
         >
-          {isDeleting ? "Wiping Node..." : "Destroy Business Permanent"}
+          {isDeleting ? t('super_admin.businesses.modal_delete.wiping') : t('super_admin.businesses.modal_delete.destroy_btn')}
         </button>
       </div>
     </Modal>
@@ -704,6 +712,7 @@ function DeleteBusinessModal({ business, onClose, onComplete }: any) {
 }
 
 function PlanCard({ plan, onUpdate }: any) {
+  const { t } = useTranslation();
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({ name: plan.name, price: plan.price });
 
@@ -716,17 +725,17 @@ function PlanCard({ plan, onUpdate }: any) {
   return (
     <>
       <div className="group relative overflow-hidden rounded-[3rem] bg-white border border-slate-200 p-10 hover:shadow-2xl hover:border-primary/20 transition-all text-ink">
-        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Duration Control</p>
+        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">{t('super_admin.subscriptions.card.duration')}</p>
         <h3 className="text-3xl font-black text-slate-900 mb-8 tracking-tighter">{plan.name}</h3>
         
         <div className="space-y-4 mb-10">
            <div className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 border border-slate-100">
-              <span className="text-[10px] font-black text-slate-400 uppercase">Pricing Tier</span>
-              <span className="text-lg font-black text-slate-900">{Number(plan.price).toLocaleString()} RWF</span>
+              <span className="text-[10px] font-black text-slate-400 uppercase">{t('super_admin.subscriptions.card.pricing_tier')}</span>
+              <span className="text-lg font-black text-slate-900">{formatCurrency(Number(plan.price || 0))}</span>
            </div>
            <div className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 border border-slate-100">
-              <span className="text-[10px] font-black text-slate-400 uppercase">Users Max</span>
-              <span className="text-sm font-black text-slate-900">{plan.max_users || 'Unlimited'}</span>
+              <span className="text-[10px] font-black text-slate-400 uppercase">{t('super_admin.subscriptions.card.users_max')}</span>
+              <span className="text-sm font-black text-slate-900">{plan.max_users || t('super_admin.subscriptions.card.unlimited')}</span>
            </div>
         </div>
 
@@ -734,15 +743,15 @@ function PlanCard({ plan, onUpdate }: any) {
           onClick={() => setIsEditing(true)}
           className="w-full py-5 rounded-[2rem] bg-slate-50 border border-slate-100 font-black text-[10px] uppercase tracking-widest text-slate-400 group-hover:bg-slate-950 group-hover:text-white transition-all active:scale-95 shadow-lg shadow-slate-900/5"
         >
-          Edit Plan Logic
+          {t('super_admin.subscriptions.card.edit_btn')}
         </button>
       </div>
 
       {isEditing && (
-        <Modal title={`Edit Plan: ${plan.name}`} onClose={() => setIsEditing(false)}>
+        <Modal title={`${t('super_admin.subscriptions.modal_edit.title')} ${plan.name}`} onClose={() => setIsEditing(false)}>
            <div className="space-y-6">
               <div>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Primary Label</p>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">{t('super_admin.subscriptions.modal_edit.primary_label')}</p>
                 <input 
                   value={formData.name}
                   onChange={(e) => setFormData({...formData, name: e.target.value})}
@@ -750,7 +759,7 @@ function PlanCard({ plan, onUpdate }: any) {
                 />
               </div>
               <div>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Price (Monthly)</p>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">{t('super_admin.subscriptions.modal_edit.price_monthly')}</p>
                 <input 
                   type="number"
                   value={formData.price}
@@ -758,7 +767,7 @@ function PlanCard({ plan, onUpdate }: any) {
                   className="w-full h-14 px-6 rounded-2xl bg-slate-50 border border-slate-100 font-bold"
                 />
               </div>
-              <button onClick={handleSave} className="w-full py-5 rounded-[2rem] bg-slate-950 text-white font-black text-[10px] uppercase tracking-widest">Update Plan Global</button>
+              <button onClick={handleSave} className="w-full py-5 rounded-[2rem] bg-slate-950 text-white font-black text-[10px] uppercase tracking-widest">{t('super_admin.subscriptions.modal_edit.update_btn')}</button>
            </div>
         </Modal>
       )}
@@ -767,6 +776,7 @@ function PlanCard({ plan, onUpdate }: any) {
 }
 
 function ResetPasswordModal({ owner, onClose }: any) {
+  const { t } = useTranslation();
   const [password, setPassword] = useState('');
   const [isUpdating, setIsUpdating] = useState(false);
   const { showToast } = useNotification();
@@ -774,14 +784,14 @@ function ResetPasswordModal({ owner, onClose }: any) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (password.length < 6) {
-      showToast("warning", "Password must be at least 6 characters long.");
+      showToast("warning", t('super_admin.owners.modal_reset.error_length'));
       return;
     }
 
     setIsUpdating(true);
     try {
       await superAdminService.resetUserPassword(owner.auth_user_id, password);
-      showToast("success", "Password Overwritten & Secured!");
+      showToast("success", t('super_admin.owners.modal_reset.success'));
       onClose();
     } catch (err: any) {
       showToast("error", err.message || "Failed to update password");
@@ -791,7 +801,7 @@ function ResetPasswordModal({ owner, onClose }: any) {
   };
 
   return (
-    <Modal title="Overwrite Administrator Auth" onClose={onClose}>
+    <Modal title={t('super_admin.owners.modal_reset.title')} onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="p-6 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center gap-4">
           <div className="h-12 w-12 rounded-xl bg-indigo-500 text-white flex items-center justify-center shadow-lg shadow-indigo-500/20">
@@ -804,7 +814,7 @@ function ResetPasswordModal({ owner, onClose }: any) {
         </div>
 
         <div>
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">New Security Key</p>
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">{t('super_admin.owners.modal_reset.new_password')}</p>
           <div className="relative">
              <Lock className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
              <input 
@@ -813,7 +823,6 @@ function ResetPasswordModal({ owner, onClose }: any) {
                value={password}
                onChange={(e) => setPassword(e.target.value)}
                className="w-full h-14 pl-12 pr-6 rounded-2xl bg-slate-50 border border-slate-100 font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-               placeholder="Enter new 6+ char password"
              />
           </div>
         </div>
@@ -823,7 +832,7 @@ function ResetPasswordModal({ owner, onClose }: any) {
           disabled={isUpdating || password.length < 6}
           className="w-full py-6 rounded-[2rem] bg-indigo-600 text-white font-black text-xs uppercase tracking-[0.2em] shadow-xl shadow-indigo-200 disabled:opacity-50 disabled:grayscale transition-all active:scale-95"
         >
-          {isUpdating ? "Transmitting..." : "Apply Global Override"}
+          {isUpdating ? t('super_admin.owners.modal_reset.updating') : t('super_admin.owners.modal_reset.update_btn')}
         </button>
       </form>
     </Modal>

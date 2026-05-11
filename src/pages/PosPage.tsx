@@ -45,6 +45,7 @@ import { ShoppingBag, Tablet, CreditCard, Printer } from "lucide-react";
 import type { PaymentMethod, PosCustomerRecord, PosProductRecord, ShopSettingsRecord } from "../types/database";
 import { createPortal } from "react-dom";
 import { Receipt80mm } from "../components/print/Receipt80mm";
+import { formatCurrency } from "../lib/format";
 
 type BulkBreakdown = {
   bulkPackages: number;
@@ -83,7 +84,7 @@ function computeBulkBreakdown(
 
 const calcKeys = ["7", "8", "9", "/", "4", "5", "6", "*", "1", "2", "3", "-", "0", ".", "=", "+"];
 
-const rwf = (value: number) => `${value.toLocaleString()} RWF`;
+const rwf = (value: number) => formatCurrency(value);
 
 export function PosPage() {
   const { t } = useTranslation();
@@ -842,8 +843,8 @@ export function PosPage() {
     <div className="h-screen overflow-hidden bg-slate-100 px-2 py-1 text-ink sm:px-3 lg:px-4">
       <div className="mx-auto flex h-full max-w-[1700px] flex-col">
         <div className="mb-1 rounded-[16px] bg-white px-2 py-1 shadow-soft">
-          <div className="flex h-12 items-center gap-2 xl:flex-nowrap">
-            <div className="order-1 grid gap-2 sm:grid-cols-4 xl:max-w-[200px]">
+          <div className="flex min-h-12 items-center gap-2 flex-wrap lg:flex-nowrap">
+            <div className="flex gap-2 items-center">
               <button
                 onClick={() => { setHistoryOpen(true); void loadRecentSales(); }}
                 title={t('pos.ui.recent_sales')}
@@ -874,7 +875,7 @@ export function PosPage() {
               </button>
             </div>
 
-            <div className="order-2 flex h-10 min-w-0 flex-1 items-center justify-center gap-2 rounded-2xl bg-slate-50 px-3 text-center">
+            <div className="hidden sm:flex h-10 min-w-0 flex-1 items-center justify-center gap-2 rounded-2xl bg-slate-50 px-3 text-center">
               <Clock3 size={13} className="text-brand-600" />
               <p className="truncate text-xs font-semibold text-ink">{liveTime}</p>
               <p className="truncate text-[11px] text-slate-500">{liveDate}</p>
@@ -1063,7 +1064,7 @@ export function PosPage() {
                     <div className="flex w-full flex-1 flex-col justify-between px-1 pb-0.5">
                       <p className="line-clamp-2 text-[13px] font-black leading-tight text-ink">{product.name}</p>
                       <div className="mt-2 flex items-center justify-between gap-1 w-full">
-                        <span className="text-[13px] font-black text-brand-600">{product.selling_price.toLocaleString()}</span>
+                        <span className="text-[13px] font-black text-brand-600">{formatCurrency(product.selling_price)}</span>
                         <span className={`text-[10px] font-black rounded-lg px-2 py-0.5 ${
                           product.stock_quantity <= 0 ? 'bg-rose-100 text-rose-600' :
                           product.stock_quantity <= product.reorder_level ? 'bg-amber-100 text-amber-700' :
@@ -1138,11 +1139,11 @@ export function PosPage() {
                         {item.bulkBreakdown && item.bulkBreakdown.bulkPackages > 0 && (
                           <div className="mt-1 space-y-0.5">
                             <p className="text-[10px] font-black text-brand-400 uppercase tracking-wider">
-                              📦 {item.bulkBreakdown.bulkPackages} {item.bulkBreakdown.bulkPackages > 1 ? 'Boxes' : 'Box'} ({item.bulkBreakdown.bulkQty} units each)
+                              📦 {item.bulkBreakdown.bulkPackages} {item.bulkBreakdown.bulkPackages > 1 ? t('products.units.boxes') : t('products.units.box')} ({item.bulkBreakdown.bulkQty} units each)
                             </p>
                             {item.bulkBreakdown.remainingUnits > 0 && (
                               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                                🧩 {item.bulkBreakdown.remainingUnits} {item.bulkBreakdown.remainingUnits > 1 ? 'Units' : 'Unit'} (Loose)
+                                🧩 {item.bulkBreakdown.remainingUnits} {item.bulkBreakdown.remainingUnits > 1 ? t('products.units.units') : t('products.units.unit')} (Loose)
                               </p>
                             )}
                           </div>
@@ -1619,30 +1620,30 @@ export function PosPage() {
                   value={newCustomerName}
                   onChange={(e) => setNewCustomerName(e.target.value)}
                   className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-brand-200"
-                  placeholder="Full name"
+                  placeholder={t('common.full_name')}
                   autoFocus
                 />
               </label>
 
               <label className="rounded-2xl bg-sky-50 p-4">
-                <span className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-700">Contact</span>
+                <span className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-700">{t('common.contact')}</span>
                 <input
                   type="text"
                   value={newCustomerPhone}
                   onChange={(e) => setNewCustomerPhone(e.target.value)}
                   className="mt-2 w-full rounded-xl border border-sky-100 bg-white px-4 py-3 text-sm outline-none focus:border-brand-200"
-                  placeholder="Phone or email"
+                  placeholder={t('common.phone_or_email')}
                 />
               </label>
 
               <label className="col-span-full rounded-2xl bg-slate-50 p-4">
-                <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Address</span>
+                <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{t('common.address')}</span>
                 <input
                   type="text"
                   value={newCustomerAddress}
                   onChange={(e) => setNewCustomerAddress(e.target.value)}
                   className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-brand-200"
-                  placeholder="Street, city"
+                  placeholder={t('common.street_city')}
                 />
               </label>
             </div>
@@ -1652,14 +1653,14 @@ export function PosPage() {
                 onClick={() => setAddCustomerOpen(false)}
                 className="rounded-2xl border border-slate-200 px-6 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
               >
-                Cancel
+                {t('common.cancel')}
               </button>
               <button
                 onClick={handleQuickAddCustomer}
                 disabled={addCustomerSubmitting || !newCustomerName.trim()}
                 className="rounded-2xl bg-brand-500 px-8 py-3 text-sm font-semibold text-white shadow-soft transition hover:bg-brand-600 disabled:opacity-50"
               >
-                {addCustomerSubmitting ? "Adding..." : "Create & Select"}
+                {addCustomerSubmitting ? t('common.adding') : t('pos.ui.save_customer')}
               </button>
             </div>
           </div>
@@ -1671,7 +1672,7 @@ export function PosPage() {
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/80 px-4 backdrop-blur-md">
           <div className="w-full max-w-md rounded-[2.5rem] bg-white p-8 shadow-2xl animate-scale-in">
             <div className="mb-6 flex items-center justify-between">
-              <h3 className="text-xl font-black text-ink uppercase tracking-tight">Order Discount</h3>
+              <h3 className="text-xl font-black text-ink uppercase tracking-tight">{t('pos.ui.order_discount')}</h3>
               <button onClick={() => setDiscountModalOpen(false)} className="text-slate-300 hover:text-slate-600">
                 <X size={24} />
               </button>
@@ -1685,7 +1686,7 @@ export function PosPage() {
                     orderDiscount.type === 'percentage' ? 'bg-white text-brand-600 shadow-sm' : 'text-slate-500 hover:bg-white/50'
                   }`}
                 >
-                  <Percent size={14} className="inline mr-2" /> Percentage
+                  <Percent size={14} className="inline mr-2" /> {t('common.percentage')}
                 </button>
                 <button
                   onClick={() => setOrderDiscount(prev => ({ ...prev, type: 'fixed' }))}
@@ -1693,7 +1694,7 @@ export function PosPage() {
                     orderDiscount.type === 'fixed' ? 'bg-white text-brand-600 shadow-sm' : 'text-slate-500 hover:bg-white/50'
                   }`}
                 >
-                  <Calculator size={14} className="inline mr-2" /> Fixed Amount
+                  <Calculator size={14} className="inline mr-2" /> {t('common.fixed_amount')}
                 </button>
               </div>
 
@@ -1712,7 +1713,7 @@ export function PosPage() {
 
               <div className="rounded-2xl bg-emerald-50 p-4 border border-emerald-100">
                 <div className="flex justify-between items-center text-emerald-700">
-                  <span className="text-sm font-bold">Estimated Savings:</span>
+                  <span className="text-sm font-bold">{t('pos.ui.estimated_savings')}:</span>
                   <span className="text-lg font-black">{rwf(orderDiscountAmount)}</span>
                 </div>
               </div>
@@ -1721,7 +1722,7 @@ export function PosPage() {
                 onClick={() => setDiscountModalOpen(false)}
                 className="w-full rounded-2xl bg-slate-900 py-4 font-bold text-white shadow-xl hover:bg-black transition active:scale-95"
               >
-                Apply to Order
+                {t('pos.ui.apply_discount')}
               </button>
             </div>
           </div>
@@ -1734,7 +1735,7 @@ export function PosPage() {
           <div className="w-full max-w-md rounded-[2.5rem] bg-white p-8 shadow-2xl animate-scale-in">
             <div className="mb-6 flex items-center justify-between">
               <div>
-                <h3 className="text-xl font-black text-ink uppercase tracking-tight">Line Discount</h3>
+                <h3 className="text-xl font-black text-ink uppercase tracking-tight">{t('pos.ui.line_discount')}</h3>
                 <p className="text-xs text-slate-500 mt-0.5 truncate max-w-[250px] font-semibold">
                   {cart.find(i => i.id === discountItemId)?.name}
                 </p>
@@ -1752,7 +1753,7 @@ export function PosPage() {
                     cart.find(i => i.id === discountItemId)?.discount_type === 'percentage' ? 'bg-white text-brand-600 shadow-sm' : 'text-slate-500 hover:bg-white/50'
                   }`}
                 >
-                  <Percent size={14} className="inline mr-2" /> Percentage
+                  <Percent size={14} className="inline mr-2" /> {t('common.percentage')}
                 </button>
                 <button
                   onClick={() => setCart(prev => prev.map(i => i.id === discountItemId ? { ...i, discount_type: 'fixed' } : i))}
@@ -1760,7 +1761,7 @@ export function PosPage() {
                     cart.find(i => i.id === discountItemId)?.discount_type === 'fixed' ? 'bg-white text-brand-600 shadow-sm' : 'text-slate-500 hover:bg-white/50'
                   }`}
                 >
-                  <Calculator size={14} className="inline mr-2" /> Fixed Amount
+                  <Calculator size={14} className="inline mr-2" /> {t('common.fixed_amount')}
                 </button>
               </div>
 
@@ -1803,13 +1804,13 @@ export function PosPage() {
                   }}
                   className="flex-1 rounded-2xl bg-rose-50 py-4 font-bold text-rose-600 hover:bg-rose-100 transition"
                 >
-                  Clear
+                  {t('common.clear')}
                 </button>
                 <button
                   onClick={() => setItemDiscountModalOpen(false)}
                   className="flex-[2] rounded-2xl bg-slate-900 py-4 font-bold text-white shadow-xl hover:bg-black transition active:scale-95"
                 >
-                  Close
+                  {t('common.close')}
                 </button>
               </div>
             </div>
@@ -1824,8 +1825,8 @@ export function PosPage() {
             <div className="flex h-full flex-col">
               <div className="flex items-center justify-between border-b border-slate-100 p-6">
                 <div>
-                  <h2 className="text-xl font-bold text-ink">Recent Transactions</h2>
-                  <p className="text-xs text-slate-500">Last 20 sales at this store</p>
+                  <h2 className="text-xl font-bold text-ink">{t('pos.ui.recent_transactions')}</h2>
+                  <p className="text-xs text-slate-500">{t('pos.ui.last_20_sales')}</p>
                 </div>
                 <button onClick={() => setHistoryOpen(false)} className="rounded-full bg-slate-100 p-2 text-slate-600 hover:bg-slate-200">
                   <X size={20} />
@@ -1836,7 +1837,7 @@ export function PosPage() {
                 {historyLoading ? (
                   <div className="flex flex-col items-center justify-center py-20 text-slate-400">
                     <History size={40} className="animate-spin opacity-20" />
-                    <p className="mt-4 font-semibold uppercase tracking-widest text-[10px]">Loading history...</p>
+                    <p className="mt-4 font-semibold uppercase tracking-widest text-[10px]">{t('pos.ui.loading_history')}</p>
                   </div>
                 ) : recentSales.length > 0 ? (
                   recentSales.map((sale) => (
@@ -1860,7 +1861,7 @@ export function PosPage() {
                           onClick={() => openReturnModal(sale)}
                           className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-amber-50 py-2 text-xs font-bold text-amber-600 hover:bg-amber-100"
                         >
-                          <RotateCcw size={14} /> Process Refund
+                          <RotateCcw size={14} /> {t('pos.ui.process_refund')}
                         </button>
                       </div>
                     </div>
@@ -1868,7 +1869,7 @@ export function PosPage() {
                 ) : (
                   <div className="py-20 text-center text-slate-400">
                     <ShoppingBag size={40} className="mx-auto opacity-20" />
-                    <p className="mt-4">No recent transactions found</p>
+                    <p className="mt-4">{t('pos.ui.no_recent_transactions')}</p>
                   </div>
                 )}
               </div>
@@ -1886,7 +1887,7 @@ export function PosPage() {
                 <div>
                   <div className="flex items-center gap-2 text-white/80">
                     <RotateCcw size={16} />
-                    <span className="text-[10px] font-bold uppercase tracking-widest">Transaction Refund</span>
+                    <span className="text-[10px] font-bold uppercase tracking-widest">{t('pos.ui.transaction_refund')}</span>
                   </div>
                   <h2 className="mt-2 text-3xl font-black">{returnSale.sale_number}</h2>
                 </div>
@@ -1920,7 +1921,7 @@ export function PosPage() {
                         <input type="checkbox" className="hidden" checked={item.restock} onChange={(e) => {
                           const ns = [...returnItems]; ns[idx].restock = e.target.checked; setReturnItems(ns);
                         }} />
-                        Restock Inventory
+                        {t('pos.ui.restock_inventory')}
                       </label>
                       
                       <div className="flex items-center gap-3">
@@ -1940,7 +1941,7 @@ export function PosPage() {
                         >
                           <Plus size={14} />
                         </button>
-                        <span className="text-[10px] font-bold text-slate-300 uppercase">/ { (returnSale?.sale_items || []).find((s: any) => s.id === item.sale_item_id)?.quantity } max</span>
+                        <span className="text-[10px] font-bold text-slate-300 uppercase">{t('pos.ui.max_qty', { max: (returnSale?.sale_items || []).find((s: any) => s.id === item.sale_item_id)?.quantity })}</span>
                       </div>
                     </div>
                   </div>
@@ -1950,7 +1951,7 @@ export function PosPage() {
               <div className="rounded-[2rem] bg-slate-900 p-6 text-white shadow-xl">
                  <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/40">Total Refund Due</p>
+                      <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/40">{t('pos.ui.total_refund_due')}</p>
                       <p className="mt-1 text-3xl font-black text-amber-400">
                         {rwf(returnItems.reduce((s, i) => s + i.unit_price * i.quantity, 0))}
                       </p>
@@ -1963,7 +1964,7 @@ export function PosPage() {
 
               <div className="grid grid-cols-2 gap-4">
                  <div>
-                    <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 block mb-2">Refund Method</label>
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 block mb-2">{t('pos.ui.refund_method')}</label>
                     <select value={returnRefundMethod} onChange={(e) => setReturnRefundMethod(e.target.value)} className="w-full rounded-2xl bg-slate-50 p-4 font-bold outline-none border border-slate-100">
                       <option value="cash">Cash</option>
                       <option value="momo">MoMo</option>
@@ -1971,7 +1972,7 @@ export function PosPage() {
                     </select>
                  </div>
                  <div>
-                    <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 block mb-2">Reason</label>
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 block mb-2">{t('pos.ui.reason')}</label>
                     <select value={returnReason} onChange={(e) => setReturnReason(e.target.value)} className="w-full rounded-2xl bg-slate-50 p-4 font-bold outline-none border border-slate-100">
                       <option value="">Select Reason</option>
                       <option value="damaged">Damaged Item</option>
@@ -1987,14 +1988,14 @@ export function PosPage() {
                 onClick={() => setReturnModalOpen(false)}
                 className="flex-1 rounded-2xl py-4 font-bold text-slate-400 hover:bg-slate-50 transition"
               >
-                Cancel
+                {t('common.cancel')}
               </button>
               <button 
                 onClick={handleConfirmReturn}
                 disabled={processingReturn || returnItems.reduce((s,i) => s + i.quantity, 0) === 0}
                 className="flex-[2] rounded-2xl bg-amber-500 py-4 font-bold text-white shadow-xl shadow-amber-200/50 hover:bg-amber-600 disabled:opacity-20 transition active:scale-95"
               >
-                {processingReturn ? "Processing..." : "Confirm Refund"}
+                {processingReturn ? t('common.processing') : t('pos.ui.confirm_refund')}
               </button>
             </div>
           </div>

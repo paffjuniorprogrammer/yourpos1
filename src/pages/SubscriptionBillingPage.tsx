@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { AlertCircle, CheckCircle2, Clock, CreditCard, Info, Send } from "lucide-react";
+import { formatCurrency } from "../lib/format";
 import { useAuth } from "../context/AuthContext";
 import { supabase } from "../lib/supabase";
 import { LoadingPOS } from "../components/ui/LoadingPOS";
@@ -23,7 +24,7 @@ type SubscriptionPlan = {
 
 function money(amount: number | null | undefined) {
   if (amount == null || Number.isNaN(amount)) return "Custom";
-  return `${amount.toLocaleString()} RWF`;
+  return formatCurrency(amount);
 }
 
 function countdownLabel(endDate: string | null) {

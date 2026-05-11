@@ -17,6 +17,22 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Custom thin scrollbar for mobile drawers */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
 }
 
 #root {
@@ -57,4 +73,85 @@ table td a {
 /* Action icon buttons in tables stay the same size */
 table td button {
   font-size: 11px !important;
+}
+
+/* ═══════════════════════════════════════
+   RESPONSIVE TABLE WRAPPER
+   ═══════════════════════════════════════ */
+.table-container {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin-bottom: 1rem;
+  border-radius: 1rem;
+}
+
+/* Hide scrollbar for Chrome, Safari and Opera */
+.table-container::-webkit-scrollbar {
+  display: none;
+}
+
+/* Hide scrollbar for IE, Edge and Firefox */
+.table-container {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+@media (max-width: 640px) {
+  table th {
+    padding: 0.5rem 0.25rem !important;
+  }
+  table td {
+    padding: 0.5rem 0.25rem !important;
+  }
+  .section-card {
+    padding: 1rem !important;
+  }
+}
+
+/* Touch-friendly buttons on mobile */
+@media (pointer: coarse) {
+  button, 
+  a, 
+  select, 
+  input {
+    min-height: 44px;
+  }
+}
+
+/* ═══════════════════════════════════════
+   GLOBAL PRINT RULES — All print portals
+   ═══════════════════════════════════════ */
+@media print {
+  /* Hide the entire React app */
+  body > #root {
+    display: none !important;
+  }
+
+  /* Show all print documents */
+  .print-doc {
+    display: block !important;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    background: white;
+    font-family: system-ui, -apple-system, sans-serif;
+    color: #0f172a;
+  }
+
+  /* Remove browser's URL / page number headers/footers */
+  @page {
+    margin: 0;
+  }
+
+  /* Prevent page breaks inside tables */
+  table { page-break-inside: avoid; }
+  tr { page-break-inside: avoid; }
+}
+
+/* Hide print-only elements on screen */
+@media screen {
+  .print-doc {
+    display: none;
+  }
 }

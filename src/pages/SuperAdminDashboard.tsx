@@ -13,8 +13,10 @@ import {
 } from "lucide-react";
 import { useRealtimeSync } from "../hooks/useRealtimeSync";
 import { BusinessesPage, OwnersPage } from "./super-admin/ModulePages";
+import { useTranslation } from "react-i18next";
 
 export function SuperAdminDashboard() {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<'businesses' | 'owners'>('businesses');
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -28,20 +30,19 @@ export function SuperAdminDashboard() {
         setStats(data);
       } catch (err) {
         console.error("Dashboard stats error:", err);
-        setError("Failed to connect to monitoring heartbeat.");
+        setError(t('super_admin.monitoring_failed'));
       } finally {
         setLoading(false);
       }
     }
     loadStats();
-  }, []);
+  }, [t]);
 
   useRealtimeSync({
     onSaleCreated: () => {
       // Refresh system-wide stats when sales happen
       superAdminService.getSystemWideStats().then(setStats);
     }
-    // We could add more hooks here for business registration etc.
   });
 
   if (loading) return <LoadingPOS />;
@@ -51,24 +52,24 @@ export function SuperAdminDashboard() {
       {/* 🚀 TOP STATS SUMMARY */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
         <StatCard
-          title="Total Ecosystem"
+          title={t('super_admin.stats.ecosystem')}
           value={String(stats?.totalBusinesses || 0)}
           icon={<Building2 size={24} />}
-          meta="Integrated business nodes"
+          meta={t('super_admin.stats.ecosystem_meta')}
           tone="primary"
         />
         <StatCard
-          title="Active Admins"
+          title={t('super_admin.stats.active_admins')}
           value={String(stats?.totalAdmins || 0)}
           icon={<ShieldCheck size={24} />}
-          meta="Verified business owners"
+          meta={t('super_admin.stats.active_admins_meta')}
           tone="primary"
         />
         <StatCard
-          title="System Integrity"
-          value="STABLE"
+          title={t('super_admin.stats.integrity')}
+          value={t('super_admin.stats.integrity_stable')}
           icon={<Zap size={24} />}
-          meta="Node validation status"
+          meta={t('super_admin.stats.integrity_meta')}
           tone="success"
         />
       </div>
@@ -81,8 +82,8 @@ export function SuperAdminDashboard() {
                  <LayoutDashboard size={20} />
               </div>
               <div>
-                 <h3 className="text-xl font-black text-slate-900 uppercase tracking-tighter">Command Center Live</h3>
-                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Global Node Interaction Table</p>
+                 <h3 className="text-xl font-black text-slate-900 uppercase tracking-tighter">{t('super_admin.command_center')}</h3>
+                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('super_admin.global_node_interaction')}</p>
               </div>
            </div>
 
@@ -94,7 +95,7 @@ export function SuperAdminDashboard() {
                   activeTab === 'businesses' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'
                 }`}
               >
-                Businesses
+                {t('super_admin.tabs.businesses')}
               </button>
               <button 
                 onClick={() => setActiveTab('owners')}
@@ -102,7 +103,7 @@ export function SuperAdminDashboard() {
                   activeTab === 'owners' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'
                 }`}
               >
-                Owners
+                {t('super_admin.tabs.owners')}
               </button>
            </div>
         </div>

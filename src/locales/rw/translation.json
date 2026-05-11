@@ -38,7 +38,7 @@
     "phone": "Telefoni",
     "amount": "Amafaranga",
     "notes": "Ibisobanuro",
-    "confirm": "Emeza",
+    "confirm": "Kwemeza",
     "success": "Byagenze neza",
     "error": "Ikosa",
     "calculating": "Kubara...",
@@ -57,8 +57,217 @@
     "syncing": "Gusanisha...",
     "time": "Igihe",
     "dashboard": "Idashibodi",
-    "logout": "Sohoka",
-    "confirm": "Emeza"
+    "logout": "Sohoka"
+  },
+  "login": {
+    "brand": "POS Yanyu",
+    "title_part1": "Genzura",
+    "title_part2": "Buri",
+    "title_part3": "Gihombo.",
+    "subtitle": "Uburambe bwiza bwo mu iduka rigezweho rwitabira kwihuta no kwizerwa cyane.",
+    "secure_login": "Kwinjira Mu Buryo Bwizewe",
+    "welcome": "Murakaza neza",
+    "welcome_desc": "Koresha imeli n'ijambo ry'ibanga ryamenyekanye muri Supabase Auth.",
+    "no_auth_env": "Shyiramo `VITE_SUPABASE_URL` na `VITE_SUPABASE_ANON_KEY` muri env file yawe kugira ngo ubashe kwinjira.",
+    "email": "Imeli",
+    "password": "Ijambo ry'ibanga",
+    "entering": "Kwinjira muri Sisitemu...",
+    "sign_in": "Injira muri POS Yanyu",
+    "error_failed": "Kwinjira byanze. Reba neza imeli n'ijambo ry'ibanga ryawe.",
+    "error_unable": "Ntabwo bishoboka kwinjira muri uyu mwanya.",
+    "assistance": "Ukeneye Ubufasha?",
+    "assistance_desc": "Niba uhuye n'ikibazo hamagara"
+  },
+  "super_admin": {
+    "dashboard": "Imbonerahamwe y'Ubugenzuzi Bukuru",
+    "stats": {
+      "ecosystem": "Sisitemu Yose",
+      "ecosystem_meta": "Ibisubizo by'ubucuruzi byahujwe",
+      "active_admins": "Abagenzuzi Bakora",
+      "active_admins_meta": "Abanyiri ubucuruzi bagenzuwe",
+      "integrity": "Ubusugire bwa Sisitemu",
+      "integrity_meta": "Imimerere y'ibisubizo",
+      "integrity_stable": "BIHAMYE"
+    },
+    "command_center": "Ihuriro ry'Ubugenzuzi ry'ako kanya",
+    "global_node_interaction": "Imbonerahamwe y'Imihurire y'Ibisubizo byose",
+    "tabs": {
+      "businesses": "Ubucuruzi",
+      "owners": "Ba Nyirubucuruzi"
+    },
+    "monitoring_failed": "Kuhuza n'igenzura byanze.",
+    "businesses": {
+      "title": "Urusobe rw'Ubucuruzi",
+      "subtitle": "Ikigo cyo kugenzura mu gihe nyacyo",
+      "register_btn": "Kwiyandikisha",
+      "no_records": "Nta bucuruzi bwabonetse buhuye n'ibipimo.",
+      "table": {
+        "name": "Izina ry'Ubucuruzi",
+        "status": "Imiterere",
+        "plan": "Gahunda",
+        "expiry": "Itariki ntarengwa",
+        "users": "Abakoresha",
+        "actions": "Ibikorwa"
+      },
+      "status": {
+        "active": "Bikora",
+        "suspended": "Byahagaritswe",
+        "expired": "Byarangiye"
+      },
+      "actions": {
+        "suspend": "Hagarika Uruhushya",
+        "enable": "Fungura Uruhushya",
+        "on": "ON",
+        "off": "OFF",
+        "reset_password": "Kuvugurura Ijambo ry'Ibanga",
+        "extend": "+ Iminsi 30"
+      },
+      "modal_register": {
+        "title": "Kwiyandikisha Ubucuruzi Bushya",
+        "core_identity": "Ibiranga",
+        "name_placeholder": "Urugero: Fresh Market",
+        "owner_email": "Imeli ya Nyirubucuruzi",
+        "password": "Ijambo ry'ibanga",
+        "plan_config": "Igenamiterere rya Gahunda",
+        "start_date": "Itariki y'Itangiriro",
+        "end_date": "Itariki y'Irangira",
+        "finalize_btn": "Emeza kandi Utangire"
+      },
+      "modal_plan": {
+        "title": "Gena Gahunda:",
+        "select_tier": "Hitamo Urugwego rw'Ifatabuguzi",
+        "update_btn": "Vugurura Igihe Cy'Ifatabuguzi"
+      },
+      "modal_delete": {
+        "title": "Siba Konti Y'Ubucuruzi",
+        "caution_title": "Ubwitonzi Bukabije",
+        "caution_desc": "Iki gikorwa kizasiba burundu amakuru yose y'ubucuruzi harimo Ibyagurishijwe, Ibicuruzwa, n'Abakoresha.",
+        "backup": "Guhitamo: Kubika Amakuru",
+        "download_btn": "Kuramo Dosiyee (CSV)",
+        "type_confirm": "Andika \"{{name}}\" kwemeza",
+        "matching_required": "Izina rihuye rirakenewe...",
+        "wiping": "Gusiba...",
+        "destroy_btn": "Senya Ubucuruzi Burundu"
+      },
+      "modal_details": {
+        "title": "Amakuru y'Ubucuruzi",
+        "id": "ID:",
+        "owner": "Nyirubucuruzi",
+        "not_set": "Ntabwo yashyizweho",
+        "created": "Byakozwe",
+        "days_left": "Iminsi isigaye y'Ifatabuguzi",
+        "expired": "Byarangiye",
+        "critical": "Bikomeye",
+        "close_btn": "Funga",
+        "lifetime": "Ubuzima bwose"
+      }
+    },
+    "subscriptions": {
+      "title": "Imiyoborere ya Gahunda",
+      "subtitle": "Amategeko y'Ibiciro",
+      "card": {
+        "duration": "Kugenzura Igihe",
+        "pricing_tier": "Urugwego rw'Ibiciro",
+        "users_max": "Umubare ntarengwa w'Abakoresha",
+        "unlimited": "Nta nkomoko",
+        "edit_btn": "Hindura Gahunda"
+      },
+      "modal_edit": {
+        "title": "Hindura Gahunda:",
+        "primary_label": "Icyapa cy'Ibanze",
+        "price_monthly": "Igiciro (Buri Kwezi)",
+        "update_btn": "Vugurura Gahunda Global"
+      }
+    },
+    "owners": {
+      "no_records": "Nta konti z'abacungamari zabonetse.",
+      "table": {
+        "admin": "Umucungamari",
+        "node": "Ubucuruzi",
+        "email": "Imeli",
+        "created": "Byakozwe",
+        "actions": "Ibikorwa"
+      },
+      "system_admin": "System Admin",
+      "global": "Global",
+      "modal_reset": {
+        "title": "Guhindura Ijambo ry'Ibanga",
+        "error_length": "Ijambo ry'ibanga rigomba kugira inyuguti byibuze 6.",
+        "success": "Ijambo ry'ibanga ryahinduwe kandi ryizewe!",
+        "reset_btn": "Vugurura Ijambo ry'Ibanga",
+        "desc": "Gushyiraho ijambo ry'ibanga rishya kuri uyu mucungamari.",
+        "new_password": "Ijambo ry'ibanga rishya",
+        "update_btn": "Vugurura Uruhushya",
+        "updating": "Kuvugurura..."
+      }
+    },
+    "audit_logs": {
+      "title": "Amateka y'Ibyakozwe (Audit Logs)",
+      "subtitle": "Amateka rusange y'impinduka zose mu sisitemu.",
+      "export_btn": "Ohereza Amateka",
+      "search_placeholder": "Shakisha hakurikijwe igikorwa, imbonerahamwe, cyangwa ubucuruzi...",
+      "all_tables": "Imbonerahamwe Zose",
+      "table": {
+        "event": "Igikorwa",
+        "business": "Ubucuruzi",
+        "user": "Umukoresha",
+        "time": "Igihe",
+        "details": "Amakuru Arambuye"
+      },
+      "view_diff": "Reba Ikinyuranyo",
+      "system": "SISITEMU"
+    },
+    "global_settings": {
+      "title": "Igenamiterere Rusange",
+      "subtitle": "Genzura imikorere n'ibiranga urubuga rwose.",
+      "saving": "KUBIKA...",
+      "save_btn": "BIKA IMPINDUKA",
+      "success_msg": "Igenamiterere rusange ryavuguruwe neza!",
+      "error_msg": "Kuvugurura igenamiterere byanze.",
+      "settings_suffix": "Igenamiterere",
+      "active": "Bikora",
+      "disabled": "Byahagaritswe",
+      "danger_zone": "Agace k'Akaga",
+      "danger_desc": "Ibikorwa hano ntibishobora gusubizwa inyuma. Guhindura igenamiterere rusange bishobora guhungabanya serivisi ku bacuruzi bose.",
+      "reset_btn": "Siba Igenamiterere Ryose"
+    },
+    "global_users": {
+      "title": "Igenzura ry'Abakoresha Bose",
+      "subtitle": "Shakisha kandi ucunge abakoresha mu bucuruzi bwose.",
+      "search_placeholder": "Shakisha izina, imeli, cyangwa ubucuruzi...",
+      "business_label": "Ubucuruzi",
+      "unassigned": "Ntabwo yashyizweho",
+      "joined_label": "Yinjiye",
+      "disable": "Hagarika",
+      "enable": "Fungura",
+      "no_auth": "Uyu mukoresha nta konti afite yo kwinjira.",
+      "enter_password": "Injiza ijambo ry'ibanga rishya rya",
+      "password_length": "Ijambo ry'ibanga rigomba kugira inyuguti byibuze 6.",
+      "reset_success": "Ijambo ry'ibanga ryahinduwe neza! Umukoresha ubu ashobora kwinjira akoresheje ijambo ry'ibanga rishya.",
+      "reset_failed": "Guhindura ijambo ry'ibanga byanze:"
+    },
+    "support": {
+      "title": "Ibikoresho by'Ubufasha n'Ikemurabibazo",
+      "subtitle": "Ibikoresho byo gukemura ibibazo by'abacuruzi.",
+      "impersonation": {
+        "title": "Kwinjira nk'Umucuruzi",
+        "subtitle": "Kwinjira mu makuru nk'umucuruzi",
+        "desc": "Hitamo ubucuruzi kugira ngo urebe ikibaho cyabo, ibicuruzwa, n'ibigurishwa nk'uko babibona. Ubu ni uburyo bwo <strong>Gusoma Gusa</strong> kugira ngo ugufashe gukemura ibibazo utabasabye imyirondoro yabo yo kwinjira.",
+        "search_placeholder": "Shakisha ubucuruzi bwo kwinjiramo...",
+        "active": "Kwinjira nk'umucuruzi bikora",
+        "stop_btn": "Hagarika",
+        "alert": "Ubu winjiye nka {{name}}. Urakoresha amakuru mu buryo bwo Gusoma Gusa."
+      },
+      "system_tools": {
+        "title": "Igenzura ryo ku Rwego rwa Sisitemu",
+        "cache_title": "Siba Ububiko bwa Sisitemu",
+        "cache_desc": "Hata ivugurura ry'ibihe by'abakoresha bose",
+        "db_title": "Kubungabunga Ububiko bw'Amakuru",
+        "db_desc": "Kuvugurura no gusukura imbonerahamwe",
+        "lock_title": "Gufunga Ibikoresho Rusange",
+        "lock_desc": "Hagarika cyangwa ufungure POS cyangwa Raporo hose"
+      }
+    }
   },
   "dashboard": {
     "greeting_morning": "Mwaramutse",
@@ -149,7 +358,11 @@
     },
     "units": {
       "kg": "Kg",
-      "piece": "Igice"
+      "piece": "Igice",
+      "boxes": "Amakarito",
+      "box": "Ikarito",
+      "units": "Ibice",
+      "unit": "Igice"
     },
     "errors": {
       "name_required": "Izina ry'igicuruzwa rirakenewe.",
@@ -177,13 +390,13 @@
     },
     "receipt": {
       "title": "INYEMEZABUGUZI",
-      "refund_title": "⟵ INYEMEZA-KUGARURA",
+      "refund_title": "âŸµ INYEMEZA-KUGARURA",
       "invoice_title": "INYEMEZABUGUZI (A4)",
       "invoice_no": "Fagitire #",
       "return_no": "Ibikaruwe #",
       "refunded": "YAGARUWE",
       "paid_via": "Yishyuwe kuri",
-      "footer1": "★ Murakoze guhahira natwe! ★",
+      "footer1": "â˜… Murakoze guhahira natwe! â˜…",
       "footer2": "Mwazagaruka kandi",
       "printed_at": "Yacapwe:",
       "bill_to": "Uwishyuye",
@@ -217,17 +430,24 @@
       "title": "Amakuru y'igurisha",
       "walk_in": "Umukiriya usanzwe",
       "shop": "Iduka",
+      "customer": "Umukiriya",
+      "cashier_label": "Umukozi:",
+      "date_label": "Itariki:",
       "product": "Igicuruzwa",
       "qty": "Umubare",
       "price": "Igiciro",
       "total": "Iteraniro",
       "subtotal": "Iteraniro rito",
       "tax": "Umusoro",
+      "discount": "Igabanywa",
       "record_payment": "Injiza ubwishyu",
       "return_refund": "Garura / Gusubizwa",
       "receipt_80mm": "Inyemezabwishyu (80mm)",
       "invoice_a4": "Fagitire (A4)",
-      "edit_btn": "Hindura igurisha"
+      "edit_btn": "Hindura igurisha",
+      "payments_breakdown": "Uburyo bwishyuwe",
+      "no_payments": "Nta bwishyu bwabonetse",
+      "print_summary": "Impirima incamake"
     },
     "returns": {
       "title": "Ibigarurwa & Gusubizwa",
@@ -338,8 +558,10 @@
       "start_title": "Tangira akazi",
       "start_desc": "Mwiyinjirizemo amafaranga mutangiranye mbere yo gufungura POS.",
       "opening_cash": "Amafaranga mutangiranye (RWF)",
-      "start_btn": "Fungura akazi & Tangira gucuruza",
-      "starting": "Biratangira..."
+      "start_btn": "Fungura Imashini & Tangira Kugurisha",
+      "starting": "Gutangira...",
+      "open_btn": "Fungura Imashini & Tangira Kugurisha",
+      "checking_status": "Kugenzura imimerere y'imashini..."
     },
     "ui": {
       "scan_barcode": "Gusoma Barcode",
@@ -349,7 +571,8 @@
       "tax": "Umusoro",
       "total": "Iteraniro",
       "checkout": "Kwishyura",
-      "order_summary": "Incamake y'ibifashwe",
+      "order_summary": "Incamake y'Icuruza",
+      "walk_in_customer": "Umukiriya usanzwe",
       "select_payment": "Hitamo uburyo bwo kwishyura",
       "finish_only": "Kurangiza gusa",
       "finish_print": "Kurangiza & Gucapa",
@@ -385,7 +608,22 @@
       "momo_sales": "Icyishyuwe kuri Momo",
       "bank_sales": "Icyishyuwe kuri Banki",
       "card_sales": "Icyishyuwe kuri Karita",
-      "total_closed_sales": "Iteraniro ry'ibifunzwe"
+      "total_closed_sales": "Icuruza Yose ryafunzwe",
+      "recent_transactions": "Ibitabo by'Icuruza biheruka",
+      "last_20_sales": "Icuruza 20 riheruka kuri riri duka",
+      "loading_history": "Gutegura amateka...",
+      "process_refund": "Gusubiza amafaranga",
+      "no_recent_transactions": "Nta curuza riheruka ryabonetse",
+      "transaction_refund": "Gusubiza Icuruza",
+      "restock_inventory": "Garura mu bubiko",
+      "max_qty": "/ {{max}} ntarengwa",
+      "total_refund_due": "Amafaranga yose asubizwa",
+      "refund_method": "Uburyo bwo gusubiza",
+      "reason": "Impamvu",
+      "select_reason": "Hitamo Impamvu",
+      "damaged_item": "Igicuruzwa cyangiritse",
+      "wrong_item": "Igicuruzwa kitari cyo",
+      "changed_mind": "Yicujije"
     },
     "no_location": {
       "title": "Nta hantu hateganyijwe",
@@ -416,7 +654,21 @@
     "refresh": "Vugurura raporo",
     "daily_sales": "Ibyagurishijwe uyu munsi",
     "wastage": "Ibyangiritse",
-    "returns": "Ibigarurwa",
+    "returns": {
+      "title": "Amakuru y'ibiyagarurwa",
+      "subtitle": "Ibintu 10 biheruka kugarurwa cyangwa gusubizwa amafaranga",
+      "sale_num": "Nimero y'igurisha",
+      "cashier": "Umukozi",
+      "reason": "Impamvu",
+      "method": "Uburyo",
+      "status": "Imiterere",
+      "approved": "Byemejwe",
+      "pending": "Biracyategerejwe",
+      "approve_btn": "Emeza",
+      "no_records": "Nta bintu biheruka kugarurwa.",
+      "success_approved": "Gusubizwa kwemejwe kandi byashyizwe mu bubiko!",
+      "error_failed": "Kwemeza ntibyashobotse: "
+    },
     "net_paid": "Inyungu isigaye",
     "profit": "Inyungu mbonera",
     "tax_collected": "Umusoro wakiriwe",
@@ -428,9 +680,11 @@
       "apply": "Emeza amatariki",
       "sales": "Ibyagurishijwe mu gihe cyahisemo",
       "cost": "Igiciro cy'ibyakoreshejwe",
-      "gross": "Inyungu mbonera",
+      "gross": "Inyungu mbumbe",
       "tax": "Umusoro",
-      "net": "Inyungu isigaye nyuma y'umusoro"
+      "net": "Inyungu Nshya",
+      "net_sales": "Igurisha nyaryo (Nta TVA)",
+      "tax_collected": "Imisoro Yakusanyijwe"
     },
     "daily": {
       "title": "Raporo y'ibyagurishijwe uyu munsi",
@@ -451,23 +705,46 @@
       "opening": "Amafaranga yatangiranye",
       "cash_sales": "Amafaranga yakiriwe",
       "total_revenue": "Iteraniro ryose",
-      "no_records": "Nta makuru y'abakozi baheruka gusoza akazi yabonetse."
+      "no_records": "Nta makuru y'abakozi baheruka gusoza akazi yabonetse.",
+      "cash_payments": "Amafaranga yakiriwe",
+      "grand_total": "Amafaranga yose hamwe",
+      "net_cash": "Amafaranga yinjiye (Cash)",
+      "detail_title": "Incamake ya Shift",
+      "opened": "Shift yatangiye",
+      "closed": "Shift yarangiye",
+      "payment_breakdown": "Uburyo bwishyuwe",
+      "no_closure_data": "Nta makuru arambuye yabonetse.",
+      "print_title": "Raporo yo gufunga umunsi",
+      "method": "Uburyo bwo kwishyura",
+      "footer_generated": "Raporo yakozwe ku wa"
     },
-    "returns": {
-      "title": "Amakuru y'ibiyagarurwa",
-      "subtitle": "Ibintu 10 biheruka kugarurwa cyangwa gusubizwa amafaranga",
-      "sale_num": "Nimero y'igurisha",
-      "cashier": "Umukozi",
-      "reason": "Impamvu",
-      "method": "Uburyo",
-      "status": "Imiterere",
-      "approved": "Byemejwe",
-      "pending": "Biracyategerejwe",
-      "approve_btn": "Emeza",
-      "no_records": "Nta bintu biheruka kugarurwa.",
-      "success_approved": "Gusubizwa kwemejwe kandi byashyizwe mu bubiko!",
-      "error_failed": "Kwemeza ntibyashobotse: "
-    }
+    "print": {
+      "button": "Capa Raporo Irambuye",
+      "title": "Raporo y'Ubucuruzi Irambuye",
+      "date_range": "Igihe: {{start}} kugeza {{end}}",
+      "products_sold_title": "Incamake y'Ibicuruzwa Byagurishijwe",
+      "col_product": "Izina ry'Igicuruzwa",
+      "col_quantity": "Ingano Yagurishijwe",
+      "col_revenue": "Amafaranga Yinjiye",
+      "debt_payments_title": "Kwishyura Imyenda y'Abakiriya",
+      "col_client": "Izina ry'Umukiriya",
+      "col_amount": "Amafaranga Yishyuwe",
+      "col_cashier": "Uwakiriye",
+      "col_date": "Itariki yo Kwishyura",
+      "col_sale_num": "Nomero y'Igurisha",
+      "no_data": "Nta makuru aboneka muri iki gihe."
+    },
+    "debt_payments": {
+      "title": "Urutonde rwishyura ry'abakiriya",
+      "subtitle": "Amateka y'uburyo abakiriya bagiye bishyura imyenda yabo",
+      "col_client": "Izina ry'umukiriya",
+      "col_amount": "Amafaranga yishyuwe",
+      "col_cashier": "Byanditswe na",
+      "col_date": "Itariki rwishyura",
+      "col_sale": "Inomero y'igurisha",
+      "no_records": "Nta makuru y'ubwishyu aboneka muri iki gihe"
+    },
+    "net_sales": "Igurisha nyaryo (Nta TVA)"
   },
   "settings": {
     "title": "Igenamiterere rya Sisitemu",
@@ -666,7 +943,8 @@
       "volume": "Iteraniro ry'ibyaguze",
       "unpaid": "Ideni tubereyemo",
       "email": "Imeri",
-      "phone": "Telefone"
+      "phone": "Telefone",
+      "total_purchase": "Ibyaguzwe byose"
     },
     "modal": {
       "create_title": "UGURISHA MUSHYA",
@@ -740,7 +1018,8 @@
         "from": "Aho bivuye",
         "to": "Aho bijya",
         "status": "Imiterere",
-        "date": "Itariki"
+        "date": "Itariki",
+        "recorder": "Byanditswe na"
       },
       "status": {
         "pending": "Iragerejwe",
@@ -774,6 +1053,8 @@
     "title": "Ibyaguze",
     "subtitle": "Kurikirana ibicuruzwa byakiriwe",
     "new_purchase": "Iguze rishya",
+    "search_placeholder": "Shakisha usabira, numero y'iguze...",
+    "no_purchases": "Nta biguze byabonetse.",
     "table": {
       "order": "Iguze #",
       "supplier": "Ugutanga",
@@ -783,86 +1064,96 @@
       "delivery": "Izaboneka",
       "date": "Itariki"
     },
+    "invoice": {
+      "title": "FAGITIRE Y'IGUZE",
+      "supplier_info": "Amakuru y'utanga ibicuruzwa",
+      "delivery_status": "Imiterere y'izaboneka",
+      "order_details": "Ibirambuye ku guze",
+      "purchase_date": "Itariki yo guze",
+      "payment_status": "Ubwishyu",
+      "product": "Igicuruzwa",
+      "price": "Igiciro cy'igice",
+      "qty": "Ingano",
+      "total": "Byose",
+      "subtotal": "Igiteranyo",
+      "grand_total": "IGITERANYO CYOSE",
+      "print": "Sohora fagitire",
+      "location": "Aho uherereye",
+      "po_number": "Iguze #"
+    },
     "modal": {
+      "create_title": "Iguze Rishya",
+      "edit_title": "Hindura Iguze",
       "title": "Injiza ibicuruzwa bishya",
       "subtitle": "Andika ibicuruzwa byakiriwe bivuye kubatuburira",
       "search_items": "Shakisha ibyo wongeraho...",
+      "search_products": "Shakisha cyangwa scan ibicuruzwa...",
       "select_supplier": "Hitamo ubagurisha",
       "summary": "Incamake y'iguze",
+      "order_summary": "Igiciro cyose",
       "total_cost": "Igiciro cyose",
       "amount_paid": "Ayishyuwe",
       "balance": "Ideni risigaye",
       "save_btn": "Rangiza iguze",
+      "save_purchase": "Bika iguze",
       "supplier": "Ugutanga ibicuruzwa",
+      "location": "Aho uherereye",
       "search_suppliers": "Shakisha abasabira...",
       "no_supplier_found": "Nta musabira wabonetse kuri \"{{query}}\"",
       "add_as_supplier": "Injiza \"{{query}}\" nk'umusabira",
       "date": "Itariki",
       "payment": "Ubwishyu",
       "delivery": "Izaboneka",
-      "table": {
-        "product": "Igicuruzwa",
-        "qty": "Ingano",
-        "cost": "Igiciro",
-        "profit": "Inyungu",
-        "selling": "Kugurisha"
-      },
       "add_product": "Ongeraho igicuruzwa",
       "no_products_found": "Nta bicuruzwa byabonetse kuri \"{{query}}\"",
       "delete_title": "Futa iguze",
       "delete_desc": "Ese uremeye ko ushaka gufuta iri guze? Ibi ntibishobora gusubirwamo kandi bizasubiza inyuma imibare y'ububiko.",
       "empty_search": "Shakisha cyangwa scan ibicuruzwa kugira ngo ubyinjize muri iri guze.",
-      "invoice": {
-        "title": "FAGITIRE",
-        "supplier_info": "Amakuru y'utanga ibicuruzwa",
-        "delivery_status": "Imiterere y'izaboneka",
-        "order_details": "Ibirambuye ku guze",
-        "purchase_date": "Itariki yo guze",
-        "payment_status": "Ubwishyu",
+      "table": {
         "product": "Igicuruzwa",
-        "price": "Igiciro",
         "qty": "Ingano",
-        "total": "Byose",
-        "subtotal": "Igiteranyo",
-        "grand_total": "Igiteranyo rusange",
-        "print": "Sohora fagitire"
-      },
-      "quick_supplier": {
-        "label": "Icyemezo cyihuse",
-        "title": "Injiza utanga ibicuruzwa mushya",
-        "name": "Izina ry'utanga ibicuruzwa",
-        "name_placeholder": "Urugero: Rwanda Coffee Ltd",
-        "contact": "Izina ry'uwo mwavugana",
-        "contact_placeholder": "Izina ryi nshuti y'ubucuruzi",
-        "phone": "Telefone",
-        "phone_placeholder": "+250 7xx xxx xxx",
-        "saving": "Birabikwa...",
-        "save_btn": "Injiza & Hitamo"
-      },
-      "schedule": {
-        "label": "Gahunda y'ubwishyu",
-        "title": "Gena gahunda yo kwishyura utanga ibicuruzwa",
-        "amount": "Ayishyuwe (RWF)",
-        "amount_placeholder": "Ayishyurwa",
-        "due_date": "Itariki y'ubwishyu",
-        "notes": "Ibindi",
-        "notes_placeholder": "Amasezerano, numero y'icyiciro...",
-        "success": "Gahunda y'ubwishyu yagenwe!",
-        "error": "Gugena gahunda y'ubwishyu ntibyashobotse",
-        "save_btn": "Gena ubwishyu",
-        "upcoming_title": "Ubwishyu bugiye kubaho",
-        "show_all": "Yerekane yose",
-        "hide": "Yihishe",
-        "mark_paid": "Emeza ko byishyuwe",
-        "mark_paid_success": "Byemejwe ko byishyuwe!",
-        "delete_title": "Futa gahunda",
-        "delete_desc": "Ese ushaka gufuta iyi gahunda y'ubwishyu?"
+        "cost": "Igiciro",
+        "profit": "Inyungu %",
+        "selling": "Igiciro cyo kugurisha"
       }
+    },
+    "quick_supplier": {
+      "label": "Icyemezo cyihuse",
+      "title": "Injiza utanga ibicuruzwa mushya",
+      "name": "Izina ry'utanga ibicuruzwa",
+      "name_placeholder": "Urugero: Rwanda Coffee Ltd",
+      "contact": "Izina ry'uwo mwavugana",
+      "contact_placeholder": "Izina ryi nshuti y'ubucuruzi",
+      "phone": "Telefone",
+      "phone_placeholder": "+250 7xx xxx xxx",
+      "saving": "Birabikwa...",
+      "save_btn": "Injiza & Hitamo"
+    },
+    "schedule": {
+      "label": "Gahunda y'ubwishyu",
+      "title": "Gena gahunda yo kwishyura utanga ibicuruzwa",
+      "amount": "Ayishyuwe (RWF)",
+      "amount_placeholder": "Ayishyurwa",
+      "due_date": "Itariki y'ubwishyu",
+      "notes": "Ibindi",
+      "notes_placeholder": "Amasezerano, numero y'icyiciro...",
+      "success": "Gahunda y'ubwishyu yagenwe!",
+      "error": "Gugena gahunda y'ubwishyu ntibyashobotse",
+      "save_btn": "Gena ubwishyu",
+      "saving": "Biragena...",
+      "upcoming_title": "Ubwishyu bugiye kubaho",
+      "show_all": "Yerekana yose",
+      "hide": "Hisha",
+      "mark_paid": "Emeza ko byishyuwe",
+      "mark_paid_success": "Byemejwe ko byishyuwe!",
+      "delete_title": "Futa gahunda",
+      "delete_desc": "Ese ushaka gufuta iyi gahunda y'ubwishyu?"
     },
     "status": {
       "paid": "Byishyuwe",
       "partial": "Byishyuwe igice",
-      "due": "Ikirarane"
+      "due": "Ikirarane",
+      "unpaid": "Bitarishyuwe"
     },
     "delivery": {
       "received": "Byakiriwe",

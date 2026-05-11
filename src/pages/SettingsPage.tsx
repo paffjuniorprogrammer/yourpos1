@@ -26,6 +26,7 @@ import { SectionCard } from "../components/ui/SectionCard";
 import { useRealtimeSync } from "../hooks/useRealtimeSync";
 import { useTranslation } from "react-i18next";
 import i18n from "../i18n";
+import { formatCurrency } from "../lib/format";
 
 type StaffPermission = {
   module: string;
@@ -902,14 +903,14 @@ export function SettingsPage() {
         <SectionCard title={t('settings.totals.title')} subtitle={t('settings.totals.subtitle')}>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             {[
-              { title: t('settings.totals.sales_today'), value: financeOverview ? `${Math.round(financeOverview.salesToday).toLocaleString()} RWF` : t('common.loading'), tone: "bg-sky-50 text-sky-700" },
-              { title: t('settings.totals.sales_month'), value: financeOverview ? `${Math.round(financeOverview.salesMonth).toLocaleString()} RWF` : t('common.loading'), tone: "bg-emerald-50 text-emerald-700" },
-              { title: t('settings.totals.sales_year'), value: financeOverview ? `${Math.round(financeOverview.salesYear).toLocaleString()} RWF` : t('common.loading'), tone: "bg-indigo-50 text-indigo-700" },
-              { title: t('settings.totals.purchases_total'), value: financeOverview ? `${Math.round(financeOverview.purchasesTotal).toLocaleString()} RWF` : t('common.loading'), tone: "bg-amber-50 text-amber-700" },
-              { title: t('settings.totals.supplier_due'), value: financeOverview ? `${Math.round(financeOverview.supplierDue).toLocaleString()} RWF` : t('common.loading'), tone: "bg-rose-50 text-rose-700" },
-              { title: t('settings.totals.supplier_paid'), value: financeOverview ? `${Math.round(financeOverview.supplierPaid).toLocaleString()} RWF` : t('common.loading'), tone: "bg-emerald-50 text-emerald-700" },
-              { title: t('settings.totals.customer_unpaid'), value: financeOverview ? `${Math.round(financeOverview.customerUnpaid).toLocaleString()} RWF` : t('common.loading'), tone: "bg-orange-50 text-orange-700" },
-              { title: t('settings.totals.tax_est'), value: financeOverview ? `${Math.round(financeOverview.taxEstimation).toLocaleString()} RWF` : t('common.loading'), tone: "bg-brand-50 text-brand-700" },
+              { title: t('settings.totals.sales_today'), value: financeOverview ? formatCurrency(Math.round(financeOverview.salesToday)) : t('common.loading'), tone: "bg-sky-50 text-sky-700" },
+              { title: t('settings.totals.sales_month'), value: financeOverview ? formatCurrency(Math.round(financeOverview.salesMonth)) : t('common.loading'), tone: "bg-emerald-50 text-emerald-700" },
+              { title: t('settings.totals.sales_year'), value: financeOverview ? formatCurrency(Math.round(financeOverview.salesYear)) : t('common.loading'), tone: "bg-indigo-50 text-indigo-700" },
+              { title: t('settings.totals.purchases_total'), value: financeOverview ? formatCurrency(Math.round(financeOverview.purchasesTotal)) : t('common.loading'), tone: "bg-amber-50 text-amber-700" },
+              { title: t('settings.totals.supplier_due'), value: financeOverview ? formatCurrency(Math.round(financeOverview.supplierDue)) : t('common.loading'), tone: "bg-rose-50 text-rose-700" },
+              { title: t('settings.totals.supplier_paid'), value: financeOverview ? formatCurrency(Math.round(financeOverview.supplierPaid)) : t('common.loading'), tone: "bg-emerald-50 text-emerald-700" },
+              { title: t('settings.totals.customer_unpaid'), value: financeOverview ? formatCurrency(Math.round(financeOverview.customerUnpaid)) : t('common.loading'), tone: "bg-orange-50 text-orange-700" },
+              { title: t('settings.totals.tax_est'), value: financeOverview ? formatCurrency(Math.round(financeOverview.taxEstimation)) : t('common.loading'), tone: "bg-brand-50 text-brand-700" },
             ].map((card) => (
               <div key={card.title} className={`rounded-3xl p-5 ${card.tone}`}>
                 <p className="text-sm font-semibold">{card.title}</p>

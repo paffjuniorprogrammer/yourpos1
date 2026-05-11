@@ -73,8 +73,8 @@ export function AppShell() {
           />
           
           {/* Menu Drawer */}
-          <div className="absolute inset-y-0 left-0 w-[280px] bg-slate-950 p-6 shadow-2xl animate-in slide-in-from-left duration-300">
-            <div className="flex items-center justify-between mb-8">
+          <div className="absolute inset-y-0 left-0 w-[280px] bg-slate-950 p-6 shadow-2xl animate-in slide-in-from-left duration-300 flex flex-col">
+            <div className="flex items-center justify-between mb-8 shrink-0">
               <div className="flex items-center gap-3">
                 <div className="h-8 w-8 rounded-lg bg-brand-500 flex items-center justify-center text-white font-bold text-xs">
                   {settings?.shop_name?.charAt(0) || "B"}
@@ -87,7 +87,7 @@ export function AppShell() {
               </button>
             </div>
 
-            <nav className="space-y-1">
+            <nav className="space-y-1 overflow-y-auto flex-1 pr-2 custom-scrollbar">
               {visibleNavItems.map(({ label, path, icon: Icon }) => (
                 <NavLink
                   key={path}
@@ -108,7 +108,7 @@ export function AppShell() {
               ))}
             </nav>
 
-            <div className="absolute bottom-6 left-6 right-6 pt-6 border-t border-white/10">
+            <div className="mt-6 pt-6 border-t border-white/10 shrink-0">
               {/* Mobile Language Switcher */}
               <div className="mb-6 flex gap-2">
                 {['en', 'rw', 'fr'].map((lng) => (

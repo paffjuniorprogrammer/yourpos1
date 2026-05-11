@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { Building2, Eye, Pencil, Plus, Printer, Search, Trash2, X } from "lucide-react";
 
@@ -9,6 +10,7 @@ import { Pagination } from "../components/ui/Pagination";
 import { useAsyncAction } from "../hooks/useAsyncAction";
 import { createSupplier, deleteSupplier as deleteSupplierFromDb, listSuppliersWithMetrics, updateSupplier, type SupplierMetrics } from "../services/supplierService";
 import { useRealtimeSync } from "../hooks/useRealtimeSync";
+import { formatCurrency } from "../lib/format";
 
 type SupplierRow = {
   id: string;
@@ -186,16 +188,79 @@ export function SuppliersPage() {
     }
   }
 
-  function handlePrint() {
-    window.print();
+  const [printTarget, setPrintTarget] = useState<SupplierRow | null>(null);
+
+  function handlePrint(row: SupplierRow) {
+    setPrintTarget(row);
+    setTimeout(() => {
+      window.print();
+      setPrintTarget(null);
+    }, 300);
   }
 
-  function formatCurrency(val: number) {
-    return val.toLocaleString('fr-Fr', { style: 'currency', currency: 'RWF' }).replace('RWF', '').trim() + ' RWF';
+  function formatCurrencyLocal(val: number) {
+    return formatCurrency(val);
   }
 
   return (
     <div className="space-y-6">
+      {/* ── SUPPLIER PRINT PORTAL ── */}
+      {printTarget && createPortal(
+        <div className="print-doc" style={{ padding: '18mm', fontFamily: 'system-ui, sans-serif', color: '#0f172a' }}>
+          {/* Header */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #0f172a', paddingBottom: '12px', marginBottom: '20px' }}>
+            <div>
+              <p style={{ fontSize: '9px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.2em', color: '#94a3b8', marginBottom: '4px' }}>{t('suppliers.title')}</p>
+              <h1 style={{ fontSize: '24px', fontWeight: 900, margin: 0 }}>{printTarget.name}</h1>
+              <p style={{ fontSize: '11px', color: '#64748b', marginTop: '4px' }}>{new Date().toLocaleDateString()}</p>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <p style={{ fontSize: '9px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.15em', color: '#94a3b8' }}>SUPPLIER PROFILE</p>
+            </div>
+          </div>
+
+          {/* Two column info */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '24px' }}>
+            <div style={{ background: '#f8fafc', borderRadius: '8px', padding: '14px' }}>
+              <p style={{ fontSize: '9px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.15em', color: '#94a3b8', marginBottom: '12px' }}>CONTACT INFORMATION</p>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                <tbody>
+                  {[
+                    ['Contact', printTarget.contact],
+                    ['Phone', printTarget.phone],
+                    ['Location', printTarget.location],
+                    ['TIN', printTarget.tinNumber],
+                    ['Payment Term', printTarget.paymentTerm],
+                    ['Bank Account', printTarget.bankAccount],
+                  ].map(([label, val]) => (
+                    <tr key={label} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                      <td style={{ padding: '6px 0', color: '#64748b', fontWeight: 600, width: '40%' }}>{label}</td>
+                      <td style={{ padding: '6px 0', fontWeight: 700, color: '#0f172a' }}>{val || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div>
+              <div style={{ background: '#eff6ff', borderRadius: '8px', padding: '14px', marginBottom: '12px' }}>
+                <p style={{ fontSize: '9px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.15em', color: '#93c5fd', marginBottom: '6px' }}>TOTAL PURCHASES</p>
+                <p style={{ fontSize: '22px', fontWeight: 900, color: '#1d4ed8', margin: 0 }}>{formatCurrency(printTarget.totalPurchase)}</p>
+              </div>
+              <div style={{ background: printTarget.unpaidAmount > 0 ? '#fff7ed' : '#f0fdf4', borderRadius: '8px', padding: '14px' }}>
+                <p style={{ fontSize: '9px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.15em', color: printTarget.unpaidAmount > 0 ? '#fb923c' : '#4ade80', marginBottom: '6px' }}>UNPAID BALANCE</p>
+                <p style={{ fontSize: '22px', fontWeight: 900, color: printTarget.unpaidAmount > 0 ? '#ea580c' : '#16a34a', margin: 0 }}>{formatCurrency(printTarget.unpaidAmount)}</p>
+              </div>
+            </div>
+          </div>
+
+          <p style={{ fontSize: '10px', color: '#94a3b8', textAlign: 'center', marginTop: '24px', borderTop: '1px solid #e2e8f0', paddingTop: '12px' }}>
+            This is a computer-generated supplier profile. Printed on {new Date().toLocaleString()}.
+          </p>
+        </div>,
+        document.body
+      )}
+
       <div className="mb-2">
         <p className="text-sm font-semibold uppercase tracking-[0.25em] text-brand-600">{t('dashboard.stats.suppliers')}</p>
         <h2 className="mt-1 text-3xl font-bold text-ink">{t('suppliers.title')}</h2>
@@ -291,7 +356,7 @@ export function SuppliersPage() {
                             <Eye size={16} />
                           </button>
                           <button
-                            onClick={() => handlePrint()}
+                            onClick={() => handlePrint(row)}
                             className="rounded-xl bg-orange-50 p-2 text-orange-600 transition hover:bg-orange-100"
                             title={t('common.print')}
                           >
@@ -376,3 +441,5 @@ export function SuppliersPage() {
     </div>
   );
 }
+
+// Nothing below — print portal is rendered inside the component JSX above

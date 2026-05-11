@@ -1,4 +1,5 @@
 import { ensureSupabaseConfigured } from "./supabaseUtils";
+import { formatCurrency } from "../lib/format";
 
 // Simple in-memory cache for report data
 let cardsCache: { data: ReportCard[], timestamp: number } | null = null;
@@ -17,6 +18,7 @@ export type FinancialSummary = {
   totalCost: number;
   grossProfit: number;
   taxCollected: number;
+  netSales: number;
   netIncome: number;
 };
 
@@ -95,22 +97,22 @@ export async function getReportCards(forceRefresh = false): Promise<ReportCard[]
   const result = [
     {
       title: "Daily Sales",
-      value: `${dailySales.toLocaleString()} RWF`,
+      value: formatCurrency(dailySales),
       meta: "Shift Summary"
     },
     {
       title: "Wastage Loss",
-      value: `${dailyLoss.toLocaleString()} RWF`,
+      value: formatCurrency(dailyLoss),
       meta: "Damages & Expired"
     },
     {
       title: "Daily Returns",
-      value: `${dailyReturns.toLocaleString()} RWF`,
+      value: formatCurrency(dailyReturns),
       meta: `${todayReturns?.length || 0} items returned`
     },
     {
       title: "Net Paid Sales",
-      value: `${(paidSales - dailyReturns).toLocaleString()} RWF`,
+      value: formatCurrency(paidSales - dailyReturns),
       meta: unpaidCount > 0 ? `${((paidSales / dailySales) * 100).toFixed(0)}% paid (less returns)` : "After returns deducted"
     }
   ];
@@ -223,6 +225,22 @@ export async function getRecentShifts(limit = 10) {
   return data;
 }
 
+export async function getShiftClosure(userId: string, locationId: string, date: string): Promise<DayClosureRecord | null> {
+  const client = await ensureSupabaseConfigured();
+  const { data, error } = await client
+    .from('day_closures')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('location_id', locationId)
+    .eq('closing_date', date.split('T')[0])
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data;
+}
+
 export async function getRecentReturns(limit = 10) {
   const client = await ensureSupabaseConfigured();
   const { data, error } = await client
@@ -276,14 +294,103 @@ export async function getFinancialReport(startDate: string, endDate: string): Pr
     totalCost += cost * Number(item.quantity);
   });
   
+  const netSales = totalSales - taxCollected;
   const grossProfit = totalSales - totalCost;
-  const netIncome = grossProfit - taxCollected;
+  const netIncome = netSales - totalCost;
   
   return {
     totalSales,
     totalCost,
     grossProfit,
     taxCollected,
+    netSales,
     netIncome
   };
+}
+
+export async function getAggregatedProductsSold(startDate: string, endDate: string) {
+  const client = await ensureSupabaseConfigured();
+
+  const { data: sales, error: salesError } = await client
+    .from('sales')
+    .select('id')
+    .gte('created_at', `${startDate}T00:00:00.000Z`)
+    .lte('created_at', `${endDate}T23:59:59.999Z`);
+
+  if (salesError) throw salesError;
+
+  const saleIds = sales?.map(s => s.id) || [];
+  if (saleIds.length === 0) return [];
+
+  const { data: items, error: itemsError } = await client
+    .from('sale_items')
+    .select('quantity, line_total, products(name)')
+    .in('sale_id', saleIds);
+
+  if (itemsError) throw itemsError;
+
+  const aggregated = new Map<string, { name: string; quantity: number; revenue: number }>();
+
+  items?.forEach(item => {
+    const productName = (item.products as any)?.name || 'Unknown Product';
+    const current = aggregated.get(productName) || { name: productName, quantity: 0, revenue: 0 };
+    aggregated.set(productName, {
+      name: productName,
+      quantity: current.quantity + Number(item.quantity),
+      revenue: current.revenue + Number(item.line_total)
+    });
+  });
+
+  return Array.from(aggregated.values()).sort((a, b) => b.revenue - a.revenue);
+}
+
+export async function getDebtPaymentsReport(startDate: string, endDate: string) {
+  const client = await ensureSupabaseConfigured();
+
+  // Debt payments are those where a payment is made, and the sale has a customer.
+  // The 'sale_payments' table doesn't have cashier_id or customer_id, so we must join 'sales'.
+  const { data: payments, error: paymentsError } = await client
+    .from('sale_payments')
+    .select(`
+      id,
+      amount,
+      paid_at,
+      sales!inner(
+        sale_number,
+        customer_id,
+        cashier_id,
+        created_at,
+        customers(full_name),
+        users(full_name)
+      )
+    `)
+    .gte('paid_at', `${startDate}T00:00:00.000Z`)
+    .lte('paid_at', `${endDate}T23:59:59.999Z`)
+    .gt('amount', 0); // Exclude 0 amount payments if any
+
+  if (paymentsError) throw paymentsError;
+
+  // Filter for payments where the sale has a customer and the payment is not at the EXACT same time as the sale creation
+  // Or simpler: just list payments for known customers. A "debt payment" usually implies an existing customer balance.
+  const debtPayments = payments?.filter((p: any) => {
+    const sale = p.sales as any;
+    if (!sale.customer_id) return false;
+    
+    // Simple heuristic: If the payment was made after the sale date (different day or significantly later), it's a debt payment.
+    // However, if a client pays a deposit on the spot, it's also a payment towards their debt. 
+    // To be comprehensive as requested, we return all payments from customers.
+    return true;
+  }).map((p: any) => {
+    const sale = p.sales as any;
+    return {
+      id: p.id,
+      clientName: sale.customers?.full_name || 'Unknown Client',
+      amount: Number(p.amount),
+      cashierName: sale.users?.full_name || 'Unknown Cashier',
+      date: p.paid_at,
+      saleNumber: sale.sale_number
+    };
+  }) || [];
+
+  return debtPayments.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 }

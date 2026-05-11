@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { 
   History, 
   Search, 
@@ -16,6 +17,7 @@ import { superAdminService } from "../../services/superAdminService";
 import { LoadingPOS } from "../../components/ui/LoadingPOS";
 
 export function AuditLogsPage() {
+  const { t } = useTranslation();
   const [logs, setLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -57,12 +59,12 @@ export function AuditLogsPage() {
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">System Audit Logs</h1>
-          <p className="text-slate-500 font-medium">Global history of all system-wide modifications.</p>
+          <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">{t('super_admin.audit_logs.title')}</h1>
+          <p className="text-slate-500 font-medium">{t('super_admin.audit_logs.subtitle')}</p>
         </div>
         <button className="flex items-center gap-2 rounded-2xl bg-white border border-slate-200 px-6 py-4 font-bold text-slate-600 shadow-sm transition-all hover:bg-slate-50 active:scale-95">
           <Download size={20} />
-          Export Logs
+          {t('super_admin.audit_logs.export_btn')}
         </button>
       </div>
 
@@ -71,7 +73,7 @@ export function AuditLogsPage() {
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
           <input 
             type="text"
-            placeholder="Filter by action, table, or business..."
+            placeholder={t('super_admin.audit_logs.search_placeholder')}
             className="w-full rounded-2xl border-none bg-white py-4 pl-12 pr-4 shadow-sm outline-none ring-primary/20 transition-all focus:ring-4 placeholder:text-slate-400 font-medium"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -79,7 +81,7 @@ export function AuditLogsPage() {
         </div>
         <button className="flex items-center gap-2 rounded-2xl bg-white border border-slate-200 px-6 py-4 font-bold text-slate-600 shadow-sm transition-all hover:bg-slate-50">
           <Filter size={20} />
-          All Tables
+          {t('super_admin.audit_logs.all_tables')}
         </button>
       </div>
 
@@ -88,11 +90,11 @@ export function AuditLogsPage() {
           <table className="w-full text-left">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200 text-xs font-black uppercase tracking-widest text-slate-400">
-                <th className="px-8 py-6">Event</th>
-                <th className="px-8 py-6">Business</th>
-                <th className="px-8 py-6">User</th>
-                <th className="px-8 py-6">Time</th>
-                <th className="px-8 py-6 text-right">Details</th>
+                <th className="px-8 py-6">{t('super_admin.audit_logs.table.event')}</th>
+                <th className="px-8 py-6">{t('super_admin.audit_logs.table.business')}</th>
+                <th className="px-8 py-6">{t('super_admin.audit_logs.table.user')}</th>
+                <th className="px-8 py-6">{t('super_admin.audit_logs.table.time')}</th>
+                <th className="px-8 py-6 text-right">{t('super_admin.audit_logs.table.details')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -112,14 +114,14 @@ export function AuditLogsPage() {
                   <td className="px-8 py-6">
                     <div className="flex items-center gap-2">
                        <Building2 size={14} className="text-slate-400" />
-                       <span className="text-sm font-bold text-slate-600">{log.business?.name || 'GLOBAL'}</span>
+                       <span className="text-sm font-bold text-slate-600">{log.business?.name || t('super_admin.audit_logs.system')}</span>
                     </div>
                   </td>
                   <td className="px-8 py-6">
                     <div className="flex items-center gap-2">
                        <User size={14} className="text-slate-400" />
                        <div className="overflow-hidden">
-                          <div className="text-sm font-bold text-slate-600 truncate">{log.user?.full_name || 'SYSTEM'}</div>
+                          <div className="text-sm font-bold text-slate-600 truncate">{log.user?.full_name || t('super_admin.audit_logs.system')}</div>
                           <div className="text-[10px] text-slate-400 truncate">{log.user?.email}</div>
                        </div>
                     </div>
@@ -132,7 +134,7 @@ export function AuditLogsPage() {
                   </td>
                   <td className="px-8 py-6 text-right">
                     <button className="text-[10px] font-black uppercase tracking-widest text-primary hover:underline">
-                      View Diff
+                      {t('super_admin.audit_logs.view_diff')}
                     </button>
                   </td>
                 </tr>

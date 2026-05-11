@@ -1,8 +1,10 @@
 import { type FormEvent, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { useTranslation } from "react-i18next";
 
 export function LoginPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
   const { authConfigured, signIn } = useAuth();
@@ -22,7 +24,7 @@ export function LoginPage() {
       const userProfile = await signIn(email, password);
       
       if (!userProfile) {
-        throw new Error("Login failed. Please check your credentials.");
+        throw new Error(t('login.error_failed', { defaultValue: 'Login failed. Please check your credentials.' }));
       }
 
       if (userProfile.role === 'super_admin') {
@@ -31,7 +33,7 @@ export function LoginPage() {
         navigate(redirectTo ?? "/dashboard", { replace: true });
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to sign in.");
+      setError(err instanceof Error ? err.message : t('login.error_unable', { defaultValue: 'Unable to sign in.' }));
     } finally {
       setSubmitting(false);
     }
@@ -42,24 +44,24 @@ export function LoginPage() {
       <div className="grid w-full max-w-5xl overflow-hidden rounded-[2rem] bg-white shadow-soft lg:grid-cols-[1.1fr_0.9fr]">
         <section className="bg-slate-950 px-8 py-10 flex flex-col justify-center text-white">
           <p className="text-sm font-semibold uppercase tracking-[0.3em] text-brand-400">
-            Your POS
+            {t('login.brand')}
           </p>
           <h1 className="mt-6 text-5xl font-black leading-tight tracking-tight">
             Control <br />Every <br />Shift.
           </h1>
           <div className="mt-12 h-1 w-20 bg-brand-500 rounded-full"></div>
           <p className="mt-8 max-w-sm text-lg font-medium text-slate-400 leading-relaxed">
-            A premium retail experience powered by extreme speed and reliability.
+            {t('login.subtitle')}
           </p>
         </section>
 
         <section className="px-8 py-10">
           <p className="text-sm font-semibold uppercase tracking-[0.25em] text-brand-600">
-            Secure Login
+            {t('login.secure_login')}
           </p>
-          <h2 className="mt-3 text-3xl font-bold text-ink">Welcome back</h2>
+          <h2 className="mt-3 text-3xl font-bold text-ink">{t('login.welcome')}</h2>
           <p className="mt-3 text-sm text-slate-500">
-            Use the same email and password stored in Supabase Auth.
+            {t('login.welcome_desc')}
           </p>
 
           {!authConfigured ? (
@@ -71,7 +73,7 @@ export function LoginPage() {
           <form className="mt-8 space-y-4" onSubmit={handleSubmit}>
             <label className="block rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 focus-within:border-brand-300 transition-colors">
               <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                Email Address
+                {t('login.email')}
               </span>
               <input
                 type="email"
@@ -84,7 +86,7 @@ export function LoginPage() {
             </label>
             <label className="block rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 focus-within:border-brand-300 transition-colors">
               <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                Secret Password
+                {t('login.password')}
               </span>
               <input
                 type="password"
@@ -107,16 +109,16 @@ export function LoginPage() {
               disabled={!authConfigured || submitting}
               className="w-full rounded-2xll bg-slate-950 px-4 py-5 text-sm font-bold text-white shadow-xl transition hover:bg-black disabled:cursor-not-allowed disabled:bg-slate-300 active:scale-[0.98]"
             >
-              {submitting ? "Entering System..." : "Sign Into Your POS"}
+              {submitting ? t('login.entering') : t('login.sign_in')}
             </button>
           </form>
 
           <footer className="mt-12 pt-8 border-t border-slate-100">
             <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest text-center">
-              Need Assistance?
+              {t('login.assistance')}
             </p>
             <p className="mt-3 text-center text-sm font-bold text-ink">
-              If you meet with any problem call <a href="tel:+250793063512" className="text-brand-600 hover:underline">+250 793 063 512</a>
+              {t('login.assistance_desc')} <a href="tel:+250793063512" className="text-brand-600 hover:underline">+250 793 063 512</a>
             </p>
           </footer>
         </section>

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { Printer, Pencil, Plus, Search, Trash2, X } from "lucide-react";
 
@@ -6,6 +7,7 @@ import { useAuth } from "../context/AuthContext";
 import { useNotification } from "../context/NotificationContext";
 import { SectionCard } from "../components/ui/SectionCard";
 import { Pagination } from "../components/ui/Pagination";
+import { formatCurrency } from "../lib/format";
 import { useAsyncAction } from "../hooks/useAsyncAction";
 import { createCustomer, deleteCustomer as deleteCustomerFromDb, listCustomersWithMetrics, updateCustomer, type CustomerMetrics } from "../services/customerService";
 import { useRealtimeSync } from "../hooks/useRealtimeSync";
@@ -201,9 +203,7 @@ export function CustomersPage() {
     setTimeout(() => window.print(), 300);
   }
 
-  function formatCurrency(val: number) {
-    return val.toLocaleString('fr-Fr', { style: 'currency', currency: 'RWF' }).replace('RWF', '').trim() + ' RWF';
-  }
+  const currency = formatCurrency;
 
   return (
     <div className="space-y-6">
@@ -401,85 +401,61 @@ export function CustomersPage() {
       ) : null}
 
  
-      {/* Hidden Print Section */}
-      <div className="hidden print:block print:fixed print:inset-0 print:bg-white print:p-8 print:z-[9999]">
-         {selectedCustomer && (
-            <div className="max-w-4xl mx-auto">
-               <div className="flex justify-between items-start mb-10 border-b-2 border-slate-900 pb-8">
-                  <div>
-                     <h1 className="text-4xl font-black text-slate-900 mb-2 uppercase tracking-tighter">{t('customers.print.title')}</h1>
-                     <p className="text-slate-500 font-bold">{t('customers.print.generated_on')} {new Date().toLocaleDateString()}</p>
-                     <p className="text-slate-950 mt-4 text-xl font-black">{selectedCustomer.name}</p>
-                     <p className="text-slate-600">{selectedCustomer.contact}</p>
-                     <p className="text-slate-600">{selectedCustomer.address}</p>
-                  </div>
-                  <div className="text-right">
-                     <div className="bg-slate-900 text-white p-6 rounded-2xl">
-                        <p className="text-xs font-bold uppercase tracking-widest opacity-70 mb-1">{t('customers.print.outstanding')}</p>
-                        <p className="text-3xl font-black">{formatCurrency(selectedCustomer.unpaidAmount)}</p>
-                     </div>
-                  </div>
-               </div>
-
-               <div className="mb-10">
-                  <h3 className="text-sm font-bold uppercase tracking-widest text-slate-400 mb-4 px-2">{t('customers.print.history')}</h3>
-                  <table className="w-full text-sm border-collapse">
-                     <thead>
-                        <tr className="bg-slate-50 border-y border-slate-200">
-                           <th className="px-4 py-3 text-left font-bold text-slate-700">{t('common.date')}</th>
-                           <th className="px-4 py-3 text-left font-bold text-slate-700">{t('pos.order_summary')} ID</th>
-                           <th className="px-4 py-3 text-right font-bold text-slate-700">{t('common.amount')}</th>
-                           <th className="px-4 py-3 text-center font-bold text-slate-700">{t('common.status')}</th>
-                        </tr>
-                     </thead>
-                     <tbody>
-                        {selectedCustomer.sales.map((sale) => (
-                           <tr key={sale.id} className="border-b border-slate-100">
-                              <td className="px-4 py-3 text-slate-600 font-medium">{new Date(sale.created_at || Date.now()).toLocaleDateString()}</td>
-                              <td className="px-4 py-3 font-mono text-xs text-slate-500">{sale.id}</td>
-                              <td className="px-4 py-3 text-right font-bold text-slate-950">{formatCurrency(sale.total_amount)}</td>
-                              <td className="px-4 py-3 text-center text-[10px] font-bold uppercase tracking-wider text-slate-400">{sale.payment_status}</td>
-                           </tr>
-                        ))}
-                        {selectedCustomer.sales.length === 0 && (
-                           <tr>
-                              <td colSpan={4} className="px-4 py-8 text-center text-slate-400 italic">{t('customers.print.no_history')}</td>
-                           </tr>
-                        )}
-                     </tbody>
-                  </table>
-               </div>
-
-               <div className="grid grid-cols-2 gap-8 pt-8 border-t border-slate-100">
-                  <div>
-                     <p className="text-xs font-bold uppercase text-slate-400 mb-1">{t('customers.print.total_purchases')}</p>
-                     <p className="text-lg font-black text-slate-950">{formatCurrency(selectedCustomer.totalPurchase)}</p>
-                  </div>
-               </div>
-
-               <div className="mt-20 text-center border-t border-slate-100 pt-8">
-                  <p className="text-xs text-slate-400 italic">{t('customers.print.footer')}</p>
-               </div>
+      {/* ── CUSTOMER PRINT PORTAL ── */}
+      {selectedCustomer && createPortal(
+        <div className="print-doc" style={{ padding: '18mm', fontFamily: 'system-ui, sans-serif', color: '#0f172a' }}>
+          {/* Header */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #0f172a', paddingBottom: '16px', marginBottom: '24px' }}>
+            <div>
+              <p style={{ fontSize: '9px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.2em', color: '#94a3b8', marginBottom: '4px' }}>{t('customers.print.title')}</p>
+              <p style={{ fontSize: '9px', color: '#94a3b8' }}>{t('customers.print.generated_on')} {new Date().toLocaleDateString()}</p>
+              <h1 style={{ fontSize: '22px', fontWeight: 900, margin: '8px 0 2px' }}>{selectedCustomer.name}</h1>
+              <p style={{ fontSize: '11px', color: '#64748b' }}>{selectedCustomer.contact}</p>
+              <p style={{ fontSize: '11px', color: '#64748b' }}>{selectedCustomer.address}</p>
             </div>
-         )}
-      </div>
+            <div style={{ textAlign: 'right' }}>
+              <p style={{ fontSize: '9px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.15em', color: '#94a3b8', marginBottom: '4px' }}>{t('customers.print.outstanding')}</p>
+              <p style={{ fontSize: '28px', fontWeight: 900, color: selectedCustomer.unpaidAmount > 0 ? '#dc2626' : '#059669' }}>{formatCurrency(selectedCustomer.unpaidAmount)}</p>
+            </div>
+          </div>
 
-      <style dangerouslySetInnerHTML={{ __html: `
-        @media print {
-          body * {
-            visibility: hidden;
-          }
-          .print\\:block, .print\\:block * {
-            visibility: visible;
-          }
-          .print\\:block {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 100%;
-          }
-        }
-      `}} />
+          {/* Purchase History */}
+          <p style={{ fontSize: '9px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.2em', color: '#94a3b8', marginBottom: '10px' }}>{t('customers.print.history')}</p>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', marginBottom: '20px' }}>
+            <thead>
+              <tr style={{ background: '#0f172a', color: 'white' }}>
+                <th style={{ padding: '9px 12px', textAlign: 'left', fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{t('common.date')}</th>
+                <th style={{ padding: '9px 12px', textAlign: 'left', fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Order #</th>
+                <th style={{ padding: '9px 12px', textAlign: 'right', fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{t('common.amount')}</th>
+                <th style={{ padding: '9px 12px', textAlign: 'center', fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{t('common.status')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {selectedCustomer.sales.length === 0 ? (
+                <tr><td colSpan={4} style={{ padding: '16px', textAlign: 'center', color: '#94a3b8', fontStyle: 'italic' }}>{t('customers.print.no_history')}</td></tr>
+              ) : selectedCustomer.sales.map((sale, idx) => (
+                <tr key={sale.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                  <td style={{ padding: '9px 12px', color: '#64748b' }}>{new Date(sale.created_at || Date.now()).toLocaleDateString()}</td>
+                  <td style={{ padding: '9px 12px', fontWeight: 700 }}>#{String(idx + 1).padStart(4, '0')}</td>
+                  <td style={{ padding: '9px 12px', textAlign: 'right', fontWeight: 800 }}>{formatCurrency(sale.total_amount)}</td>
+                  <td style={{ padding: '9px 12px', textAlign: 'center', fontSize: '9px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: sale.payment_status === 'paid' ? '#059669' : '#d97706' }}>{sale.payment_status}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {/* Totals */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '2px solid #e2e8f0', paddingTop: '12px' }}>
+            <div>
+              <p style={{ fontSize: '9px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.15em', color: '#94a3b8', marginBottom: '2px' }}>{t('customers.print.total_purchases')}</p>
+              <p style={{ fontSize: '18px', fontWeight: 900 }}>{formatCurrency(selectedCustomer.totalPurchase)}</p>
+            </div>
+          </div>
+
+          <p style={{ fontSize: '10px', color: '#94a3b8', textAlign: 'center', marginTop: '24px', borderTop: '1px solid #e2e8f0', paddingTop: '12px', fontStyle: 'italic' }}>{t('customers.print.footer')}</p>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }
