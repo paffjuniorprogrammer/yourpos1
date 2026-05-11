@@ -397,11 +397,11 @@ export function SalesPage() {
                       <td className="border-b border-slate-100 px-5 py-4 text-slate-600">{sale.cashier_name}</td>
                       <td className="border-b border-slate-100 px-5 py-4 text-slate-600">{new Date(sale.created_at).toLocaleDateString()}</td>
                       <td className="border-b border-slate-100 px-5 py-4">
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <button onClick={() => handleViewSaleDetails(sale)} className="rounded-xl bg-slate-50 p-2 text-slate-600 transition hover:bg-slate-100" title="View"><Eye size={15} /></button>
+                        <div className="flex items-center gap-1">
+                          <button onClick={() => handleViewSaleDetails(sale)} className="rounded-xl bg-slate-50 p-1.5 text-slate-600 transition hover:bg-slate-100" title="View"><Eye size={14} /></button>
                           {can("Sales", "edit") && (
                             <>
-                              <button onClick={() => { setSelectedSale(sale); handleViewSaleDetails(sale).then(() => setShowEditModal(true)); }} className="rounded-xl bg-sky-50 p-2 text-sky-600 transition hover:bg-sky-100" title="Edit"><Pencil size={15} /></button>
+                              <button onClick={() => { setSelectedSale(sale); handleViewSaleDetails(sale).then(() => setShowEditModal(true)); }} className="rounded-xl bg-sky-50 p-1.5 text-sky-600 transition hover:bg-sky-100" title="Edit"><Pencil size={14} /></button>
                               <button disabled={sale.payment_status === "paid"} onClick={() => { 
                                 setSelectedSale(sale); 
                                 handleViewSaleDetails(sale).then((details) => {
@@ -412,16 +412,16 @@ export function SalesPage() {
                                   }
                                   setShowPaymentModal(true);
                                 });
-                              }} className={`rounded-xl p-2 transition ${sale.payment_status === "paid" ? "bg-slate-50 text-slate-300" : "bg-emerald-50 text-emerald-600 hover:bg-emerald-100"}`} title="Payment"><CreditCard size={15} /></button>
+                              }} className={`rounded-xl p-1.5 transition ${sale.payment_status === "paid" ? "bg-slate-50 text-slate-300" : "bg-emerald-50 text-emerald-600 hover:bg-emerald-100"}`} title="Payment"><CreditCard size={14} /></button>
                               {!(sale as any).sale_returns?.length && (
-                                <button onClick={() => { handleViewSaleDetails(sale).then(() => setShowReturnModal(true)); }} className="rounded-xl bg-amber-50 p-2 text-amber-600 transition hover:bg-amber-100" title="Return/Refund"><ArrowLeftRight size={15} /></button>
+                                <button onClick={() => { handleViewSaleDetails(sale).then(() => setShowReturnModal(true)); }} className="rounded-xl bg-amber-50 p-1.5 text-amber-600 transition hover:bg-amber-100" title="Return/Refund"><ArrowLeftRight size={14} /></button>
                               )}
                             </>
                           )}
-                          <button onClick={() => { setSelectedSale(sale); handleViewSaleDetails(sale).then(() => handlePrint("receipt")); }} className="rounded-xl bg-orange-50 p-2 text-orange-600 transition hover:bg-orange-100" title="Print Receipt"><Printer size={15} /></button>
-                          <button onClick={() => { setSelectedSale(sale); handleViewSaleDetails(sale).then(() => handlePrint("invoice")); }} className="rounded-xl bg-brand-50 p-2 text-brand-600 transition hover:bg-brand-100" title="A4 Invoice"><FileText size={15} /></button>
+                          <button onClick={() => { setSelectedSale(sale); handleViewSaleDetails(sale).then(() => handlePrint("receipt")); }} className="rounded-xl bg-orange-50 p-1.5 text-orange-600 transition hover:bg-orange-100" title="Print Receipt"><Printer size={14} /></button>
+                          <button onClick={() => { setSelectedSale(sale); handleViewSaleDetails(sale).then(() => handlePrint("invoice")); }} className="rounded-xl bg-brand-50 p-1.5 text-brand-600 transition hover:bg-brand-100" title="A4 Invoice"><FileText size={14} /></button>
                           {can("Sales", "delete") && (
-                            <button onClick={() => handleDeleteSale(sale.id)} className="rounded-xl bg-rose-50 p-2 text-rose-600 transition hover:bg-rose-100" title="Delete"><Trash2 size={15} /></button>
+                            <button onClick={() => handleDeleteSale(sale.id)} className="rounded-xl bg-rose-50 p-1.5 text-rose-600 transition hover:bg-rose-100" title="Delete"><Trash2 size={14} /></button>
                           )}
                         </div>
                       </td>

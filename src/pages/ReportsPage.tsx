@@ -155,14 +155,6 @@ export function ReportsPage() {
             <p>{t('reports.updated_at', { time: lastRefreshed })}</p>
           </div>
           <button 
-            onClick={() => window.print()}
-            className="flex items-center gap-2 rounded-2xl bg-indigo-50 px-4 py-3 text-indigo-600 font-bold shadow-soft transition hover:bg-indigo-100"
-            title={t('reports.print.button')}
-          >
-            <Printer size={18} />
-            <span className="hidden sm:inline">{t('reports.print.button')}</span>
-          </button>
-          <button 
             onClick={() => void loadReports(true)}
             className="rounded-2xl bg-white p-3 text-brand-600 shadow-soft transition hover:bg-brand-50"
             title={t('reports.refresh')}
