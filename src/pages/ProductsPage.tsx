@@ -651,8 +651,8 @@ export function ProductsPage() {
                         <td className="border-b border-slate-100 px-5 py-4 text-slate-600">
                           {categoryMap.get(product.category_id ?? "") ?? "Uncategorized"}
                         </td>
-                        <td className="border-b border-slate-100 px-5 py-4 text-slate-600">{currency(product.cost_price)}</td>
-                        <td className="border-b border-slate-100 px-5 py-4 font-semibold text-brand-600">{currency(product.selling_price)}</td>
+                        <td className="border-b border-slate-100 px-5 py-4 text-slate-600">{formatCurrency(product.cost_price)}</td>
+                        <td className="border-b border-slate-100 px-5 py-4 font-semibold text-brand-600">{formatCurrency(product.selling_price)}</td>
                         <td className="border-b border-slate-100 px-5 py-4">
                           <span className={`rounded-full px-3 py-1 text-xs font-semibold ${lowStock ? "bg-rose-50 text-rose-600" : "bg-emerald-50 text-emerald-600"}`}>
                             {product.stock_quantity} - {status}
@@ -1009,7 +1009,7 @@ export function ProductsPage() {
                 <div className="rounded-3xl border border-indigo-100 bg-indigo-50/80 p-3.5">
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-indigo-700">{t('settings.finance.title')}</p>
                   <p className="mt-2 text-sm text-slate-600">{t('products.modal.pricing_formula')}</p>
-                  <p className="mt-2 text-lg font-bold text-indigo-700">{currency(Number(values.selling_price || 0))}</p>
+                  <p className="mt-2 text-lg font-bold text-indigo-700">{formatCurrency(Number(values.selling_price || 0))}</p>
                 </div>
 
                 <div className="flex gap-3">
@@ -1055,8 +1055,8 @@ export function ProductsPage() {
             <div className="grid gap-4 md:grid-cols-5">
               {[
                 [t('products.table.category'), categoryMap.get(reportProduct.category_id ?? "") ?? t('products.uncategorized')],
-                [t('products.table.cost'), currency(reportProduct.cost_price)],
-                [t('products.table.price'), currency(reportProduct.selling_price)],
+                [t('products.table.cost'), formatCurrency(reportProduct.cost_price)],
+                [t('products.table.price'), formatCurrency(reportProduct.selling_price)],
                 [t('products.table.stock'), String(reportProduct.stock_quantity)],
                 [t('products.modal.barcode'), reportProduct.barcode ?? "N/A"],
               ].map(([label, value]) => (
@@ -1077,12 +1077,12 @@ export function ProductsPage() {
                   </div>
                   <div className="rounded-2xl bg-white p-4 shadow-sm border border-brand-100">
                     <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">{t('products.report.total_revenue')}</p>
-                    <p className="mt-2 text-2xl font-bold text-emerald-600">{currency(reportAggregates.total_revenue)}</p>
+                    <p className="mt-2 text-2xl font-bold text-emerald-600">{formatCurrency(reportAggregates.total_revenue)}</p>
                   </div>
                   <div className="rounded-2xl bg-white p-4 shadow-sm border border-brand-100">
                     <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">{t('reports.profit')}</p>
                     <p className="mt-2 text-2xl font-bold text-indigo-600">
-                      {currency(reportAggregates.total_revenue - (reportAggregates.total_sold * (Number(reportProduct.cost_price) || 0)))}
+                      {formatCurrency(reportAggregates.total_revenue - (reportAggregates.total_sold * (Number(reportProduct.cost_price) || 0)))}
                     </p>
                   </div>
                   <div className="rounded-2xl bg-white p-4 shadow-sm border border-brand-100">
@@ -1117,8 +1117,8 @@ export function ProductsPage() {
                             <tr key={index}>
                               <td className="py-3">{sale.date}</td>
                               <td className="py-3">{sale.qty}</td>
-                              <td className="py-3">{currency(sale.price)}</td>
-                              <td className="py-3">{currency(sale.total)}</td>
+                              <td className="py-3">{formatCurrency(sale.price)}</td>
+                              <td className="py-3">{formatCurrency(sale.total)}</td>
                               <td className="py-3">{sale.customer}</td>
                             </tr>
                           ))
@@ -1158,7 +1158,7 @@ export function ProductsPage() {
                             <tr key={index}>
                               <td className="py-3">{purchase.date}</td>
                               <td className="py-3">{purchase.qty}</td>
-                              <td className="py-3">{currency(purchase.cost)}</td>
+                              <td className="py-3">{formatCurrency(purchase.cost)}</td>
                               <td className="py-3">{purchase.supplier}</td>
                             </tr>
                           ))

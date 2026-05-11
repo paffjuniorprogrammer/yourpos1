@@ -12,7 +12,8 @@ import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
 import { Eye, X, Printer, Check, Clock, Calendar, TrendingUp, TrendingDown, DollarSign } from "lucide-react";
 import { getDailyReport, getRecentReturns, getRecentShifts, getReportCards, getFinancialReport, getAggregatedProductsSold, getDebtPaymentsReport, getShiftClosure } from "../services/reportsService";
-import type { ReportCard, FinancialSummary, DayClosureRecord } from "../services/reportsService";
+import type { ReportCard, FinancialSummary } from "../services/reportsService";
+import type { DayClosureRecord } from "../types/database";
 import { formatCurrency } from "../lib/format";
 
 

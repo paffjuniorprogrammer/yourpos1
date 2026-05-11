@@ -1,5 +1,6 @@
 import { ensureSupabaseConfigured } from "./supabaseUtils";
 import { formatCurrency } from "../lib/format";
+import type { DayClosureRecord } from "../types/database";
 
 // Simple in-memory cache for report data
 let cardsCache: { data: ReportCard[], timestamp: number } | null = null;
@@ -276,7 +277,7 @@ export async function getFinancialReport(startDate: string, endDate: string): Pr
   // 2. Get all sale items for these sales to calculate cost
   const saleIds = sales?.map(s => s.id) || [];
   if (saleIds.length === 0) {
-    return { totalSales: 0, totalCost: 0, grossProfit: 0, taxCollected: 0, netIncome: 0 };
+    return { totalSales: 0, totalCost: 0, grossProfit: 0, taxCollected: 0, netSales: 0, netIncome: 0 };
   }
   
   // We fetch in chunks if there are too many sales (supabase 'in' limit is usually ~1000)
