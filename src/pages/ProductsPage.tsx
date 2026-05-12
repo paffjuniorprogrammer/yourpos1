@@ -285,9 +285,7 @@ export function ProductsPage() {
               ? status === t('products.in_stock')
               : status === t('products.out_of_stock');
 
-      const matchesLocation = locationFilter === "all" ? true : (product as any).product_stocks?.some((ps: any) => ps.location_id === locationFilter);
-
-      return matchesSearch && matchesCategory && matchesStock && matchesLocation;
+      return matchesSearch && matchesCategory && matchesStock;
     });
   }, [categoryFilter, products, search, stockFilter, locationFilter, t]);
 
