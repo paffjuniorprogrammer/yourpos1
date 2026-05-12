@@ -42,7 +42,7 @@ export async function generateApiKey(name: string) {
       key_hash: keyHash,
       key_prefix: prefix,
     })
-    .select()
+    .select("*")
     .single();
 
   if (error) throw error;

@@ -15,7 +15,7 @@ interface Props {
 
 export function QuickAddProductModal({ isOpen, onClose, onSuccess }: Props) {
   const { showToast } = useNotification();
-  const { activeLocationId } = useAuth();
+  const { activeLocationId, business } = useAuth();
   const { refreshData } = usePosData();
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(false);
@@ -83,7 +83,7 @@ export function QuickAddProductModal({ isOpen, onClose, onSuccess }: Props) {
         cost_price: Number(form.cost_price),
         selling_price: Number(form.selling_price),
         image_url: "",
-      });
+      }, business?.id || "");
       
       await refreshData();
       

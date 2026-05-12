@@ -263,6 +263,7 @@ export function SettingsPage() {
             email: user.email,
             phone: "",
             role: user.role,
+            language: user.language,
             locationId: user.location_id,
             assignedLocationIds: (user as any).user_locations?.map((ul: any) => ul.location_id) || [],
             permissions: buildStaffPermissions(
@@ -707,7 +708,7 @@ export function SettingsPage() {
               <table className="min-w-full border-separate border-spacing-0 text-sm">
                 <thead className="bg-gradient-to-r from-slate-900 via-slate-800 to-brand-700 text-white">
                   <tr>
-                    {[t('settings.staff.col_staff'), t('settings.staff.col_role'), t('settings.staff.col_location'), t('settings.staff.col_permissions'), t('settings.staff.col_actions')].map((column) => (
+                    {[t('settings.staff.col_staff'), t('settings.staff.col_role'), t('settings.staff.col_location'), t('settings.personal.language'), t('settings.staff.col_permissions'), t('settings.staff.col_actions')].map((column) => (
                       <th key={column} className="border-b border-white/10 px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-100">
                         {column}
                       </th>
@@ -735,6 +736,11 @@ export function SettingsPage() {
                               : staff.role === "admin" ? t('settings.staff.global_access') : t('settings.staff.no_locations')}
                           </span>
                         </div>
+                      </td>
+                      <td className="border-b border-slate-100 px-5 py-4">
+                        <span className="text-xs font-bold uppercase tracking-widest text-slate-500">
+                          {(staff as any).language || 'en'}
+                        </span>
                       </td>
                       <td className="border-b border-slate-100 px-5 py-4">
                         <div className="flex flex-wrap gap-2">

@@ -42,7 +42,7 @@ export async function createProductVariant(input: CreateVariantInput) {
       additional_price: input.additional_price ?? 0,
       stock_quantity: input.stock_quantity ?? 0,
     })
-    .select()
+    .select("*")
     .single();
   if (error) throw error;
   return data as ProductVariant;
@@ -57,7 +57,7 @@ export async function updateProductVariant(
     .from("product_variants")
     .update(updates)
     .eq("id", id)
-    .select()
+    .select("*")
     .single();
   if (error) throw error;
   return data as ProductVariant;

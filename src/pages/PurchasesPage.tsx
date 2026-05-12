@@ -10,7 +10,7 @@ import { SectionCard } from "../components/ui/SectionCard";
 import { Pagination } from "../components/ui/Pagination";
 import { QuickAddProductModal } from "../components/ui/QuickAddProductModal";
 import { useAsyncAction } from "../hooks/useAsyncAction";
-import { createPurchase, deletePurchase, listPurchases, updatePurchase, updatePurchaseStatus, type PurchaseSummary } from "../services/purchaseService";
+import { addPurchasePayment, createPurchase, deletePurchase, listPurchases, updatePurchase, updatePurchaseStatus, type PurchaseSummary } from "../services/purchaseService";
 import { listProducts } from "../services/productService";
 import { listSuppliers, createSupplier } from "../services/supplierService";
 import { listLocations, getShopSettingsRecord } from "../services/settingsService";
@@ -24,6 +24,7 @@ import {
   autoMarkOverdue,
   type PaymentSchedule,
 } from "../services/paymentScheduleService";
+import type { PaymentMethod } from "../types/database";
 
 type PaymentStatus = "Paid" | "Due" | "Partially Paid";
 type DeliveryStatus = "Pending" | "Received";
@@ -46,6 +47,9 @@ type PurchaseFormState = {
   supplier: string;
   location: string;
   paymentStatus: PaymentStatus;
+  paidAmount: string;
+  paymentMethod: PaymentMethod;
+  paymentDate: string;
   deliveryStatus: DeliveryStatus;
   date: string;
   items: PurchaseLine[];
@@ -57,6 +61,9 @@ const createEmptyForm = (): PurchaseFormState => ({
   supplier: "",
   location: "",
   paymentStatus: "Due",
+  paidAmount: "",
+  paymentMethod: "cash",
+  paymentDate: new Date().toISOString().split("T")[0],
   deliveryStatus: "Pending",
   date: new Date().toISOString().split("T")[0],
   items: [],
@@ -70,9 +77,43 @@ function lineTotal(item: PurchaseLine) {
   return item.quantity * item.purchasePrice;
 }
 
+function getScheduleDaysLeft(dueDate: string) {
+  const [year, month, day] = dueDate.split("-").map(Number);
+  const due = new Date(year, month - 1, day);
+  const today = new Date();
+  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
+  return Math.round((due.getTime() - todayStart.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+function formatScheduleCountdown(dueDate: string) {
+  const daysLeft = getScheduleDaysLeft(dueDate);
+
+  if (daysLeft < 0) {
+    const overdueDays = Math.abs(daysLeft);
+    return {
+      label: `${overdueDays} ${overdueDays === 1 ? "day" : "days"} overdue`,
+      tone: "overdue" as const,
+    };
+  }
+
+  if (daysLeft === 0) {
+    return { label: "Due today", tone: "today" as const };
+  }
+
+  if (daysLeft === 1) {
+    return { label: "1 day left", tone: "soon" as const };
+  }
+
+  return {
+    label: `${daysLeft} days left`,
+    tone: daysLeft <= 3 ? ("soon" as const) : ("upcoming" as const),
+  };
+}
+
 export function PurchasesPage() {
   const { t } = useTranslation();
-  const { can } = useAuth();
+  const { can, business } = useAuth();
 
   const { showToast, confirm } = useNotification();
   const { settings } = useSettings();
@@ -98,6 +139,7 @@ export function PurchasesPage() {
   const [savingSupplier, setSavingSupplier] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
+  const [loading, setLoading] = useState(true);
   const ITEMS_PER_PAGE = 10;
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -110,6 +152,11 @@ export function PurchasesPage() {
   const [scheduleNotes, setScheduleNotes] = useState("");
   const [savingSchedule, setSavingSchedule] = useState(false);
   const [showScheduleList, setShowScheduleList] = useState(false);
+  const [paymentPurchase, setPaymentPurchase] = useState<PurchaseRow | null>(null);
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
+  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split("T")[0]);
+  const [savingPayment, setSavingPayment] = useState(false);
 
   const { run } = useAsyncAction();
 
@@ -130,7 +177,7 @@ export function PurchasesPage() {
         phone: newSupplierPhone.trim(),
         email: "",
         address: "",
-      });
+      }, business?.id || "");
       // Update local options - proper state, no window hacks
       setSupplierOptions(prev => [...prev, created.name]);
       setSupplierObjects(prev => [...prev, { id: created.id, name: created.name }]);
@@ -148,16 +195,18 @@ export function PurchasesPage() {
     }
   }
 
-  const loadPage = async () => {
-    const [{ data: purchases, count }, products, suppliers, locations] = await Promise.all([
-      listPurchases({ page: currentPage, pageSize: ITEMS_PER_PAGE, search: search }),
-      listProducts(),
-      listSuppliers(),
-      listLocations(),
-    ]);
+  const loadPage = async (showLoading = true) => {
+    if (showLoading) setLoading(true);
+    try {
+      const [{ data: purchases, count }, products, suppliers, locations] = await Promise.all([
+        listPurchases({ page: currentPage, pageSize: ITEMS_PER_PAGE, search: search }),
+        listProducts(),
+        listSuppliers(),
+        listLocations(),
+      ]);
 
-    setRows(purchases);
-    setTotalCount(count);
+      setRows(purchases);
+      setTotalCount(count);
     
     // Load payment schedules too
     try {
@@ -202,6 +251,11 @@ export function PurchasesPage() {
       supplier: suppliers[0]?.name || "",
       location: locations[0]?.name || "",
     }));
+    } catch (error) {
+      console.error("Failed to load purchases:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -251,7 +305,7 @@ export function PurchasesPage() {
         await updatePurchase(id, {
           supplier_id: supplierId,
           total_cost: Number(rows.find(r => r.id === id)?.amount.replace(/[$,]/g, '') || 0),
-          payment_status: status.toLowerCase() as any,
+          payment_status: mapPaymentStatusToDb(status),
         });
         setRows((current) => current.map((row) => (row.id === id ? { ...row, paymentStatus: status } : row)));
       });
@@ -308,6 +362,9 @@ export function PurchasesPage() {
       supplier: row.supplier,
       location: row.location,
       paymentStatus: row.paymentStatus,
+      paidAmount: row.paidAmount ? String(row.paidAmount) : "",
+      paymentMethod: "cash",
+      paymentDate: new Date().toISOString().split("T")[0],
       deliveryStatus: row.deliveryStatus,
       date: row.date,
       items: row.items,
@@ -389,6 +446,39 @@ export function PurchasesPage() {
     return "unpaid"; // Due -> unpaid
   }
 
+  function openPaymentModal(row: PurchaseRow, amount = row.remainingAmount) {
+    setPaymentPurchase(row);
+    setPaymentAmount(String(Math.max(0, Math.round(amount))));
+    setPaymentMethod("cash");
+    setPaymentDate(new Date().toISOString().split("T")[0]);
+  }
+
+  async function handleRecordPurchasePayment() {
+    if (!paymentPurchase || !paymentAmount) return;
+    const amount = Number(paymentAmount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      showToast("error", "Enter a valid payment amount.");
+      return;
+    }
+    if (amount > paymentPurchase.remainingAmount) {
+      showToast("error", "Payment cannot be more than the remaining balance.");
+      return;
+    }
+
+    try {
+      setSavingPayment(true);
+      await addPurchasePayment(paymentPurchase.id, paymentMethod, amount, paymentDate);
+      setPaymentPurchase(null);
+      setPaymentAmount("");
+      await loadPage();
+      showToast("success", "Supplier payment recorded.");
+    } catch (error: any) {
+      showToast("error", error?.message || "Failed to record supplier payment.");
+    } finally {
+      setSavingPayment(false);
+    }
+  }
+
   async function savePurchase() {
     if (!purchaseForm.items.length) return;
 
@@ -406,6 +496,18 @@ export function PurchasesPage() {
 
     await run(async () => {
       try {
+        const initialPaidAmount =
+          purchaseForm.paymentStatus === "Paid"
+            ? purchaseTotal
+            : purchaseForm.paymentStatus === "Partially Paid"
+              ? Number(purchaseForm.paidAmount || 0)
+              : 0;
+
+        if (purchaseForm.paymentStatus === "Partially Paid" && (initialPaidAmount <= 0 || initialPaidAmount >= purchaseTotal)) {
+          showToast("warning", "Partial payment must be more than 0 and less than the total.");
+          return;
+        }
+
         if (purchaseForm.id) {
           await updatePurchase(purchaseForm.id, {
             supplier_id: supplierId,
@@ -418,6 +520,9 @@ export function PurchasesPage() {
             location_id: locationId,
             total_cost: purchaseTotal,
             payment_status: mapPaymentStatusToDb(purchaseForm.paymentStatus),
+            paid_amount: initialPaidAmount,
+            payment_method: purchaseForm.paymentMethod,
+            paid_at: purchaseForm.paymentDate,
             items: purchaseForm.items.map(item => ({
               product_id: item.productId,
               quantity: item.quantity,
@@ -497,8 +602,29 @@ export function PurchasesPage() {
 
                 </tr>
               </thead>
-              <tbody className="bg-white">
-                {noResults ? (
+              <tbody className="bg-white relative">
+                {/* Loading overlay */}
+                {loading && rows.length > 0 && (
+                  <tr className="absolute inset-0 z-10 flex items-center justify-center bg-white/40 backdrop-blur-[1px]">
+                    <td colSpan={8} className="h-full w-full flex items-center justify-center py-20">
+                       <div className="flex flex-col items-center gap-3">
+                          <div className="h-10 w-10 animate-spin rounded-full border-4 border-brand-100 border-t-brand-600"></div>
+                          <p className="text-xs font-bold uppercase tracking-widest text-brand-700">{t('common.processing')}</p>
+                       </div>
+                    </td>
+                  </tr>
+                )}
+
+                {loading && rows.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="px-5 py-20 text-center text-slate-500">
+                      <div className="flex flex-col items-center gap-4">
+                        <div className="h-12 w-12 animate-spin rounded-full border-4 border-brand-100 border-t-brand-600"></div>
+                        <p className="font-semibold">{t('common.loading')}</p>
+                      </div>
+                    </td>
+                  </tr>
+                ) : noResults ? (
                   <tr>
                     <td colSpan={8} className="px-5 py-10 text-center text-slate-500">
                       {t('purchases.no_purchases')}
@@ -520,7 +646,20 @@ export function PurchasesPage() {
                       </td>
                       <td className="border-b border-slate-100 px-4 py-3 text-slate-700 font-medium text-sm truncate max-w-[150px]" title={row.supplier}>{row.supplier}</td>
                       <td className="border-b border-slate-100 px-4 py-3 text-slate-500 text-sm truncate max-w-[120px]" title={row.location}>{row.location}</td>
-                      <td className="border-b border-slate-100 px-4 py-3 font-bold text-brand-600 text-sm">{row.amount}</td>
+                      <td className="border-b border-slate-100 px-4 py-3">
+                        <p className="font-bold text-brand-600 text-sm">{row.amount}</p>
+                        {row.paidAmount > 0 && (
+                          <div className="mt-1 space-y-0.5 text-[10px] font-semibold">
+                            <p className="text-emerald-600">Paid: {formatMoney(row.paidAmount)}</p>
+                            <p className={row.remainingAmount > 0 ? "text-amber-600" : "text-slate-400"}>
+                              Left: {formatMoney(row.remainingAmount)}
+                            </p>
+                            {row.lastPaymentDate && (
+                              <p className="text-slate-400">Last: {new Date(row.lastPaymentDate).toLocaleDateString()}</p>
+                            )}
+                          </div>
+                        )}
+                      </td>
                       <td className="border-b border-slate-100 px-4 py-3">
                         <button
                           onClick={(e) => setStatusPopup({ id: row.id, type: "payment", anchor: e.currentTarget.getBoundingClientRect() })}
@@ -560,10 +699,15 @@ export function PurchasesPage() {
                             <Printer size={14} />
                           </button>
                           {can("Purchases", "edit") && row.paymentStatus !== "Paid" && (
+                            <button onClick={() => openPaymentModal(row)} className="rounded-lg bg-emerald-50 p-1.5 text-emerald-600 transition hover:bg-emerald-100" title="Record Payment">
+                              <CreditCard size={14} />
+                            </button>
+                          )}
+                          {can("Purchases", "edit") && row.paymentStatus !== "Paid" && (
                             <button
                               onClick={() => {
                                 setSchedulePurchase(row);
-                                setScheduleAmount(row.amount.replace(/[^0-9.]/g, ""));
+                                setScheduleAmount(String(Math.round(row.remainingAmount || row.totalCost)));
                                 setScheduleDate(new Date(Date.now() + 7 * 86400000).toISOString().split("T")[0]);
                                 setScheduleNotes("");
                                 setScheduleModalOpen(true);
@@ -618,9 +762,20 @@ export function PurchasesPage() {
                     <button
                       key={val}
                       onClick={async () => {
-                        await updatePurchaseStatus(statusPopup.id, "payment_status", val);
+                        const row = rows.find((item) => item.id === statusPopup.id);
                         setStatusPopup(null);
-                        run(loadPage);
+                        if (val === "unpaid") {
+                          if (row && row.paidAmount > 0) {
+                            showToast("warning", "This purchase already has payments recorded.");
+                            return;
+                          }
+                          await updatePurchaseStatus(statusPopup.id, "payment_status", val);
+                          run(loadPage);
+                          return;
+                        }
+                        if (row) {
+                          openPaymentModal(row, val === "paid" ? row.remainingAmount : Math.max(1, row.remainingAmount));
+                        }
                       }}
                       className={`w-full rounded-xl px-4 py-2.5 text-left text-sm font-semibold transition ${colors}`}
                     >
@@ -752,7 +907,7 @@ export function PurchasesPage() {
                 <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">{t('purchases.modal.payment')}</label>
                 <select
                   value={purchaseForm.paymentStatus}
-                  onChange={(e) => setPurchaseForm({ ...purchaseForm, paymentStatus: e.target.value as PaymentStatus })}
+                  onChange={(e) => setPurchaseForm({ ...purchaseForm, paymentStatus: e.target.value as PaymentStatus, paidAmount: e.target.value === "Due" ? "" : purchaseForm.paidAmount })}
                   className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2 px-3 text-sm outline-none focus:border-brand-500 transition"
                 >
                   <option value="Paid">{t('purchases.status.paid')}</option>
@@ -760,6 +915,47 @@ export function PurchasesPage() {
                   <option value="Partially Paid">{t('purchases.status.partial')}</option>
                 </select>
               </div>
+
+              {purchaseForm.paymentStatus !== "Due" && (
+                <>
+                  {purchaseForm.paymentStatus === "Partially Paid" && (
+                    <div>
+                      <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">Paid amount</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max={purchaseTotal || undefined}
+                        value={purchaseForm.paidAmount}
+                        onChange={(e) => setPurchaseForm({ ...purchaseForm, paidAmount: e.target.value })}
+                        className="w-full rounded-xl border border-emerald-100 bg-emerald-50 py-2 px-3 text-sm font-bold text-emerald-700 outline-none focus:border-emerald-500 transition"
+                        placeholder="Amount already paid"
+                      />
+                    </div>
+                  )}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">Payment method</label>
+                    <select
+                      value={purchaseForm.paymentMethod}
+                      onChange={(e) => setPurchaseForm({ ...purchaseForm, paymentMethod: e.target.value as PaymentMethod })}
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2 px-3 text-sm outline-none focus:border-brand-500 transition"
+                    >
+                      <option value="cash">Cash</option>
+                      <option value="momo">Momo</option>
+                      <option value="card">Card</option>
+                      <option value="bank">Bank</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">Payment date</label>
+                    <input
+                      type="date"
+                      value={purchaseForm.paymentDate}
+                      onChange={(e) => setPurchaseForm({ ...purchaseForm, paymentDate: e.target.value })}
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2 px-3 text-sm outline-none focus:border-brand-500 transition"
+                    />
+                  </div>
+                </>
+              )}
 
 
               {/* Delivery */}
@@ -1112,6 +1308,16 @@ export function PurchasesPage() {
                     </span>
                   </div>
                   <p className="mt-3 text-2xl font-black text-brand-700">{selectedPurchase.amount}</p>
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs font-bold">
+                    <div className="rounded-xl bg-white/70 px-3 py-2">
+                      <p className="text-slate-400">Paid</p>
+                      <p className="text-emerald-600">{formatMoney(selectedPurchase.paidAmount)}</p>
+                    </div>
+                    <div className="rounded-xl bg-white/70 px-3 py-2">
+                      <p className="text-slate-400">Left</p>
+                      <p className="text-amber-600">{formatMoney(selectedPurchase.remainingAmount)}</p>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -1203,6 +1409,77 @@ export function PurchasesPage() {
         </div>
       )}
 
+      {/* Record Supplier Payment Modal */}
+      {paymentPurchase && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/50 px-4 backdrop-blur-sm" onClick={() => setPaymentPurchase(null)}>
+          <div className="w-full max-w-md rounded-[2rem] bg-white p-8 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-6 flex items-center justify-between">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-widest text-emerald-600 mb-1">Supplier payment</p>
+                <h2 className="text-xl font-bold text-ink">{paymentPurchase.supplier}</h2>
+                <p className="text-sm text-slate-500 mt-1">{paymentPurchase.purchaseNumber ? `#${paymentPurchase.purchaseNumber}` : paymentPurchase.id.substring(0, 8)}</p>
+              </div>
+              <button onClick={() => setPaymentPurchase(null)} className="rounded-full bg-slate-100 p-2 text-slate-500 hover:bg-slate-200">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="mb-5 grid grid-cols-3 gap-2 rounded-2xl bg-slate-50 p-3 text-center text-xs font-bold">
+              <div>
+                <p className="text-slate-400">Total</p>
+                <p className="text-slate-900">{formatMoney(paymentPurchase.totalCost)}</p>
+              </div>
+              <div>
+                <p className="text-slate-400">Paid</p>
+                <p className="text-emerald-600">{formatMoney(paymentPurchase.paidAmount)}</p>
+              </div>
+              <div>
+                <p className="text-slate-400">Left</p>
+                <p className="text-amber-600">{formatMoney(paymentPurchase.remainingAmount)}</p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <label className="block">
+                <span className="text-sm font-medium text-slate-700">Amount paid</span>
+                <input
+                  type="number"
+                  min="0"
+                  max={paymentPurchase.remainingAmount}
+                  value={paymentAmount}
+                  onChange={(e) => setPaymentAmount(e.target.value)}
+                  className="mt-1 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 font-bold outline-none focus:border-emerald-500"
+                />
+              </label>
+              <label className="block">
+                <span className="text-sm font-medium text-slate-700">Payment method</span>
+                <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)} className="mt-1 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none">
+                  <option value="cash">Cash</option>
+                  <option value="momo">Momo</option>
+                  <option value="card">Card</option>
+                  <option value="bank">Bank</option>
+                </select>
+              </label>
+              <label className="block">
+                <span className="text-sm font-medium text-slate-700">Payment date</span>
+                <input
+                  type="date"
+                  value={paymentDate}
+                  onChange={(e) => setPaymentDate(e.target.value)}
+                  className="mt-1 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-emerald-500"
+                />
+              </label>
+            </div>
+            <div className="mt-6 flex gap-3">
+              <button onClick={() => setPaymentPurchase(null)} className="flex-1 rounded-2xl border border-slate-200 py-3 font-semibold text-slate-600 hover:bg-slate-50">{t('common.cancel')}</button>
+              <button onClick={handleRecordPurchasePayment} disabled={savingPayment || !paymentAmount} className="flex-1 rounded-2xl bg-emerald-500 py-3 font-semibold text-white hover:bg-emerald-600 disabled:opacity-50">
+                {savingPayment ? t('common.loading') : t('common.confirm')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── SCHEDULE PAYMENT MODAL ── */}
       {scheduleModalOpen && schedulePurchase && (
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/50 px-4 backdrop-blur-sm" onClick={() => setScheduleModalOpen(false)}>
@@ -1234,6 +1511,16 @@ export function PurchasesPage() {
                   onChange={(e) => setScheduleDate(e.target.value)}
                   className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none focus:border-amber-400 transition"
                 />
+                {scheduleDate && (
+                  <p className={`mt-2 inline-flex rounded-full px-3 py-1 text-xs font-bold ${
+                    formatScheduleCountdown(scheduleDate).tone === "overdue" ? "bg-rose-100 text-rose-700" :
+                    formatScheduleCountdown(scheduleDate).tone === "today" ? "bg-orange-100 text-orange-700" :
+                    formatScheduleCountdown(scheduleDate).tone === "soon" ? "bg-amber-100 text-amber-700" :
+                    "bg-emerald-100 text-emerald-700"
+                  }`}>
+                    {formatScheduleCountdown(scheduleDate).label}
+                  </p>
+                )}
               </div>
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">{t('purchases.schedule.notes')}</label>
@@ -1291,46 +1578,58 @@ export function PurchasesPage() {
           </div>
           {showScheduleList && (
             <div className="overflow-hidden rounded-2xl border border-amber-100">
-              {schedules.filter(s => s.status !== "paid").map(sched => (
-                <div key={sched.id} className={`flex items-center justify-between px-5 py-3 border-b border-amber-50 last:border-0 ${
-                  sched.status === "overdue" ? "bg-rose-50" : "bg-amber-50/40"
-                }`}>
-                  <div>
-                    <p className="font-semibold text-ink text-sm">{sched.suppliers?.name || t('purchases.modal.supplier')}</p>
-                    <p className="text-xs text-slate-500">{t('purchases.modal.date')}: {new Date(sched.due_date).toLocaleDateString()}</p>
-                    {sched.notes && <p className="text-xs text-slate-400 italic">{sched.notes}</p>}
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="text-right">
-                      <p className="font-black text-amber-700">{Number(sched.amount_due).toLocaleString()} RWF</p>
-                      <span className={`text-[10px] font-bold rounded-full px-2 py-0.5 ${
-                        sched.status === "overdue" ? "bg-rose-100 text-rose-600" : "bg-amber-100 text-amber-700"
-                      }`}>{sched.status}</span>
+              {schedules.filter(s => s.status !== "paid").map(sched => {
+                const countdown = formatScheduleCountdown(sched.due_date);
+                const countdownClass =
+                  countdown.tone === "overdue" ? "bg-rose-100 text-rose-700" :
+                  countdown.tone === "today" ? "bg-orange-100 text-orange-700" :
+                  countdown.tone === "soon" ? "bg-amber-100 text-amber-700" :
+                  "bg-emerald-100 text-emerald-700";
+
+                return (
+                  <div key={sched.id} className={`flex items-center justify-between px-5 py-3 border-b border-amber-50 last:border-0 ${
+                    sched.status === "overdue" ? "bg-rose-50" : "bg-amber-50/40"
+                  }`}>
+                    <div>
+                      <p className="font-semibold text-ink text-sm">{sched.suppliers?.name || t('purchases.modal.supplier')}</p>
+                      <p className="text-xs text-slate-500">{t('purchases.modal.date')}: {new Date(sched.due_date).toLocaleDateString()}</p>
+                      <span className={`mt-1 inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wide ${countdownClass}`}>
+                        {countdown.label}
+                      </span>
+                      {sched.notes && <p className="mt-1 text-xs text-slate-400 italic">{sched.notes}</p>}
                     </div>
-                    <button
-                      onClick={async () => {
-                        await markSchedulePaid(sched.id);
-                        setSchedules(prev => prev.map(s => s.id === sched.id ? { ...s, status: "paid" } : s));
-                        showToast("success", t('purchases.schedule.mark_paid_success'));
-                      }}
-                      className="rounded-xl bg-emerald-500 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-600 transition"
-                    >
-                      {t('purchases.schedule.mark_paid')}
-                    </button>
-                    <button
-                      onClick={async () => {
-                        const ok = await confirm(t('purchases.schedule.delete_title'), t('purchases.schedule.delete_desc'));
-                        if (!ok) return;
-                        await deletePaymentSchedule(sched.id);
-                        setSchedules(prev => prev.filter(s => s.id !== sched.id));
-                      }}
-                      className="rounded-xl bg-rose-50 p-1.5 text-rose-500 hover:bg-rose-100 transition"
-                    >
-                      <Trash2 size={13} />
-                    </button>
+                    <div className="flex items-center gap-3">
+                      <div className="text-right">
+                        <p className="font-black text-amber-700">{Number(sched.amount_due).toLocaleString()} RWF</p>
+                        <span className={`text-[10px] font-bold rounded-full px-2 py-0.5 ${
+                          sched.status === "overdue" ? "bg-rose-100 text-rose-600" : "bg-amber-100 text-amber-700"
+                        }`}>{sched.status}</span>
+                      </div>
+                      <button
+                        onClick={async () => {
+                          await markSchedulePaid(sched.id);
+                          setSchedules(prev => prev.map(s => s.id === sched.id ? { ...s, status: "paid" } : s));
+                          showToast("success", t('purchases.schedule.mark_paid_success'));
+                        }}
+                        className="rounded-xl bg-emerald-500 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-600 transition"
+                      >
+                        {t('purchases.schedule.mark_paid')}
+                      </button>
+                      <button
+                        onClick={async () => {
+                          const ok = await confirm(t('purchases.schedule.delete_title'), t('purchases.schedule.delete_desc'));
+                          if (!ok) return;
+                          await deletePaymentSchedule(sched.id);
+                          setSchedules(prev => prev.filter(s => s.id !== sched.id));
+                        }}
+                        className="rounded-xl bg-rose-50 p-1.5 text-rose-500 hover:bg-rose-100 transition"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -1339,4 +1638,3 @@ export function PurchasesPage() {
     </div>
   );
 }
-

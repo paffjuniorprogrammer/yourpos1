@@ -1,8 +1,19 @@
 import { ensureSupabaseConfigured } from "./supabaseUtils";
+import { db } from "../lib/db";
 
 // Performance cache
 let suppliersCache: { data: SupplierRecord[], timestamp: number } | null = null;
 const CACHE_DURATION_MS = 30000; // 30 seconds
+const FAST_CACHE_TIMEOUT_MS = 500;
+
+function withFastCacheTimeout<T>(promise: PromiseLike<T>) {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error("Network timeout, using local cache.")), FAST_CACHE_TIMEOUT_MS),
+    ),
+  ]);
+}
 
 export interface SupplierRecord {
   id: string;
@@ -30,9 +41,10 @@ export interface SupplierFormValues {
   address: string;
 }
 
-function mapSupplierPayload(values: SupplierFormValues) {
+function mapSupplierPayload(values: SupplierFormValues, businessId?: string) {
   return {
     name: values.name.trim(),
+    business_id: businessId,
     contact_name: values.contact_name.trim() || null,
     phone: values.phone.trim() || null,
     email: values.email.trim() || null,
@@ -41,17 +53,36 @@ function mapSupplierPayload(values: SupplierFormValues) {
 }
 
 export async function listSuppliers() {
-  const client = await ensureSupabaseConfigured();
-  const { data, error } = await client
-    .from("suppliers")
-    .select("*")
-    .order("created_at", { ascending: false });
+  const isOnline = navigator.onLine;
 
-  if (error) {
-    throw error;
+  if (isOnline) {
+    try {
+      const client = await ensureSupabaseConfigured();
+      const { data, error } = await withFastCacheTimeout(client
+        .from("suppliers")
+        .select("*")
+        .order("created_at", { ascending: false }));
+
+      if (error) {
+        throw error;
+      }
+
+      const result = (data ?? []) as SupplierRecord[];
+      await db.cached_suppliers.bulkPut(result.map((supplier) => ({
+        id: supplier.id,
+        data: supplier,
+        updated_at: new Date().toISOString(),
+      })));
+      return result;
+    } catch (error: any) {
+      if (error?.message !== "Failed to fetch" && !error?.message?.includes("network") && !error?.message?.includes("timeout")) {
+        throw error;
+      }
+    }
   }
 
-  return (data ?? []) as SupplierRecord[];
+  const cached = await db.cached_suppliers.toArray();
+  return cached.map((record) => record.data) as SupplierRecord[];
 }
 
 export async function listSuppliersWithMetrics() {
@@ -83,9 +114,16 @@ export async function listSuppliersWithMetrics() {
 
     supplier.purchases?.forEach((purchase: any) => {
       total_supplied += Number(purchase.total_cost || 0);
+      const purchasePaid = purchase.purchase_payments?.reduce(
+        (sum: number, payment: any) => sum + Number(payment.amount || 0),
+        0,
+      ) || 0;
       purchase.purchase_payments?.forEach((payment: any) => {
         total_paid += Number(payment.amount || 0);
       });
+      if (purchasePaid === 0 && purchase.payment_status === "paid") {
+        total_paid += Number(purchase.total_cost || 0);
+      }
     });
 
     return {
@@ -96,12 +134,12 @@ export async function listSuppliersWithMetrics() {
   }) as SupplierMetrics[];
 }
 
-export async function createSupplier(values: SupplierFormValues) {
+export async function createSupplier(values: SupplierFormValues, businessId: string) {
   const client = await ensureSupabaseConfigured();
   const { data, error } = await client
     .from("suppliers")
-    .insert(mapSupplierPayload(values))
-    .select()
+    .insert(mapSupplierPayload(values, businessId))
+    .select("*")
     .single();
 
   if (error) {
@@ -118,7 +156,7 @@ export async function updateSupplier(supplierId: string, values: SupplierFormVal
     .from("suppliers")
     .update(mapSupplierPayload(values))
     .eq("id", supplierId)
-    .select()
+    .select("*")
     .single();
 
   if (error) {

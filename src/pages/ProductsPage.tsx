@@ -35,16 +35,15 @@ import {
   type ProductAttribute,
   type ProductAttributeValue
 } from "../services/productService";
+import { getShopSettingsRecord, listLocations } from "../services/settingsService";
 import { Pagination } from "../components/ui/Pagination";
 import { useRealtimeSync } from "../hooks/useRealtimeSync";
 import { getProductAggregates, getProductPurchaseHistory, getProductSaleHistory, type ProductAggregates, type ProductPurchaseHistory, type ProductSaleHistory } from "../services/productReportService";
-import { getShopSettingsRecord } from "../services/settingsService";
 import { BarcodeLabel, BarcodePrintSheet } from "../components/print/BarcodeLabel";
 import { listProductVariants, createProductVariant, deleteProductVariant, type ProductVariant } from "../services/variantService";
 import type { Category, ProductFormValues, ProductRecord, ShopSettingsRecord } from "../types/database";
 import { useTranslation } from "react-i18next";
 import { formatCurrency } from "../lib/format";
-
 
 const DEFAULT_PROFIT = 30;
 
@@ -68,11 +67,9 @@ function stockStatus(product: ProductRecord, t: any) {
   return t('products.in_stock');
 }
 
-
 export function ProductsPage() {
   const { t } = useTranslation();
   const { can, hasRole, business, assignedLocations, activeLocationId } = useAuth();
-
   const { showToast, confirm } = useNotification();
   const [products, setProducts] = useState<ProductRecord[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -95,6 +92,7 @@ export function ProductsPage() {
   const [profitPercent, setProfitPercent] = useState(DEFAULT_PROFIT);
   const [manualPrice, setManualPrice] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  
   const [showImportLocationModal, setShowImportLocationModal] = useState(false);
   const [pendingCsvProducts, setPendingCsvProducts] = useState<any[]>([]);
   const [selectedImportLocationId, setSelectedImportLocationId] = useState("");
@@ -120,12 +118,23 @@ export function ProductsPage() {
   const [newVariantSku, setNewVariantSku] = useState("");
   const [savingVariant, setSavingVariant] = useState(false);
   const [showBarcodeSheet, setShowBarcodeSheet] = useState(false);
+  const [locationFilter, setLocationFilter] = useState(activeLocationId || "all");
+  const [locations, setLocations] = useState<Array<{id: string, name: string}>>([]);
   
+  const selectedLocationName = useMemo(() => {
+    if (locationFilter === "all") return "";
+    return locations.find(l => l.id === locationFilter)?.name || "";
+  }, [locationFilter, locations]);
   const ITEMS_PER_PAGE = 10;
   const { error, isSubmitting, run, setError } = useAsyncAction();
   const canAddProducts = can("Products", "add");
   const canEditProducts = can("Products", "edit");
   const canDeleteProducts = can("Products", "delete");
+
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, categoryFilter, locationFilter, stockFilter]);
 
   const loadProductReport = useCallback(async (product: ProductRecord) => {
     setReportLoading(true);
@@ -161,14 +170,18 @@ export function ProductsPage() {
     void run(async () => {
       setLoading(true);
       try {
-        const [loadedProducts, loadedCategories, loadedSettings] = await Promise.all([
-          listProducts(activeLocationId),
+        const fetchLocationId = locationFilter === "all" ? null : locationFilter;
+        const [loadedProducts, loadedCategories, loadedSettings, loadedLocations] = await Promise.all([
+          listProducts(fetchLocationId),
           listCategories(),
           getShopSettingsRecord(),
+          listLocations(),
         ]);
         setProducts(loadedProducts || []);
         setCategories(loadedCategories || []);
         setSettings(loadedSettings);
+        setLocations(loadedLocations || []);
+        setCurrentPage(1); // Ensure we start on page 1 when data changes
         if (loadedSettings) {
           setProfitPercent(loadedSettings.default_profit_percentage || DEFAULT_PROFIT);
         }
@@ -178,7 +191,7 @@ export function ProductsPage() {
         setLoading(false);
       }
     });
-  }, [run, activeLocationId]);
+  }, [run, locationFilter]);
 
   useEffect(() => {
     if (reportProduct) {
@@ -236,7 +249,8 @@ export function ProductsPage() {
     onStockChanged: () => {
       // Refresh products to show updated stock
       run(async () => {
-        const loadedProducts = await listProducts(activeLocationId);
+        const fetchLocationId = locationFilter === "all" ? null : locationFilter;
+        const loadedProducts = await listProducts(fetchLocationId);
         setProducts(loadedProducts || []);
       });
     },
@@ -271,10 +285,11 @@ export function ProductsPage() {
               ? status === t('products.in_stock')
               : status === t('products.out_of_stock');
 
+      const matchesLocation = locationFilter === "all" ? true : (product as any).product_stocks?.some((ps: any) => ps.location_id === locationFilter);
 
-      return matchesSearch && matchesCategory && matchesStock;
+      return matchesSearch && matchesCategory && matchesStock && matchesLocation;
     });
-  }, [categoryFilter, products, search, stockFilter]);
+  }, [categoryFilter, products, search, stockFilter, locationFilter, t]);
 
   const totalPages = Math.ceil(filteredProducts.length / ITEMS_PER_PAGE);
   const paginatedProducts = useMemo(() => {
@@ -284,7 +299,7 @@ export function ProductsPage() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, categoryFilter, stockFilter]);
+  }, [search, categoryFilter, stockFilter, locationFilter]);
 
   function openCreateModal() {
     setValues({
@@ -462,8 +477,8 @@ export function ProductsPage() {
         setProducts((current) =>
           current.map((product) => (product.id === updated.id ? updated : product)),
         );
-      } else {
-        const product = await createProduct(productValues);
+      } else if (business?.id) {
+        const product = await createProduct(productValues, business.id);
         setProducts((current) => [product, ...current]);
       }
 
@@ -482,11 +497,15 @@ export function ProductsPage() {
     const confirmed = await confirm("Delete Product", "Are you sure you want to permanentely delete this product? This will remove all associated records.");
     if (!confirmed) return;
 
-    await run(async () => {
-      await deleteProduct(productId);
-      setProducts((current) => current.filter((product) => product.id !== productId));
-      showToast("success", "Product deleted.");
-    });
+    try {
+      await run(async () => {
+        await deleteProduct(productId);
+        setProducts((current) => current.filter((product) => product.id !== productId));
+        showToast("success", "Product deleted.");
+      });
+    } catch (error: any) {
+      showToast("error", error?.message || "Failed to delete product.");
+    }
   }
 
   async function handleCreateCategory(event: FormEvent<HTMLFormElement>) {
@@ -496,9 +515,9 @@ export function ProductsPage() {
       showToast("error", "You don't have permission to create categories.");
       return;
     }
-
     await run(async () => {
-      const category = await createCategory(categoryName);
+      if (!business?.id) { showToast("error", "Business context not found."); return; }
+      const category = await createCategory(categoryName, business.id);
       setCategories((current) => [...current, category].sort((a, b) => a.name.localeCompare(b.name)));
       setValues((current) => ({ ...current, category_id: category.id }));
       setCategoryName("");
@@ -517,7 +536,19 @@ export function ProductsPage() {
       <SectionCard title={t('products.title')} subtitle={t('products.subtitle')}>
 
         <div className="mb-5 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-          <div className="grid flex-1 gap-3 md:grid-cols-3">
+          <div className="grid flex-1 gap-3 md:grid-cols-4">
+            <select
+              value={locationFilter}
+              onChange={(event) => setLocationFilter(event.target.value)}
+              className="rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-sm font-medium text-slate-700 outline-none"
+            >
+              <option value="all">{t('products.all_locations', 'All Locations')}</option>
+              {locations.map((loc) => (
+                <option key={loc.id} value={loc.id}>
+                  {loc.name}
+                </option>
+              ))}
+            </select>
             <label className="flex items-center gap-3 rounded-2xl border border-brand-100 bg-gradient-to-r from-brand-50 to-white px-4 py-3">
               <Search size={16} className="text-brand-500" />
               <input
@@ -533,7 +564,6 @@ export function ProductsPage() {
               className="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3 text-sm font-medium text-slate-700 outline-none"
             >
               <option value="all">{t('products.filter_category')}</option>
-
               {categories.map((category) => (
                 <option key={category.id} value={category.id}>
                   {category.name}
@@ -550,11 +580,10 @@ export function ProductsPage() {
               <option value="low">{t('products.low_stock')}</option>
               <option value="out">{t('products.out_of_stock')}</option>
             </select>
-
           </div>
+
           {canAddProducts && (
-            <div className="flex items-center gap-2">
-              <input type="file" accept=".csv" ref={fileInputRef} onChange={handleCsvUpload} className="hidden" />
+            <div className="flex flex-wrap gap-3">
               <button
                 onClick={handleExportTemplate}
                 className="flex items-center justify-center gap-2 rounded-2xl border border-brand-200 bg-white px-5 py-3 text-sm font-semibold text-brand-600"
@@ -598,26 +627,39 @@ export function ProductsPage() {
             <table className="min-w-full border-separate border-spacing-0 text-sm">
               <thead className="bg-gradient-to-r from-slate-900 via-slate-800 to-brand-700 text-white">
                 <tr>
-                  {[
-                    t('products.table.name'),
-                    t('products.table.category'),
-                    t('products.table.cost'),
-                    t('products.table.price'),
-                    t('products.table.stock'),
-                    t('common.actions')
-                  ].map((column) => (
-                    <th key={column} className="border-b border-white/10 px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-100">
-                      {column}
-                    </th>
-                  ))}
+                  <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-100">{t('products.table.name', 'Name')}</th>
+                  <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-100">{t('products.table.category', 'Category')}</th>
+                  <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-100">{t('products.table.cost', 'Cost')}</th>
+                  <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-100">{t('products.table.price', 'Price')}</th>
+                  <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-100">
+                    {selectedLocationName ? `${t('products.stock', 'Stock')} (${selectedLocationName})` : t('products.stock', 'Stock')}
+                  </th>
+                  <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-100">{t('common.actions', 'Actions')}</th>
                 </tr>
               </thead>
 
-              <tbody className="bg-white">
-                {loading ? (
-                    <td colSpan={6} className="px-5 py-10 text-center text-slate-500">
-                      {t('products.loading')}
+              <tbody className="bg-white relative">
+                {/* Subtle loading overlay when refreshing */}
+                {loading && products.length > 0 && (
+                  <tr className="absolute inset-0 z-10 flex items-center justify-center bg-white/40 backdrop-blur-[1px]">
+                    <td colSpan={6} className="h-full w-full flex items-center justify-center py-20">
+                       <div className="flex flex-col items-center gap-3">
+                          <div className="h-10 w-10 animate-spin rounded-full border-4 border-brand-100 border-t-brand-600"></div>
+                          <p className="text-xs font-bold uppercase tracking-widest text-brand-700">{t('common.processing')}</p>
+                       </div>
                     </td>
+                  </tr>
+                )}
+
+                {loading && products.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-5 py-20 text-center text-slate-500">
+                      <div className="flex flex-col items-center gap-4">
+                        <div className="h-12 w-12 animate-spin rounded-full border-4 border-brand-100 border-t-brand-600"></div>
+                        <p className="font-semibold">{t('products.loading')}</p>
+                      </div>
+                    </td>
+                  </tr>
                 ) : paginatedProducts.length ? (
                   paginatedProducts.map((product) => {
                     const status = stockStatus(product, t);
@@ -682,9 +724,11 @@ export function ProductsPage() {
                     );
                   })
                 ) : (
+                  <tr>
                     <td colSpan={6} className="px-5 py-10 text-center text-slate-500">
                       {t('products.no_results')}
                     </td>
+                  </tr>
                 )}
               </tbody>
             </table>
@@ -700,20 +744,23 @@ export function ProductsPage() {
       </SectionCard>
 
       {showModal ? (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/40 px-4 backdrop-blur-sm" onClick={() => setShowModal(false)}>
-          <div className="w-full max-w-3xl rounded-[2rem] border border-slate-200 bg-gradient-to-b from-white to-slate-50 p-6 shadow-soft" onClick={(e) => e.stopPropagation()}>
-            <div className="mb-6 flex items-center justify-between">
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/40 px-2 sm:px-4 backdrop-blur-sm py-2 sm:py-4" onClick={() => setShowModal(false)}>
+          <div className="w-full max-w-3xl h-[90vh] flex flex-col rounded-[2rem] border border-slate-200 bg-gradient-to-b from-white to-slate-50 shadow-soft" onClick={(e) => e.stopPropagation()}>
+            {/* STICKY HEADER */}
+            <div className="sticky top-0 z-10 border-b border-slate-100 bg-white/95 backdrop-blur-sm px-4 sm:px-6 py-4 sm:py-6 rounded-t-[2rem] flex items-center justify-between">
               <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.22em] text-brand-600">{t('products.modal.form_title')}</p>
-                <h2 className="mt-2 text-2xl font-bold text-ink">{editingProduct ? t('products.modal.edit_title') : t('products.modal.create_title')}</h2>
+                <p className="text-xs sm:text-sm font-semibold uppercase tracking-[0.22em] text-brand-600">{t('products.modal.form_title')}</p>
+                <h2 className="mt-1 sm:mt-2 text-lg sm:text-2xl font-bold text-ink">{editingProduct ? t('products.modal.edit_title') : t('products.modal.create_title')}</h2>
               </div>
 
-              <button onClick={() => setShowModal(false)} className="rounded-full bg-slate-100 p-2 text-slate-600">
+              <button onClick={() => setShowModal(false)} className="flex-shrink-0 ml-3 rounded-full bg-slate-100 p-2 text-slate-600 hover:bg-slate-200 transition">
                 <X size={18} />
               </button>
             </div>
 
-            <form className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]" onSubmit={handleSubmit}>
+            {/* SCROLLABLE CONTENT */}
+            <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 sm:py-6">
+              <form id="productForm" className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]" onSubmit={handleSubmit}>
               <div className="space-y-3">
                 <div className="rounded-3xl border border-sky-100 bg-sky-50/80 p-3.5">
                   <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-sky-700">{t('products.modal.basic_info')}</p>
@@ -1011,15 +1058,17 @@ export function ProductsPage() {
                   <p className="mt-2 text-sm text-slate-600">{t('products.modal.pricing_formula')}</p>
                   <p className="mt-2 text-lg font-bold text-indigo-700">{formatCurrency(Number(values.selling_price || 0))}</p>
                 </div>
-
-                <div className="flex gap-3">
-                  <button type="button" onClick={() => setShowModal(false)} className="flex-1 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700">{t('common.cancel')}</button>
-                  <button type="submit" disabled={!supabaseConfigured || isSubmitting} className="flex-1 rounded-2xl bg-brand-500 px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300">
-                    {isSubmitting ? t('common.saving') : t('products.modal.save_btn')}
-                  </button>
-                </div>
               </div>
-            </form>
+              </form>
+            </div>
+
+            {/* STICKY FOOTER */}
+            <div className="sticky bottom-0 border-t border-slate-100 bg-white/95 backdrop-blur-sm px-4 sm:px-6 py-3 sm:py-4 rounded-b-[2rem] flex gap-3">
+              <button type="button" onClick={() => setShowModal(false)} className="flex-1 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-semibold text-slate-700 hover:bg-slate-50 transition">{t('common.cancel')}</button>
+              <button type="submit" form="productForm" disabled={!supabaseConfigured || isSubmitting} className="flex-1 rounded-2xl bg-brand-500 px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-semibold text-white hover:bg-brand-600 disabled:cursor-not-allowed disabled:bg-slate-300 transition">
+                {isSubmitting ? t('common.saving') : t('products.modal.save_btn')}
+              </button>
+            </div>
           </div>
         </div>
       ) : null}

@@ -45,7 +45,7 @@ export async function createPaymentSchedule(input: CreateScheduleInput) {
       notes:        input.notes ?? null,
       status:       "pending",
     })
-    .select()
+    .select("*")
     .single();
   if (error) throw error;
   return data as PaymentSchedule;

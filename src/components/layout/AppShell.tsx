@@ -17,9 +17,27 @@ export function AppShell() {
     navItems.find((item) => item.path === location.pathname)?.label ?? t('menu.dashboard');
 
 
-  const changeLanguage = (lng: string) => {
+  const changeLanguage = async (lng: string) => {
     i18n.changeLanguage(lng);
     setIsMenuOpen(false);
+    
+    // Persist to DB if user is logged in
+    if (profile?.id) {
+      try {
+        const { updateUserLanguage } = await import("../../services/settingsService");
+        await updateUserLanguage(profile.id, lng);
+        
+        // Update local cache to avoid flicker on reload
+        const cached = localStorage.getItem('cached_user_profile');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          parsed.language = lng;
+          localStorage.setItem('cached_user_profile', JSON.stringify(parsed));
+        }
+      } catch (err) {
+        console.error("Failed to persist language preference:", err);
+      }
+    }
   };
 
   const visibleNavItems = navItems.filter((item) => {
@@ -201,7 +219,7 @@ export function AppShell() {
 
               <div className="grid grid-cols-3 gap-2">
                 <button
-                  onClick={() => i18n.changeLanguage('en')}
+                  onClick={() => changeLanguage('en')}
                   className={`rounded-xl py-2 text-[10px] font-black uppercase tracking-widest transition ${
                     i18n.language === 'en' ? 'bg-white text-slate-950' : 'bg-white/5 text-slate-400 hover:bg-white/10'
                   }`}
@@ -209,7 +227,7 @@ export function AppShell() {
                   EN
                 </button>
                 <button
-                  onClick={() => i18n.changeLanguage('rw')}
+                  onClick={() => changeLanguage('rw')}
                   className={`rounded-xl py-2 text-[10px] font-black uppercase tracking-widest transition ${
                     i18n.language === 'rw' ? 'bg-white text-slate-950' : 'bg-white/5 text-slate-400 hover:bg-white/10'
                   }`}
@@ -217,7 +235,7 @@ export function AppShell() {
                   RW
                 </button>
                 <button
-                  onClick={() => i18n.changeLanguage('fr')}
+                  onClick={() => changeLanguage('fr')}
                   className={`rounded-xl py-2 text-[10px] font-black uppercase tracking-widest transition ${
                     i18n.language === 'fr' ? 'bg-white text-slate-950' : 'bg-white/5 text-slate-400 hover:bg-white/10'
                   }`}

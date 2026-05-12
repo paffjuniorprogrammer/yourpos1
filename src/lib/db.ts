@@ -32,6 +32,18 @@ export interface CachedCloseDay {
   updated_at: string;
 }
 
+export interface CachedRecord {
+  id: string;
+  data: any;
+  updated_at: string;
+}
+
+export interface CachedPage {
+  key: string;
+  data: any;
+  updated_at: string;
+}
+
 export class PosDatabase extends Dexie {
   pending_actions!: Table<PendingAction, string>;
   pending_sales!: Table<PendingAction, string>; // Alias for backward compatibility
@@ -39,6 +51,10 @@ export class PosDatabase extends Dexie {
   cached_categories!: Table<CachedCategory, string>;
   cached_customers!: Table<CachedCustomer, string>;
   cached_close_day!: Table<CachedCloseDay, string>;
+  cached_suppliers!: Table<CachedRecord, string>;
+  cached_locations!: Table<CachedRecord, string>;
+  cached_settings!: Table<CachedRecord, string>;
+  cached_purchases!: Table<CachedPage, string>;
 
   constructor() {
     super('PosOfflineDB');
@@ -49,6 +65,18 @@ export class PosDatabase extends Dexie {
       cached_categories: 'id',
       cached_customers: 'id',
       cached_close_day: 'id'
+    });
+    this.version(4).stores({
+      pending_actions: 'id, type, status, created_at',
+      pending_sales: 'id, status, created_at',
+      cached_products: 'id, business_id',
+      cached_categories: 'id',
+      cached_customers: 'id',
+      cached_close_day: 'id',
+      cached_suppliers: 'id',
+      cached_locations: 'id',
+      cached_settings: 'id',
+      cached_purchases: 'key'
     });
   }
 }

@@ -54,7 +54,7 @@ function makeSupplierRow(supplier: SupplierMetrics): SupplierRow {
 
 export function SuppliersPage() {
   const { t } = useTranslation();
-  const { can } = useAuth();
+  const { can, business } = useAuth();
 
   const { showToast, confirm } = useNotification();
   const [search, setSearch] = useState("");
@@ -126,6 +126,10 @@ export function SuppliersPage() {
     };
 
     if (!formValues.id) {
+      if (!business?.id) {
+        showToast("error", "Business context not found.");
+        return;
+      }
       try {
         const supplier = await createSupplier({
           name: nextRow.name,
@@ -133,7 +137,7 @@ export function SuppliersPage() {
           phone: nextRow.phone,
           email: "",
           address: nextRow.location,
-        });
+        }, business.id);
         nextRow.id = supplier.id;
       } catch (error) {
         console.error("Failed to create supplier:", error);

@@ -25,6 +25,7 @@ import {
 import { LoadingPOS } from "../components/ui/LoadingPOS";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { useNotification } from "../context/NotificationContext";
 import { supabaseConfigured } from "../lib/supabase";
 import {
   createDayClosure,
@@ -89,7 +90,8 @@ const rwf = (value: number) => formatCurrency(value);
 export function PosPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { authConfigured, can, logout, profile, activeLocationId, assignedLocations, switchLocation } = useAuth();
+  const { authConfigured, can, logout, profile, activeLocationId, assignedLocations, switchLocation, business } = useAuth();
+  const { showToast } = useNotification();
   const searchRef = useRef<HTMLInputElement>(null);
   const soundRef = useRef<HTMLAudioElement | null>(null);
   const { 
@@ -341,7 +343,7 @@ export function PosPage() {
 
     async function loadCloseDaySummary() {
       try {
-        const summary = await getCloseDaySummary(profile!.id, activeLocationId!, activeShift.opened_at);
+        const summary = await getCloseDaySummary(profile!.id, activeLocationId!);
         if (active) {
           setCloseDaySummary(summary);
         }
@@ -546,6 +548,7 @@ export function PosPage() {
         }),
         payments,
         location_id: activeLocationId,
+        business_id: business?.id || "",
       } as any);
 
       if (shouldPrint) {
@@ -616,7 +619,7 @@ export function PosPage() {
         phone: newCustomerPhone,
         email: "",
         address: newCustomerAddress
-      });
+      }, business?.id || "");
       
       // Update local state if needed (though pre-fetch will catch it, we want it NOW)
       setCustomers(prev => [...prev, customer]);
@@ -650,17 +653,7 @@ export function PosPage() {
   async function confirmCloseDay() {
     if (profile?.id && authConfigured && activeLocationId) {
       try {
-        await createDayClosure({
-          user_id: profile.id,
-          location_id: activeLocationId,
-          closing_date: todayIso,
-          cash_amount: closeDaySummary.cash_amount,
-          momo_amount: closeDaySummary.momo_amount,
-          bank_amount: closeDaySummary.bank_amount,
-          card_amount: closeDaySummary.card_amount,
-          credit_amount: closeDaySummary.credit_amount,
-          total_amount: closeDaySummary.total_amount,
-        });
+        await createDayClosure(profile.id, activeLocationId, closeDaySummary);
       } catch (err) {
         console.error("Failed to close day:", err);
       }
@@ -715,8 +708,13 @@ export function PosPage() {
 
     try {
       setProcessingReturn(true);
+      if (!business?.id) {
+        showToast("error", "Business context missing.");
+        return;
+      }
       await processReturn({
         sale_id: returnSale.id,
+        business_id: business.id,
         created_by: profile.id,
         reason: returnReason,
         refund_method: returnRefundMethod,
@@ -745,7 +743,8 @@ export function PosPage() {
     if (!profile?.id || !activeLocationId) return;
     try {
       setStartingAmountSubmitting(true);
-      const reg = await openRegister(profile.id, activeLocationId, Number(startingAmount || 0));
+      if (!business?.id) throw new Error("Business ID is missing.");
+      const reg = await openRegister(profile.id, business.id, activeLocationId, Number(startingAmount || 0));
       setActiveShift(reg);
       setRegisterOpen(true);
       setStartingAmountOpen(false);
@@ -2016,6 +2015,25 @@ export function PosPage() {
           {...lastSaleForPrint}
         />,
         document.body
+      )}
+
+      {/* MOBILE BOTTOM BAR */}
+      {cart.length > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 z-40 bg-slate-950 p-4 shadow-2xl xl:hidden border-t border-slate-800 safe-bottom animate-slide-up">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">{t('pos.total')}</p>
+              <p className="text-xl font-black text-brand-400 leading-none mt-1">{rwf(checkoutTotalAmount)}</p>
+            </div>
+            <button
+              onClick={() => setCheckoutOpen(true)}
+              className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-brand-500 py-4 text-sm font-bold text-white shadow-soft active:scale-95 transition-all"
+            >
+              <Receipt size={18} />
+              {t('pos.checkout')}
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

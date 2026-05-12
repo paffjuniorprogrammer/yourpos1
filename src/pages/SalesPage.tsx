@@ -30,7 +30,7 @@ type PrintMode = "receipt" | "invoice";
 
 export function SalesPage() {
   const { t } = useTranslation();
-  const { can, profile } = useAuth();
+  const { can, profile, business } = useAuth();
 
   const { showToast, confirm } = useNotification();
   const [sales, setSales] = useState<SaleWithDetails[]>([]);
@@ -77,7 +77,8 @@ export function SalesPage() {
   });
 
 
-  const loadSales = async () => {
+  const loadSales = async (showLoading = true) => {
+    if (showLoading) setLoading(true);
     try {
       const { data: salesData, count } = await listSales({
         page: currentPage,
@@ -97,6 +98,8 @@ export function SalesPage() {
       setTotalCount(count);
     } catch (err) {
       console.error("Failed to load sales:", err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -119,7 +122,7 @@ export function SalesPage() {
     fetchFilters();
 
     // Set loading only on initial load or if you want it on every turn
-    run(loadSales).finally(() => setLoading(false));
+    run(() => loadSales());
   }, [run, currentPage, saleNumberFilter, customerFilter, cashierFilter, dateFilter]);
 
   const totalPages = Math.ceil(totalCount / itemsPerPage);
@@ -220,6 +223,7 @@ export function SalesPage() {
       setProcessingReturn(true);
       await processReturn({
         sale_id:       selectedSale.id,
+        business_id:   business?.id || "",
         created_by:    profile.id,
         reason:        returnReason,
         refund_method: returnRefundMethod,
@@ -375,9 +379,28 @@ export function SalesPage() {
                 </tr>
               </thead>
 
-              <tbody className="bg-white">
-                {loading ? (
-                  <tr><td colSpan={7} className="px-5 py-10 text-center text-slate-500">{t('common.loading')}</td></tr>
+              <tbody className="bg-white relative">
+                {/* Loading overlay when refreshing */}
+                {loading && sales.length > 0 && (
+                  <tr className="absolute inset-0 z-10 flex items-center justify-center bg-white/40 backdrop-blur-[1px]">
+                    <td colSpan={7} className="h-full w-full flex items-center justify-center py-20">
+                       <div className="flex flex-col items-center gap-3">
+                          <div className="h-10 w-10 animate-spin rounded-full border-4 border-brand-100 border-t-brand-600"></div>
+                          <p className="text-xs font-bold uppercase tracking-widest text-brand-700">{t('common.processing')}</p>
+                       </div>
+                    </td>
+                  </tr>
+                )}
+
+                {loading && sales.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="px-5 py-20 text-center text-slate-500">
+                      <div className="flex flex-col items-center gap-4">
+                        <div className="h-12 w-12 animate-spin rounded-full border-4 border-brand-100 border-t-brand-600"></div>
+                        <p className="font-semibold">{t('common.loading')}</p>
+                      </div>
+                    </td>
+                  </tr>
                 ) : paginatedSales.length > 0 ? (
                   paginatedSales.map((sale) => (
                     <tr key={sale.id} className="transition hover:bg-brand-50/40">

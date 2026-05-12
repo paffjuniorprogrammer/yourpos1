@@ -2,6 +2,17 @@ import { ensureSupabaseConfigured } from "./supabaseUtils";
 import type { ProductRecord, Category } from "../types/database";
 import { db } from "../lib/db";
 
+const FAST_CACHE_TIMEOUT_MS = 500;
+
+function withFastCacheTimeout<T>(promise: PromiseLike<T>) {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error("Network timeout, using local cache.")), FAST_CACHE_TIMEOUT_MS),
+    ),
+  ]);
+}
+
 export type ProductFormValues = {
   name: string;
   category_id?: string;
@@ -32,7 +43,7 @@ export type ProductAttributeValue = {
   created_at: string;
 };
 
-function mapProductPayload(values: ProductFormValues) {
+function mapProductPayload(values: ProductFormValues, businessId?: string) {
   const bulkQty = values.bulk_quantity !== undefined && values.bulk_quantity !== null && values.bulk_quantity !== ''
     ? Number(values.bulk_quantity)
     : null;
@@ -41,6 +52,7 @@ function mapProductPayload(values: ProductFormValues) {
     : null;
   return {
     name: (values.name || '').trim(),
+    business_id: businessId,
     category_id: values.category_id || null,
     barcode: (values.barcode || '').trim() || null,
     cost_price: Number(values.cost_price || 0),
@@ -48,13 +60,13 @@ function mapProductPayload(values: ProductFormValues) {
     stock_quantity: 0,
     reorder_level: 5,
     image_url: (values.image_url || '').trim() || null,
-    bulk_quantity: bulkQty,
-    bulk_price: bulkPrice,
-    bulk_pricing_mode: values.bulk_pricing_mode || 'fixed',
-    bulk_discount_value: values.bulk_discount_value !== undefined && values.bulk_discount_value !== null && values.bulk_discount_value !== '' ? Number(values.bulk_discount_value) : 0,
-    parent_id: values.parent_id || null,
-    is_parent: values.is_parent || false,
-    variant_combination: values.variant_combination || null,
+    // bulk_quantity: bulkQty,
+    // bulk_price: bulkPrice,
+    // bulk_pricing_mode: values.bulk_pricing_mode || 'fixed',
+    // bulk_discount_value: values.bulk_discount_value !== undefined && values.bulk_discount_value !== null && values.bulk_discount_value !== '' ? Number(values.bulk_discount_value) : 0,
+    // parent_id: values.parent_id || null,
+    // is_parent: values.is_parent || false,
+    // variant_combination: values.variant_combination || null,
   };
 }
 
@@ -65,40 +77,42 @@ export async function listProducts(locationId?: string | null) {
     try {
       const client = await ensureSupabaseConfigured();
       
-      const selectQuery = locationId ? `
-        *,
-        product_stocks(quantity, location_id)
-      ` : '*';
+      const baseColumns = "id, name, barcode, cost_price, selling_price, stock_quantity, reorder_level, image_url, is_active, created_at, business_id";
+      const selectQuery = `${baseColumns}, product_stocks(quantity, location_id)`;
 
       const { data, error } = await client
         .from("products")
         .select(selectQuery)
+        .eq("is_active", true)
         .order("created_at", { ascending: false });
 
       if (error) {
         throw error;
       }
 
-      let parsedData: ProductRecord[] = [];
-
-      if (locationId) {
-        parsedData = (data || []).map((product: any) => {
-          let branchStock = product.stock_quantity; // fallback to global
-          if (product.product_stocks && Array.isArray(product.product_stocks)) {
+      const parsedData = (data || []).map((product: any) => {
+        let displayStock = 0;
+        
+        if (product.product_stocks && Array.isArray(product.product_stocks)) {
+          if (locationId) {
+            // Filter by specific location
             const stockEntry = product.product_stocks.find((s: any) => s.location_id === locationId);
-            if (stockEntry !== undefined) {
-              branchStock = stockEntry.quantity;
-            }
+            displayStock = stockEntry ? stockEntry.quantity : 0;
+          } else {
+            // Sum all locations for "All Locations" view
+            displayStock = product.product_stocks.reduce((acc: number, s: any) => acc + (s.quantity || 0), 0);
           }
-          return {
-            ...product,
-            stock_quantity: branchStock,
-            product_stocks: undefined
-          };
-        }) as ProductRecord[];
-      } else {
-        parsedData = (data || []) as unknown as ProductRecord[];
-      }
+        } else {
+          // Fallback to legacy column if product_stocks missing
+          displayStock = product.stock_quantity || 0;
+        }
+
+        return {
+          ...product,
+          stock_quantity: displayStock,
+          product_stocks: undefined
+        };
+      }) as ProductRecord[];
 
       // Cache the result in Dexie
       try {
@@ -113,9 +127,9 @@ export async function listProducts(locationId?: string | null) {
         console.warn("Failed to cache products locally:", cacheErr);
       }
 
-      return parsedData;
+      return parsedData.filter((product) => product.is_active !== false);
     } catch (err: any) {
-      if (err?.message !== 'Failed to fetch' && !err?.message?.includes('network')) {
+      if (err?.message !== 'Failed to fetch' && !err?.message?.includes('network') && !err?.message?.includes('timeout')) {
         throw err;
       }
       console.warn("Network error, falling back to offline products cache.");
@@ -124,7 +138,7 @@ export async function listProducts(locationId?: string | null) {
 
   // Fallback to Dexie
   const cached = await db.cached_products.toArray();
-  return cached.map(c => c.data) as ProductRecord[];
+  return cached.map(c => c.data).filter((product) => product.is_active !== false) as ProductRecord[];
 }
 
 export async function listCategories() {
@@ -155,7 +169,7 @@ export async function listCategories() {
 
       return result;
     } catch (err: any) {
-      if (err?.message !== 'Failed to fetch' && !err?.message?.includes('network')) {
+      if (err?.message !== 'Failed to fetch' && !err?.message?.includes('network') && !err?.message?.includes('timeout')) {
         throw err;
       }
       console.warn("Network error, falling back to offline categories cache.");
@@ -166,7 +180,7 @@ export async function listCategories() {
   return cached.map(c => c.data) as Category[];
 }
 
-export async function createCategory(name: string) {
+export async function createCategory(name: string, businessId: string) {
   const client = await ensureSupabaseConfigured();
   const trimmedName = name.trim();
   if (!trimmedName) {
@@ -177,8 +191,9 @@ export async function createCategory(name: string) {
     .from("categories")
     .insert({
       name: trimmedName,
+      business_id: businessId
     })
-    .select()
+    .select("id, business_id, name, description, created_at")
     .single();
 
   if (error) {
@@ -195,15 +210,16 @@ export async function createCategory(name: string) {
   return data as Category;
 }
 
-export async function createProduct(values: ProductFormValues) {
+export async function createProduct(values: ProductFormValues, businessId: string) {
   const client = await ensureSupabaseConfigured();
   const { data, error } = await client
     .from("products")
-    .insert(mapProductPayload(values))
-    .select()
+    .insert(mapProductPayload(values, businessId))
+    .select("id, name, barcode, cost_price, selling_price, stock_quantity, reorder_level, business_id")
     .single();
 
   if (error) {
+    console.error("Product creation error:", error);
     throw error;
   }
 
@@ -216,7 +232,7 @@ export async function updateProduct(productId: string, values: ProductFormValues
     .from("products")
     .update(mapProductPayload(values))
     .eq("id", productId)
-    .select()
+    .select("*")
     .single();
 
   if (error) {
@@ -228,11 +244,46 @@ export async function updateProduct(productId: string, values: ProductFormValues
 
 export async function deleteProduct(productId: string) {
   const client = await ensureSupabaseConfigured();
-  const { error } = await client.from("products").delete().eq("id", productId);
+  const { count, error } = await client
+    .from("products")
+    .delete({ count: "exact" })
+    .eq("id", productId);
 
   if (error) {
-    throw error;
+    const isLinkedToHistory =
+      (error as any)?.code === "23503" ||
+      error.message?.includes("foreign key constraint") ||
+      error.message?.includes("sale_items_product_id_fkey") ||
+      error.message?.includes("purchase_items_product_id_fkey");
+
+    if (!isLinkedToHistory) {
+      throw error;
+    }
+
+    const { error: archiveRpcError } = await client.rpc("archive_product", {
+      p_product_id: productId,
+    });
+
+    if (archiveRpcError) {
+      const { error: archiveError } = await client
+        .from("products")
+        .update({ is_active: false })
+        .eq("id", productId);
+
+      if (archiveError) {
+        throw archiveRpcError;
+      }
+    }
+
+    await db.cached_products.delete(productId);
+    return;
   }
+
+  if (count === 0) {
+    throw new Error("Product was not deleted. Check your Products delete permission.");
+  }
+
+  await db.cached_products.delete(productId);
 }
 
 export async function bulkImportProducts(businessId: string, locationId: string | null, products: any[]) {
@@ -268,7 +319,7 @@ export async function createAttribute(name: string) {
   const { data, error } = await client
     .from("product_attributes")
     .insert({ name: name.trim() })
-    .select()
+    .select("*")
     .single();
 
   if (error) throw error;
@@ -298,7 +349,7 @@ export async function createAttributeValue(attributeId: string, value: string) {
   const { data, error } = await client
     .from("product_attribute_values")
     .insert({ attribute_id: attributeId, value: value.trim() })
-    .select()
+    .select("*")
     .single();
 
   if (error) throw error;

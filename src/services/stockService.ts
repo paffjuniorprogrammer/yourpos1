@@ -167,6 +167,7 @@ export async function listStockTransfers(): Promise<StockTransferSummary[]> {
 
 export async function recordStockCount(
   locationId: string,
+  businessId: string,
   createdBy: string,
   notes: string,
   items: Array<{ productId: string; systemQuantity: number; countedQuantity: number; mode: string; reason?: string }>
@@ -182,6 +183,7 @@ export async function recordStockCount(
 
   const { data, error } = await client.rpc("process_stock_count", {
     p_location_id: locationId,
+    p_business_id: businessId,
     p_created_by: createdBy,
     p_notes: notes,
     p_items: transformedItems
@@ -194,6 +196,7 @@ export async function recordStockCount(
 export async function recordStockTransfer(
   fromLocationId: string,
   toLocationId: string,
+  businessId: string,
   status: "pending" | "in_transit" | "completed",
   createdBy: string,
   items: Array<{ productId: string; availableQuantity: number; transferQuantity: number }>
@@ -208,6 +211,7 @@ export async function recordStockTransfer(
   const { data, error } = await client.rpc("process_stock_transfer", {
     p_from_location_id: fromLocationId,
     p_to_location_id: toLocationId,
+    p_business_id: businessId,
     p_status: status,
     p_created_by: createdBy,
     p_items: transformedItems

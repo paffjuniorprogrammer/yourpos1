@@ -11,6 +11,7 @@ export interface ReturnItemInput {
 
 export async function processReturn(input: {
   sale_id: string;
+  business_id: string;
   created_by: string;
   reason: string;
   refund_method: string;
@@ -20,6 +21,7 @@ export async function processReturn(input: {
   const client = await ensureSupabaseConfigured();
   const { data, error } = await client.rpc("process_sale_return", {
     p_sale_id:       input.sale_id,
+    p_business_id:   input.business_id,
     p_created_by:    input.created_by,
     p_reason:        input.reason,
     p_refund_method: input.refund_method,

@@ -27,9 +27,10 @@ export interface CustomerFormValues {
   address: string;
 }
 
-function mapCustomerPayload(values: CustomerFormValues) {
+function mapCustomerPayload(values: CustomerFormValues, businessId?: string) {
   return {
     full_name: values.full_name.trim(),
+    business_id: businessId,
     phone: values.phone.trim() || null,
     email: values.email.trim() || null,
     address: values.address.trim() || null,
@@ -92,7 +93,7 @@ export async function listCustomersWithMetrics() {
   }) as CustomerMetrics[];
 }
 
-export async function createCustomer(values: CustomerFormValues) {
+export async function createCustomer(values: CustomerFormValues, businessId: string) {
   const isOnline = navigator.onLine;
 
   if (isOnline) {
@@ -100,8 +101,8 @@ export async function createCustomer(values: CustomerFormValues) {
       const client = await ensureSupabaseConfigured();
       const { data, error } = await client
         .from("customers")
-        .insert(mapCustomerPayload(values))
-        .select()
+        .insert(mapCustomerPayload(values, businessId))
+        .select("*")
         .single();
 
       if (error) {
@@ -154,7 +155,7 @@ export async function pushCustomerToSupabase(values: CustomerFormValues) {
   const { data, error } = await client
     .from("customers")
     .insert(mapCustomerPayload(values))
-    .select()
+    .select("*")
     .single();
 
   if (error) throw error;
@@ -182,7 +183,7 @@ export async function updateCustomer(customerId: string, values: CustomerFormVal
     .from("customers")
     .update(mapCustomerPayload(values))
     .eq("id", customerId)
-    .select()
+    .select("*")
     .single();
 
   if (error) {

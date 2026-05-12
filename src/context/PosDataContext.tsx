@@ -69,9 +69,14 @@ export const PosDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // Real-time synchronization
   useRealtimeSync({
     enabled: authConfigured && !!profile && !!activeLocationId,
-    onStockChanged: () => {
-      // For stock changes, we trigger a background refresh to ensure accuracy
-      void refreshData();
+    onStockChanged: (payload) => {
+      // If we have a payload with specific product update, apply it locally
+      if (payload?.new && payload.new.product_id && payload.new.location_id === activeLocationId) {
+        updateProductStock(payload.new.product_id, payload.new.quantity);
+      } else {
+        // Fallback to refresh if payload is missing or for other locations
+        void refreshData();
+      }
     },
     onCustomerChanged: () => {
       void refreshData();

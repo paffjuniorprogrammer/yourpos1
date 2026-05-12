@@ -1,5 +1,17 @@
 import type { AppRole, ShopSettingsRecord, UserPermissionRecord, UserProfile } from "../types/database";
 import { ensureSupabaseConfigured } from "./supabaseUtils";
+import { db } from "../lib/db";
+
+const FAST_CACHE_TIMEOUT_MS = 500;
+
+function withFastCacheTimeout<T>(promise: PromiseLike<T>) {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error("Network timeout, using local cache.")), FAST_CACHE_TIMEOUT_MS),
+    ),
+  ]);
+}
 
 export async function listStaffAccounts() {
   const client = await ensureSupabaseConfigured();
@@ -176,19 +188,33 @@ export async function listUserPermissions(userId: string) {
 }
 
 export async function getShopSettingsRecord() {
-  const client = await ensureSupabaseConfigured();
-  const { data, error } = await client
-    .from("shop_settings")
-    .select("*")
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
+  if (navigator.onLine) {
+    try {
+      const client = await ensureSupabaseConfigured();
+      const { data, error } = await withFastCacheTimeout(client
+        .from("shop_settings")
+        .select("*")
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle());
 
-  if (error) {
-    throw error;
+      if (error) {
+        throw error;
+      }
+
+      if (data) {
+        await db.cached_settings.put({ id: "shop_settings", data, updated_at: new Date().toISOString() });
+      }
+      return data as ShopSettingsRecord | null;
+    } catch (error: any) {
+      if (error?.message !== "Failed to fetch" && !error?.message?.includes("network") && !error?.message?.includes("timeout")) {
+        throw error;
+      }
+    }
   }
 
-  return data as ShopSettingsRecord | null;
+  const cached = await db.cached_settings.get("shop_settings");
+  return (cached?.data ?? null) as ShopSettingsRecord | null;
 }
 
 export async function upsertShopSettings(
@@ -223,17 +249,34 @@ export async function upsertShopSettings(
 }
 
 export async function listLocations() {
-  const client = await ensureSupabaseConfigured();
-  const { data, error } = await client
-    .from("locations")
-    .select("*")
-    .order("created_at", { ascending: true });
+  if (navigator.onLine) {
+    try {
+      const client = await ensureSupabaseConfigured();
+      const { data, error } = await withFastCacheTimeout(client
+        .from("locations")
+        .select("*")
+        .order("created_at", { ascending: true }));
 
-  if (error) {
-    throw error;
+      if (error) {
+        throw error;
+      }
+
+      const result = data ?? [];
+      await db.cached_locations.bulkPut(result.map((location: any) => ({
+        id: location.id,
+        data: location,
+        updated_at: new Date().toISOString(),
+      })));
+      return result;
+    } catch (error: any) {
+      if (error?.message !== "Failed to fetch" && !error?.message?.includes("network") && !error?.message?.includes("timeout")) {
+        throw error;
+      }
+    }
   }
 
-  return data;
+  const cached = await db.cached_locations.toArray();
+  return cached.map((record) => record.data);
 }
 
 export async function createLocation(name: string) {
@@ -241,7 +284,7 @@ export async function createLocation(name: string) {
   const { data, error } = await client
     .from("locations")
     .insert([{ name }])
-    .select()
+    .select("*")
     .single();
 
   if (error) {
@@ -257,7 +300,7 @@ export async function updateLocation(id: string, updates: { name?: string; is_ac
     .from("locations")
     .update(updates)
     .eq("id", id)
-    .select()
+    .select("*")
     .single();
 
   if (error) {

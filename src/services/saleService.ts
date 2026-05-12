@@ -6,6 +6,7 @@ type CreateSaleInput = {
   sale_number: string;
   customer_id: string | null;
   cashier_id: string;
+  business_id: string;
   location_id: string | null;
   subtotal: number;
   tax_amount: number;
@@ -28,6 +29,7 @@ export async function pushSaleToSupabase(input: CreateSaleInput) {
     .from("sales")
     .insert({
       sale_number: input.sale_number,
+      business_id: input.business_id,
       customer_id: input.customer_id,
       cashier_id: input.cashier_id,
       subtotal: input.subtotal,
@@ -38,7 +40,7 @@ export async function pushSaleToSupabase(input: CreateSaleInput) {
       location_id: input.location_id,
       notes: input.notes ?? null,
     })
-    .select()
+    .select("*")
     .single();
 
   if (saleError) throw saleError;
@@ -48,13 +50,14 @@ export async function pushSaleToSupabase(input: CreateSaleInput) {
     .insert(
       input.items.map((item) => ({
         sale_id: sale.id,
+        business_id: input.business_id,
         product_id: item.product_id,
         quantity: item.quantity,
         unit_price: item.unit_price,
         line_total: item.line_total,
       })),
     )
-    .select();
+    .select("*");
 
   if (itemsError) throw itemsError;
 

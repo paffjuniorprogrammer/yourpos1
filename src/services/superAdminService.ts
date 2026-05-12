@@ -52,7 +52,7 @@ export const superAdminService = {
       .from('businesses')
       .update(updates)
       .eq('id', id)
-      .select()
+      .select("*")
       .single();
 
     if (error) throw error;
@@ -139,7 +139,7 @@ export const superAdminService = {
       .from('businesses')
       .update(updates)
       .eq('id', id)
-      .select()
+      .select("*")
       .single();
 
     if (error) throw error;

@@ -37,7 +37,7 @@ const initialForm: CustomerForm = {
 
 export function CustomersPage() {
   const { t } = useTranslation();
-  const { can } = useAuth();
+  const { can, business } = useAuth();
 
   const { showToast, confirm } = useNotification();
   const [search, setSearch] = useState("");
@@ -138,13 +138,17 @@ export function CustomersPage() {
     };
 
     if (!formValues.id) {
+      if (!business?.id) {
+        showToast("error", "Business context not found.");
+        return;
+      }
       try {
         const customer = await createCustomer({
           full_name: formValues.name.trim(),
           phone: formValues.contact.trim(),
           email: "",
           address: formValues.address.trim(),
-        });
+        }, business.id);
         nextRow.id = customer.id;
       } catch (error) {
         console.error("Failed to create customer:", error);

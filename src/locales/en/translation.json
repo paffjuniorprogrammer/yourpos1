@@ -299,6 +299,8 @@
     "search_placeholder": "Search products or barcode",
     "filter_category": "Filter by Category",
     "filter_stock": "Stock Status",
+    "all_locations": "All Locations",
+    "no_category": "No Category",
     "in_stock": "In Stock",
     "low_stock": "Low Stock",
     "out_of_stock": "Out of Stock",

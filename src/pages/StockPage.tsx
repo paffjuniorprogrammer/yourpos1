@@ -74,7 +74,7 @@ const emptyTransferForm: TransferForm = {
 
 export function StockPage() {
   const { t } = useTranslation();
-  const { profile, can, activeLocationId } = useAuth();
+  const { profile, can, activeLocationId, business } = useAuth();
 
   const { showToast } = useNotification();
   const { refreshData } = usePosData();
@@ -326,6 +326,7 @@ export function StockPage() {
     try {
       await recordStockCount(
         countingForm.locationId,
+        business?.id || "",
         userId,
         countingForm.notes,
         countingForm.lines.map(line => ({
@@ -371,6 +372,7 @@ export function StockPage() {
       await recordStockTransfer(
         transferForm.fromLocationId,
         transferForm.toLocationId,
+        business?.id || "",
         transferForm.status.toLowerCase().replace(" ", "_") as "pending" | "in_transit" | "completed",
         userId,
         transferForm.lines.map(line => ({
