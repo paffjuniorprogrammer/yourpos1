@@ -8,11 +8,17 @@ import { LoginPage } from "./pages/LoginPage";
 import { PosPage } from "./pages/PosPage";
 import { ProductsPage } from "./pages/ProductsPage";
 import { PurchasesPage } from "./pages/PurchasesPage";
+import { PurchaseRequisitionPage } from "./pages/PurchaseRequisitionPage";
 import { ReportsPage } from "./pages/ReportsPage";
 import { SalesPage } from "./pages/SalesPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { StockPage } from "./pages/StockPage";
+import { AddPurchasePage } from "./pages/AddPurchasePage";
+import { AddStockCountPage } from "./pages/AddStockCountPage";
+import { AddRequisitionPage } from "./pages/AddRequisitionPage";
+import { AddProductPage } from "./pages/AddProductPage";
 import { SuppliersPage } from "./pages/SuppliersPage";
+import { PWAInstallPrompt } from "./components/ui/PWAInstallPrompt";
 import { Toaster } from "./components/ui/Toaster";
 import { ConnectionStatus } from "./components/ui/ConnectionStatus";
 import { SubscriptionGuard, SuperAdminGuard } from "./components/auth/SubscriptionGuard";
@@ -89,6 +95,54 @@ export default function App() {
               }
             />
             <Route
+              path="/purchases/new"
+              element={
+                <ProtectedRoute requiredPermission={["Purchases", "add"]}>
+                  <AddPurchasePage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/requisitions"
+              element={
+                <ProtectedRoute requiredPermission={["Requisitions", "view"]}>
+                  <PurchaseRequisitionPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/requisitions/new"
+              element={
+                <ProtectedRoute requiredPermission={["Requisitions", "add"]}>
+                  <AddRequisitionPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/requisitions/edit/:id"
+              element={
+                <ProtectedRoute requiredPermission={["Requisitions", "add"]}>
+                  <AddRequisitionPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/products/new"
+              element={
+                <ProtectedRoute requiredPermission={["Products", "add"]}>
+                  <AddProductPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/products/edit/:id"
+              element={
+                <ProtectedRoute requiredPermission={["Products", "edit"]}>
+                  <AddProductPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/customers"
               element={
                 <ProtectedRoute requiredPermission={["Customers", "view"]}>
@@ -109,6 +163,14 @@ export default function App() {
               element={
                 <ProtectedRoute requiredPermission={["Stock", "view"]}>
                   <StockPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/stock/new-count"
+              element={
+                <ProtectedRoute requiredPermission={["Stock", "add"]}>
+                  <AddStockCountPage />
                 </ProtectedRoute>
               }
             />
@@ -150,6 +212,7 @@ export default function App() {
       </Routes>
       <Toaster />
       <ConnectionStatus />
+      <PWAInstallPrompt />
     </>
   );
 }

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { useNotification } from "../context/NotificationContext";
@@ -75,6 +76,7 @@ const emptyTransferForm: TransferForm = {
 export function StockPage() {
   const { t } = useTranslation();
   const { profile, can, activeLocationId, business } = useAuth();
+  const navigate = useNavigate();
 
   const { showToast } = useNotification();
   const { refreshData } = usePosData();
@@ -438,7 +440,7 @@ export function StockPage() {
           </label>
           {can("Stock", "add") && (
             <button
-              onClick={() => openCountingModal()}
+              onClick={() => navigate('/stock/new-count')}
               className="flex items-center justify-center gap-2 rounded-2xl bg-brand-500 px-5 py-3 text-sm font-semibold text-white transition hover:bg-brand-600"
             >
               <Plus size={16} />

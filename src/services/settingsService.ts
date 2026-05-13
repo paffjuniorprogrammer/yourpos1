@@ -160,16 +160,13 @@ export async function upsertUserPermissions(
 
 export async function deleteUserProfile(userId: string) {
   const client = await ensureSupabaseConfigured();
-  const { data, error } = await client
-    .from("users")
-    .delete()
-    .eq("id", userId);
+  const { error } = await client.rpc('admin_delete_staff', {
+    p_target_user_id: userId
+  });
 
   if (error) {
     throw error;
   }
-
-  return data;
 }
 
 export async function listUserPermissions(userId: string) {

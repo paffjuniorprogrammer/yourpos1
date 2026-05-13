@@ -5,6 +5,7 @@
     "products": "Products",
     "sales": "Sales",
     "purchases": "Purchases",
+    "requisitions": "Requisitions",
     "customers": "Customers",
     "suppliers": "Suppliers",
     "stock": "Stock",
@@ -1174,6 +1175,31 @@
       "select_supplier": "Please select a valid supplier.",
       "select_location": "Please select a valid location.",
       "save_failed": "Failed to save purchase: {{error}}"
+    }
+  },
+  "requisitions": {
+    "title": "Purchase Requisitions",
+    "subtitle": "Plan your inventory needs and convert them to purchases",
+    "new_requisition": "New Requisition",
+    "import_placeholder": "Enter requisition number to import...",
+    "import_btn": "Import to Purchase",
+    "table": {
+      "number": "Req #",
+      "location": "Location",
+      "supplier": "Supplier",
+      "status": "Status",
+      "items": "Items",
+      "date": "Date"
+    },
+    "status": {
+      "pending": "Pending",
+      "converted": "Converted",
+      "cancelled": "Cancelled"
+    },
+    "success": {
+      "created": "Requisition created successfully",
+      "updated": "Requisition updated successfully",
+      "deleted": "Requisition deleted"
     }
   }
 }

@@ -528,7 +528,7 @@ create or replace function public.has_module_permission(p_module text, p_action 
 returns boolean
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, auth
 set row_security = off
 as $$
 declare
@@ -568,22 +568,36 @@ create or replace function public.get_user_role()
 returns public.app_role
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, auth
 set row_security = off
 as $$
 declare
-  v_role public.app_role;
+  v_role text;
 begin
   if public.is_platform_admin() then
     return 'admin'::public.app_role;
   end if;
 
-  select role into v_role
+  -- 1. Try to get from JWT claims (fastest, avoids DB lookup during RLS)
+  v_role := auth.jwt() -> 'app_metadata' ->> 'role';
+  if v_role is not null then
+    -- Normalize and validate against the app_role enum
+    v_role := lower(v_role);
+    if v_role = 'casher' then v_role := 'cashier'; end if;
+    
+    if v_role in ('admin', 'manager', 'cashier') then
+      return v_role::public.app_role;
+    end if;
+  end if;
+
+  -- 2. Fallback to DB if JWT is missing claims
+  select role::text into v_role
   from public.users
   where auth_user_id = auth.uid()
     and is_active = true
   limit 1;
-  return coalesce(v_role, 'cashier'::public.app_role);
+  
+  return coalesce(v_role, 'cashier')::public.app_role;
 end;
 $$;
 
@@ -591,17 +605,25 @@ create or replace function public.get_user_business_id()
 returns uuid
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, auth
 set row_security = off
 as $$
 declare
   v_business_id uuid;
 begin
+  -- 1. Try to get from JWT claims
+  v_business_id := (auth.jwt() -> 'app_metadata' ->> 'business_id')::uuid;
+  if v_business_id is not null then
+    return v_business_id;
+  end if;
+
+  -- 2. Fallback to DB
   select business_id into v_business_id
   from public.users
   where auth_user_id = auth.uid()
     and is_active = true
   limit 1;
+  
   return v_business_id;
 end;
 $$;
@@ -644,7 +666,7 @@ BEGIN
   
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, auth;
 
 -- Attach Triggers
 DROP TRIGGER IF EXISTS trg_set_business_id_permissions ON public.user_permissions;
@@ -717,26 +739,18 @@ create or replace function public.get_user_location()
 returns uuid
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, auth
 set row_security = off
 as $$
 declare
   v_location_id uuid;
-  v_has_column boolean;
 begin
-  select exists(
-    select 1 from information_schema.columns
-    where table_schema = 'public'
-      and table_name = 'users'
-      and column_name = 'location_id'
-  ) into v_has_column;
-
-  if not v_has_column then
-    return null;
-  end if;
-
-  execute 'select location_id from public.users where auth_user_id = auth.uid() and is_active = true limit 1'
-    into v_location_id;
+  select location_id into v_location_id
+  from public.users
+  where auth_user_id = auth.uid()
+    and is_active = true
+  limit 1;
+  
   return v_location_id;
 end;
 $$;
@@ -784,7 +798,7 @@ create or replace function public.handle_new_auth_user()
 returns trigger
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, auth, extensions
 set row_security = off
 as $$
 declare

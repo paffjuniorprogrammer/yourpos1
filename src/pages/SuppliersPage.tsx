@@ -307,11 +307,10 @@ export function SuppliersPage() {
                     t('suppliers.table.unpaid'),
                     t('common.actions'),
                   ].map((column) => (
-                    <th key={column} className="border-b border-white/10 px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-100">
+                    <th key={column} className="border-b border-white/10 px-5 py-4 text-left text-[10px] font-black uppercase tracking-widest text-slate-100">
                       {column}
                     </th>
                   ))}
-
                 </tr>
               </thead>
               <tbody className="bg-white">

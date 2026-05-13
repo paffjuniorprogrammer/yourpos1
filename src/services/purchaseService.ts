@@ -39,6 +39,29 @@ export type PurchaseSummary = {
   items: PurchaseItemSummary[];
 };
 
+export type PurchaseRequisitionItem = {
+  id: string;
+  product_id: string;
+  product_name?: string;
+  quantity: number;
+  unit_cost: number;
+  notes?: string;
+};
+
+export type PurchaseRequisition = {
+  id: string;
+  requisition_number: number;
+  location_id: string;
+  location_name?: string;
+  supplier_id?: string;
+  supplier_name?: string;
+  status: 'pending' | 'converted' | 'cancelled';
+  notes?: string;
+  items: PurchaseRequisitionItem[];
+  created_at: string;
+  created_by: string;
+};
+
 function mapPaymentStatus(status: string | null): PurchaseSummary["paymentStatus"] {
   if (status === "paid") return "Paid";
   if (status === "partial") return "Partially Paid";
@@ -345,4 +368,134 @@ export async function updatePurchase(
   if (error) throw error;
   await db.cached_purchases.clear();
   return data;
+}
+
+export async function listPurchaseRequisitions(): Promise<PurchaseRequisition[]> {
+  const client = await ensureSupabaseConfigured();
+  const { data, error } = await client
+    .from('purchase_requisitions')
+    .select(`
+      *,
+      locations(name),
+      suppliers(name),
+      purchase_requisition_items(
+        *,
+        products(name)
+      )
+    `)
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+
+  return (data || []).map(req => ({
+    ...req,
+    location_name: req.locations?.name,
+    supplier_name: req.suppliers?.name,
+    items: (req.purchase_requisition_items || []).map((item: any) => ({
+      ...item,
+      product_name: item.products?.name
+    }))
+  }));
+}
+
+export async function createPurchaseRequisition(input: {
+  location_id: string;
+  supplier_id?: string;
+  notes?: string;
+  items: Omit<PurchaseRequisitionItem, 'id'>[];
+}) {
+  const client = await ensureSupabaseConfigured();
+  const { data: { user } } = await client.auth.getUser();
+  if (!user) throw new Error("Not authenticated");
+
+  const { data: dbUser } = await client
+    .from("users")
+    .select("id")
+    .eq("auth_user_id", user.id)
+    .single();
+  
+  if (!dbUser) throw new Error("Local user record not found");
+
+  const { data, error } = await client.rpc('create_purchase_requisition', {
+    p_location_id: input.location_id,
+    p_supplier_id: input.supplier_id,
+    p_notes: input.notes,
+    p_created_by: dbUser.id,
+    p_items: input.items
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function updatePurchaseRequisition(id: string, input: {
+  location_id: string;
+  supplier_id?: string;
+  notes?: string;
+  items: Omit<PurchaseRequisitionItem, 'id'>[];
+}) {
+  const client = await ensureSupabaseConfigured();
+  
+  // Start a transaction-like process
+  const { error: deleteError } = await client
+    .from('purchase_requisition_items')
+    .delete()
+    .eq('requisition_id', id);
+
+  if (deleteError) throw deleteError;
+
+  const { error: updateError } = await client
+    .from('purchase_requisitions')
+    .update({
+      location_id: input.location_id,
+      supplier_id: input.supplier_id,
+      notes: input.notes
+    })
+    .eq('id', id);
+
+  if (updateError) throw updateError;
+
+  const { error: insertError } = await client
+    .from('purchase_requisition_items')
+    .insert(input.items.map(item => ({ ...item, requisition_id: id })));
+
+  if (insertError) throw insertError;
+}
+
+export async function deletePurchaseRequisition(id: string) {
+  const client = await ensureSupabaseConfigured();
+  const { error } = await client
+    .from('purchase_requisitions')
+    .delete()
+    .eq('id', id);
+  if (error) throw error;
+}
+
+export async function getPurchaseRequisitionByNumber(num: number): Promise<PurchaseRequisition | null> {
+  const client = await ensureSupabaseConfigured();
+  const { data, error } = await client
+    .from('purchase_requisitions')
+    .select(`
+      *,
+      locations(name),
+      suppliers(name),
+      purchase_requisition_items(
+        *,
+        products(name)
+      )
+    `)
+    .eq('requisition_number', num)
+    .single();
+
+  if (error) return null;
+
+  return {
+    ...data,
+    location_name: data.locations?.name,
+    supplier_name: data.suppliers?.name,
+    items: (data.purchase_requisition_items || []).map((item: any) => ({
+      ...item,
+      product_name: item.products?.name
+    }))
+  };
 }

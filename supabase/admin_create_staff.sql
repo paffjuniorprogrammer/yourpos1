@@ -16,7 +16,7 @@ SECURITY DEFINER
 SET search_path = public, auth, extensions
 AS $$
 DECLARE
-  v_auth_user_id uuid := gen_random_uuid();
+  v_auth_user_id uuid := extensions.gen_random_uuid();
 BEGIN
   -- Check permission: caller must be Admin for that business, or platform admin
   IF NOT (public.is_platform_admin() OR (public.get_user_role() = 'admin' AND public.get_user_business_id() = p_business_id)) THEN
@@ -35,7 +35,11 @@ BEGIN
     aud,
     role,
     created_at,
-    updated_at
+    updated_at,
+    confirmation_token,
+    recovery_token,
+    email_change_token_new,
+    is_super_admin
   ) VALUES (
     v_auth_user_id,
     '00000000-0000-0000-0000-000000000000',
@@ -47,11 +51,35 @@ BEGIN
     'authenticated',
     'authenticated',
     now(),
+    now(),
+    '',
+    '',
+    '',
+    false
+  );
+
+  -- MANDATORY: Create Identity record for the user to be able to login
+  INSERT INTO auth.identities (
+    id,
+    user_id,
+    identity_data,
+    provider,
+    provider_id,
+    last_sign_in_at,
+    created_at,
+    updated_at
+  ) VALUES (
+    extensions.gen_random_uuid(),
+    v_auth_user_id,
+    jsonb_build_object('sub', v_auth_user_id, 'email', p_email),
+    'email',
+    v_auth_user_id::text,
+    now(),
+    now(),
     now()
   );
 
   -- The Supabase trigger 'on_auth_user_created' fires here and inserts a row into public.users.
-  
   -- We immediately update the user's location, so it's fully populated for the frontend in one transaction
   UPDATE public.users 
   SET location_id = p_location_id 

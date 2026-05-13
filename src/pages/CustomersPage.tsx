@@ -255,7 +255,7 @@ export function CustomersPage() {
                   ].map((column) => (
                     <th
                       key={column}
-                      className="border-b border-white/10 px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-100"
+                      className="border-b border-white/10 px-5 py-4 text-left text-[10px] font-black uppercase tracking-widest text-slate-100"
                     >
                       {column}
                     </th>

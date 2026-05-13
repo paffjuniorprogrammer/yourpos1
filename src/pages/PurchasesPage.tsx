@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { CalendarClock, CreditCard, Pencil, Plus, Printer, Search, Trash2, X } from "lucide-react";
@@ -114,6 +115,7 @@ function formatScheduleCountdown(dueDate: string) {
 export function PurchasesPage() {
   const { t } = useTranslation();
   const { can, business } = useAuth();
+  const navigate = useNavigate();
 
   const { showToast, confirm } = useNotification();
   const { settings } = useSettings();
@@ -559,7 +561,7 @@ export function PurchasesPage() {
         </div>
 
         {can("Purchases", "add") && (
-          <button onClick={openCreateModal} className="inline-flex items-center gap-2 rounded-2xl bg-brand-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-brand-700">
+          <button onClick={() => navigate('/purchases/new')} className="inline-flex items-center gap-2 rounded-2xl bg-brand-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-brand-700">
             <Plus size={18} /> {t('purchases.new_purchase')}
           </button>
         )}

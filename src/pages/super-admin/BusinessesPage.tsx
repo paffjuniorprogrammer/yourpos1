@@ -81,6 +81,7 @@ export function BusinessesPage() {
         adminName: "Admin",
         planId: newBiz.planId,
         status: "active",
+        startDate: new Date().toISOString(),
         expiryDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
       });
       setShowCreateModal(false);

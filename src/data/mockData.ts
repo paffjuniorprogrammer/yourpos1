@@ -44,6 +44,12 @@ export const navItems: NavItem[] = [
     roles: ["admin", "manager"],
   },
   {
+    label: "Requisitions",
+    path: "/requisitions",
+    icon: ReceiptText,
+    roles: ["admin", "manager"],
+  },
+  {
     label: "Customers",
     path: "/customers",
     icon: Users,

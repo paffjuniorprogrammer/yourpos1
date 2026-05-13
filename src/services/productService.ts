@@ -77,8 +77,8 @@ export async function listProducts(locationId?: string | null) {
     try {
       const client = await ensureSupabaseConfigured();
       
-      const baseColumns = "id, name, barcode, cost_price, selling_price, stock_quantity, reorder_level, image_url, is_active, created_at, business_id";
-      const selectQuery = `${baseColumns}, product_stocks(quantity, location_id)`;
+      const baseColumns = "id, name, barcode, cost_price, selling_price, stock_quantity, reorder_level, image_url, is_active, created_at, business_id, category_id";
+      const selectQuery = `${baseColumns}, categories(name), product_stocks(quantity, location_id)`;
 
       const { data, error } = await client
         .from("products")
@@ -109,8 +109,10 @@ export async function listProducts(locationId?: string | null) {
 
         return {
           ...product,
+          category: product.categories?.name || 'General',
           stock_quantity: displayStock,
-          product_stocks: undefined
+          product_stocks: undefined,
+          categories: undefined
         };
       }) as ProductRecord[];
 
@@ -215,7 +217,7 @@ export async function createProduct(values: ProductFormValues, businessId: strin
   const { data, error } = await client
     .from("products")
     .insert(mapProductPayload(values, businessId))
-    .select("id, name, barcode, cost_price, selling_price, stock_quantity, reorder_level, business_id")
+    .select("*")
     .single();
 
   if (error) {
@@ -377,4 +379,42 @@ export async function deleteAttributeValue(id: string) {
   const client = await ensureSupabaseConfigured();
   const { error } = await client.from("product_attribute_values").delete().eq("id", id);
   if (error) throw error;
+}
+
+export async function getProductHistory(productId: string) {
+  const client = await ensureSupabaseConfigured();
+  
+  const [salesResponse, purchasesResponse] = await Promise.all([
+    client
+      .from("sale_items")
+      .select("quantity, unit_price, line_total, created_at, sales(sale_number, customers(full_name))")
+      .eq("product_id", productId)
+      .order("created_at", { ascending: false })
+      .limit(10),
+    client
+      .from("purchase_items")
+      .select("quantity, cost_price, line_total, created_at, purchases(purchase_number, suppliers(name))")
+      .eq("product_id", productId)
+      .order("created_at", { ascending: false })
+      .limit(10)
+  ]);
+
+  return {
+    sales: (salesResponse.data || []).map((s: any) => ({
+      date: s.created_at,
+      quantity: s.quantity,
+      price: s.unit_price,
+      total: s.line_total,
+      reference: s.sales?.sale_number,
+      partner: s.sales?.customers?.full_name || "Walk-in Customer"
+    })),
+    purchases: (purchasesResponse.data || []).map((p: any) => ({
+      date: p.created_at,
+      quantity: p.quantity,
+      price: p.cost_price,
+      total: p.line_total,
+      reference: p.purchases?.purchase_number,
+      partner: p.purchases?.suppliers?.name || "Unknown Supplier"
+    }))
+  };
 }

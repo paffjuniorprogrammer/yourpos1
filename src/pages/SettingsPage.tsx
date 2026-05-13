@@ -80,6 +80,7 @@ const moduleTemplates = [
   { module: "Reports", view: false, add: false, edit: false, remove: false },
   { module: "Purchases", view: false, add: false, edit: false, remove: false },
   { module: "Suppliers", view: true, add: true, edit: false, remove: false },
+  { module: "Requisitions", view: false, add: false, edit: false, remove: false },
 ] as StaffPermission[];
 
 function buildStaffPermissions(existing?: StaffPermission[]) {
@@ -335,12 +336,12 @@ export function SettingsPage() {
 
       setShopSettingsId(saved.id);
       setBusinessSettings({
-        name: saved.shop_name,
-        address: saved.address ?? "",
-        contact: saved.contact_phone ?? "",
-        logoUrl: saved.logo_url ?? "",
-        defaultProfitPercentage: String(saved.default_profit_percentage ?? ""),
-        taxPercentage: String(saved.tax_percentage ?? ""),
+        name: saved.shop_name || "",
+        address: saved.address || "",
+        contact: saved.contact_phone || "",
+        logoUrl: saved.logo_url || "",
+        defaultProfitPercentage: String(saved.default_profit_percentage || ""),
+        taxPercentage: String(saved.tax_percentage || ""),
       });
       showToast("success", "Business settings updated!");
     } catch (error: any) {
