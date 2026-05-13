@@ -239,6 +239,23 @@ export async function updateProduct(productId: string, values: ProductFormValues
     throw error;
   }
 
+  // Update local cache to ensure real-time consistency across POS
+  try {
+    const cached = await db.cached_products.get(productId);
+    if (cached) {
+      await db.cached_products.put({
+        ...cached,
+        data: {
+          ...cached.data,
+          ...data
+        },
+        updated_at: new Date().toISOString()
+      });
+    }
+  } catch (cacheErr) {
+    console.warn("Failed to update cache on product update:", cacheErr);
+  }
+
   return data as ProductRecord;
 }
 

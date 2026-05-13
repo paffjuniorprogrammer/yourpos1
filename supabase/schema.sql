@@ -74,6 +74,7 @@ create table if not exists public.locations (
   id uuid primary key default gen_random_uuid(),
   business_id uuid not null references public.businesses(id) on delete restrict,
   name text not null,
+  type text not null default 'branch',
   is_active boolean not null default true,
   created_at timestamptz not null default now()
 );
@@ -92,6 +93,8 @@ create table if not exists public.users (
 
 -- Add business_id columns for existing databases
 ALTER TABLE public.locations ADD COLUMN IF NOT EXISTS business_id uuid REFERENCES public.businesses(id) ON DELETE RESTRICT;
+ALTER TABLE public.locations ADD COLUMN IF NOT EXISTS type text DEFAULT 'branch';
+UPDATE public.locations SET type = 'branch' WHERE type IS NULL;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS business_id uuid REFERENCES public.businesses(id) ON DELETE RESTRICT;
 
 -- Add location_id to existing users if the column was not created yet
@@ -368,20 +371,26 @@ create table if not exists public.day_closures (
   user_id uuid references public.users(id) on delete set null,
   location_id uuid references public.locations(id) on delete restrict,
   closing_date date not null,
+  opening_cash decimal(12,2) not null default 0,
   cash_amount decimal(12,2) not null default 0,
   momo_amount decimal(12,2) not null default 0,
   bank_amount decimal(12,2) not null default 0,
   card_amount decimal(12,2) not null default 0,
   credit_amount decimal(12,2) not null default 0,
   total_amount decimal(12,2) not null default 0,
+  status text not null default 'open',
+  closed_at timestamptz,
   created_at timestamptz not null default now(),
   unique (user_id, closing_date, location_id)
 );
 
-ALTER TABLE public.day_closures ADD COLUMN IF NOT EXISTS business_id uuid REFERENCES public.businesses(id) ON DELETE RESTRICT;
+ALTER TABLE public.day_closures ADD COLUMN IF NOT EXISTS business_id uuid REFERENCES public.businesses(id) on delete restrict;
 
 -- Add location_id safeguard
 ALTER TABLE public.day_closures ADD COLUMN IF NOT EXISTS location_id uuid REFERENCES public.locations(id) ON DELETE SET NULL;
+ALTER TABLE public.day_closures ADD COLUMN IF NOT EXISTS opening_cash decimal(12,2) not null default 0;
+ALTER TABLE public.day_closures ADD COLUMN IF NOT EXISTS status text not null default 'open';
+ALTER TABLE public.day_closures ADD COLUMN IF NOT EXISTS closed_at timestamptz;
 
 create table if not exists public.stock_movements (
   id uuid primary key default gen_random_uuid(),
@@ -1475,7 +1484,20 @@ BEGIN
     p_end_date
   ) RETURNING id INTO v_business_id;
 
-  -- 2. Create Auth User (Internal Supabase Table)
+  -- 2. Create a default primary location for the new business.
+  INSERT INTO public.locations (
+    business_id,
+    name,
+    type,
+    is_active
+  ) VALUES (
+    v_business_id,
+    'Main Branch',
+    'main',
+    true
+  ) RETURNING id INTO v_location_id;
+
+  -- 3. Create Auth User (Internal Supabase Table)
   -- We use explicit schema prefixes (auth. and extensions.) to avoid search_path issues.
   INSERT INTO auth.users (
     id,
@@ -1516,18 +1538,25 @@ BEGIN
   -- 3. The trigger 'handle_new_auth_user' will now fire.
   -- It automatically creates the 'public.users' record.
 
-  -- 4. Create Default Location
+  -- 4. Create a default location for the new business.
   INSERT INTO public.locations (
-    business_id, 
-    name, 
+    business_id,
+    name,
+    type,
     is_active
   ) VALUES (
-    v_business_id, 
-    'Main Branch', 
+    v_business_id,
+    'Main Branch',
+    'main',
     true
   ) RETURNING id INTO v_location_id;
 
-  -- 5. Initial Shop Settings
+  -- 5. Attach the default location to the newly-created business owner.
+  UPDATE public.users
+  SET location_id = v_location_id
+  WHERE auth_user_id = v_auth_user_id;
+
+  -- 6. Initial Shop Settings
   INSERT INTO public.shop_settings (
     business_id, 
     shop_name, 
@@ -2477,15 +2506,18 @@ create policy "Staff read own day closures or admin all"
 on public.day_closures
 for select
 using (
-  business_id = public.get_user_business_id()
-  and (
-  public.get_user_role() = 'admin'
-  or exists (
-    select 1
-    from public.users u
-    where u.id = user_id
-      and u.auth_user_id = auth.uid()
-  )
+  public.is_platform_admin()
+  or (
+    business_id = public.get_user_business_id()
+    and (
+      public.get_user_role() = 'admin'
+      or exists (
+        select 1
+        from public.users u
+        where u.id = user_id
+          and u.auth_user_id = auth.uid()
+      )
+    )
   )
 );
 
@@ -2493,8 +2525,14 @@ drop policy if exists "Cashiers and above manage own day closures" on public.day
 create policy "Cashiers and above manage own day closures"
 on public.day_closures
 for all
-using (public.get_user_role() in ('admin', 'manager', 'cashier') and business_id = public.get_user_business_id())
-with check (public.get_user_role() in ('admin', 'manager', 'cashier') and business_id = public.get_user_business_id());
+using (
+  public.is_platform_admin()
+  or (public.get_user_role() in ('admin', 'manager', 'cashier') and business_id = public.get_user_business_id())
+)
+with check (
+  public.is_platform_admin()
+  or (public.get_user_role() in ('admin', 'manager', 'cashier') and business_id = public.get_user_business_id())
+);
 
 -- Locations Policies (Allow all staff to see sites for dropdowns)
 drop policy if exists "Authenticated staff read locations" on public.locations;

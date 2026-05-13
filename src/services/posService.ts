@@ -40,7 +40,7 @@ type CloseDaySummary = {
   total_amount: number;
 };
 
-const FAST_CACHE_TIMEOUT_MS = 500;
+const FAST_CACHE_TIMEOUT_MS = 5000;
 
 function withFastCacheTimeout<T>(promise: PromiseLike<T>) {
   return Promise.race([
@@ -138,23 +138,26 @@ export async function listPosCustomers() {
   return cached.map((record) => record.data) as PosCustomerRecord[];
 }
 
-export async function getShopSettings() {
+export async function getShopSettings(businessId?: string) {
   if (navigator.onLine) {
     try {
       const client = await ensureSupabaseConfigured();
-      const { data, error } = await withFastCacheTimeout(client
-        .from("shop_settings")
-        .select("*")
-        .order("created_at", { ascending: true })
-        .limit(1)
-        .maybeSingle());
+      let query = client.from("shop_settings").select("*");
+      if (businessId) {
+        query = query.eq("business_id", businessId);
+      } else {
+        query = query.order("created_at", { ascending: true }).limit(1);
+      }
+
+      const { data, error } = await withFastCacheTimeout(query.maybeSingle());
 
       if (error) {
         throw error;
       }
 
       if (data) {
-        await db.cached_settings.put({ id: "shop_settings", data, updated_at: new Date().toISOString() });
+        const cacheKey = businessId ? `shop_settings_${businessId}` : "shop_settings";
+        await db.cached_settings.put({ id: cacheKey, data, updated_at: new Date().toISOString() });
       }
       return data as ShopSettingsRecord;
     } catch (error: any) {
@@ -164,7 +167,8 @@ export async function getShopSettings() {
     }
   }
 
-  const cached = await db.cached_settings.get("shop_settings");
+  const cacheKey = businessId ? `shop_settings_${businessId}` : "shop_settings";
+  const cached = await db.cached_settings.get(cacheKey);
   return cached?.data as ShopSettingsRecord;
 }
 
@@ -311,7 +315,7 @@ export async function pushRegisterOpenToSupabase(payload: any) {
   const client = await ensureSupabaseConfigured();
   const { error } = await client
     .from('day_closures')
-    .insert(payload);
+    .upsert(payload, { onConflict: 'user_id, closing_date, location_id', ignoreDuplicates: true });
   if (error) throw error;
 }
 
@@ -396,18 +400,27 @@ export async function getCloseDaySummary(userId: string, locationId: string): Pr
 
 export async function pushDayClosureToSupabase(payload: any) {
   const client = await ensureSupabaseConfigured();
-  const { error } = await client
-    .from('day_closures')
-    .update(payload)
-    .eq('user_id', payload.user_id)
-    .eq('closing_date', payload.closing_date);
+  let request = client.from('day_closures').update(payload);
+  request = request.eq('user_id', payload.user_id);
+  request = request.eq('closing_date', payload.closing_date);
+
+  if (payload.location_id) {
+    request = request.eq('location_id', payload.location_id);
+  }
+
+  if (payload.business_id) {
+    request = request.eq('business_id', payload.business_id);
+  }
+
+  const { error } = await request;
   if (error) throw error;
 }
 
-export async function createDayClosure(userId: string, locationId: string, summary: CloseDaySummary) {
+export async function createDayClosure(userId: string, businessId: string, locationId: string, summary: CloseDaySummary) {
   const payload = {
     ...summary,
     user_id: userId,
+    business_id: businessId,
     location_id: locationId,
     closing_date: new Date().toISOString().split('T')[0],
     status: 'closed',

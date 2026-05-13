@@ -4,7 +4,7 @@ import { db } from "../lib/db";
 // Performance cache
 let suppliersCache: { data: SupplierRecord[], timestamp: number } | null = null;
 const CACHE_DURATION_MS = 30000; // 30 seconds
-const FAST_CACHE_TIMEOUT_MS = 500;
+const FAST_CACHE_TIMEOUT_MS = 5000;
 
 function withFastCacheTimeout<T>(promise: PromiseLike<T>) {
   return Promise.race([

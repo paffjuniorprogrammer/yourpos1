@@ -651,9 +651,9 @@ export function PosPage() {
   }
 
   async function confirmCloseDay() {
-    if (profile?.id && authConfigured && activeLocationId) {
+    if (profile?.id && authConfigured && activeLocationId && business?.id) {
       try {
-        await createDayClosure(profile.id, activeLocationId, closeDaySummary);
+        await createDayClosure(profile.id, business.id, activeLocationId, closeDaySummary);
       } catch (err) {
         console.error("Failed to close day:", err);
       }

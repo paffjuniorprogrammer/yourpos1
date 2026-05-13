@@ -308,6 +308,12 @@ function RegisterModal({ onClose, plans, onComplete }: any) {
   });
   const [errorMsg, setErrorMsg] = useState('');
 
+  useEffect(() => {
+    if (!formData.planId && plans[0]?.id) {
+      setFormData((prev) => ({ ...prev, planId: plans[0].id }));
+    }
+  }, [plans, formData.planId]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
@@ -319,7 +325,8 @@ function RegisterModal({ onClose, plans, onComplete }: any) {
         adminPassword: formData.password,
         planId: formData.planId || null,
         status: formData.status as any,
-        expiryDate: new Date(formData.endDate).toISOString()
+        expiryDate: new Date(formData.endDate).toISOString(),
+        startDate: new Date(formData.startDate).toISOString()
       });
       onComplete();
       onClose();

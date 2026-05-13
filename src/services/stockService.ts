@@ -183,7 +183,6 @@ export async function recordStockCount(
 
   const { data, error } = await client.rpc("process_stock_count", {
     p_location_id: locationId,
-    p_business_id: businessId,
     p_created_by: createdBy,
     p_notes: notes,
     p_items: transformedItems

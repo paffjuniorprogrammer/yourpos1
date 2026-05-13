@@ -1,20 +1,25 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { syncPendingSales } from '../services/syncService';
 
 export function useOfflineSync() {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [isSyncing, setIsSyncing] = useState(false);
+  const isSyncingRef = useRef(false);
 
   useEffect(() => {
     const handleOnline = async () => {
       setIsOnline(true);
       
       // Auto-trigger sync when coming back online
+      if (isSyncingRef.current) return;
+      
       setIsSyncing(true);
+      isSyncingRef.current = true;
       try {
         await syncPendingSales();
       } finally {
         setIsSyncing(false);
+        isSyncingRef.current = false;
       }
     };
 
@@ -32,7 +37,7 @@ export function useOfflineSync() {
 
     // PERIODIC SYNC: Check every 5 minutes for pending items if online
     const interval = setInterval(() => {
-      if (navigator.onLine && !isSyncing) {
+      if (navigator.onLine && !isSyncingRef.current) {
         handleOnline();
       }
     }, 5 * 60 * 1000);
@@ -42,7 +47,7 @@ export function useOfflineSync() {
       window.removeEventListener('offline', handleOffline);
       clearInterval(interval);
     };
-  }, [isSyncing]);
+  }, []);
 
   return { isOnline, isSyncing };
 }

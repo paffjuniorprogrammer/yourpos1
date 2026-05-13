@@ -218,6 +218,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setImpersonatedBusinessId(null);
           localStorage.removeItem("cached_user_profile");
           sessionStorage.removeItem("pos_session_loaded");
+          
+          try {
+            const { db } = await import("../lib/db");
+            await Promise.all(db.tables.map(t => t.clear()));
+          } catch (e) {
+            console.error("Failed to clear local cache:", e);
+          }
+          
           window.location.href = "/login";
         }
       },

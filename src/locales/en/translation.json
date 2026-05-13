@@ -39,6 +39,7 @@
     "amount": "Amount",
     "notes": "Notes",
     "confirm": "Confirm",
+    "select": "Select...",
     "success": "Success",
     "error": "Error",
     "calculating": "Calculating...",

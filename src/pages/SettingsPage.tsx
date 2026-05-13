@@ -180,9 +180,13 @@ export function SettingsPage() {
   };
 
   const loadSettingsAndStaff = async () => {
+    if (!profile?.business_id) {
+      return;
+    }
+
     try {
       const [settings, users, locs, finance] = await Promise.all([
-        getShopSettingsRecord(), 
+        getShopSettingsRecord(profile.business_id), 
         listStaffAccounts(), 
         listLocations(),
         getFinanceOverview()
@@ -223,9 +227,13 @@ export function SettingsPage() {
     let isMounted = true;
 
     async function loadSettingsAndStaff() {
+      if (!profile?.business_id) {
+        return;
+      }
+
       try {
         const [settings, users, locs, finance] = await Promise.all([
-          getShopSettingsRecord(), 
+          getShopSettingsRecord(profile.business_id), 
           listStaffAccounts(), 
           listLocations(),
           getFinanceOverview()
@@ -287,7 +295,7 @@ export function SettingsPage() {
     return () => {
       isMounted = false;
     };
-  }, [authConfigured]);
+  }, [authConfigured, profile?.business_id]);
 
   useEffect(() => {
     if (activeSection === "api") {
@@ -314,6 +322,7 @@ export function SettingsPage() {
     try {
       const saved = await upsertShopSettings({
         id: shopSettingsId ?? undefined,
+        business_id: profile?.business_id ?? null,
         shop_name: businessSettings.name,
         address: businessSettings.address,
         contact_phone: businessSettings.contact,

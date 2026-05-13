@@ -2,7 +2,7 @@ import type { AppRole, ShopSettingsRecord, UserPermissionRecord, UserProfile } f
 import { ensureSupabaseConfigured } from "./supabaseUtils";
 import { db } from "../lib/db";
 
-const FAST_CACHE_TIMEOUT_MS = 500;
+const FAST_CACHE_TIMEOUT_MS = 5000;
 
 function withFastCacheTimeout<T>(promise: PromiseLike<T>) {
   return Promise.race([
@@ -187,23 +187,26 @@ export async function listUserPermissions(userId: string) {
   return (data ?? []) as UserPermissionRecord[];
 }
 
-export async function getShopSettingsRecord() {
+export async function getShopSettingsRecord(businessId?: string) {
   if (navigator.onLine) {
     try {
       const client = await ensureSupabaseConfigured();
-      const { data, error } = await withFastCacheTimeout(client
-        .from("shop_settings")
-        .select("*")
-        .order("created_at", { ascending: true })
-        .limit(1)
-        .maybeSingle());
+      let query = client.from("shop_settings").select("*");
+      if (businessId) {
+        query = query.eq("business_id", businessId);
+      } else {
+        query = query.order("created_at", { ascending: true }).limit(1);
+      }
+
+      const { data, error } = await withFastCacheTimeout(query.maybeSingle());
 
       if (error) {
         throw error;
       }
 
       if (data) {
-        await db.cached_settings.put({ id: "shop_settings", data, updated_at: new Date().toISOString() });
+        const cacheKey = businessId ? `shop_settings_${businessId}` : "shop_settings";
+        await db.cached_settings.put({ id: cacheKey, data, updated_at: new Date().toISOString() });
       }
       return data as ShopSettingsRecord | null;
     } catch (error: any) {
@@ -213,16 +216,18 @@ export async function getShopSettingsRecord() {
     }
   }
 
-  const cached = await db.cached_settings.get("shop_settings");
+  const cacheKey = businessId ? `shop_settings_${businessId}` : "shop_settings";
+  const cached = await db.cached_settings.get(cacheKey);
   return (cached?.data ?? null) as ShopSettingsRecord | null;
 }
 
 export async function upsertShopSettings(
-  values: Partial<Omit<ShopSettingsRecord, "created_at" | "updated_at">> & { id?: string | null; updated_by?: string | null },
+  values: Partial<Omit<ShopSettingsRecord, "created_at" | "updated_at">> & { id?: string | null; updated_by?: string | null; business_id?: string | null },
 ) {
   const client = await ensureSupabaseConfigured();
   const payload = {
     id: values.id ?? undefined,
+    business_id: values.business_id ?? undefined,
     shop_name: values.shop_name,
     logo_url: values.logo_url ?? null,
     address: values.address ?? null,

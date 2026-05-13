@@ -27,9 +27,10 @@ export const superAdminService = {
     adminEmail: string;
     adminName: string;
     adminPassword?: string;
-    planId: string;
+    planId?: string | null;
     status: BusinessStatus;
     expiryDate: string;
+    startDate: string;
   }) {
     // We use the RPC to ensure atomicity
     const { data, error } = await supabase.rpc('create_business_with_admin', {
@@ -37,9 +38,9 @@ export const superAdminService = {
         p_admin_email: payload.adminEmail,
         p_admin_password: payload.adminPassword || 'Password123',
         p_admin_name: payload.adminName,
-        p_plan_id: payload.planId,
+        p_plan_id: payload.planId ?? null,
         p_status: payload.status as any,
-        p_start_date: new Date().toISOString(),
+        p_start_date: payload.startDate,
         p_end_date: payload.expiryDate
     });
 

@@ -33,7 +33,7 @@ export const PosDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const [nextProducts, nextCustomers, nextSettings] = await Promise.all([
         listPosProducts(locationId, 1000), // Increase limit for better coverage
         listPosCustomers(),
-        getShopSettings()
+        getShopSettings(profile.business_id)
       ]);
       
       setProducts(nextProducts);
