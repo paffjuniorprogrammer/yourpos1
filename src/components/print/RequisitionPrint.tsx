@@ -91,7 +91,7 @@ export function RequisitionPrint({ requisition, shopName, address }: Requisition
               <div className="flex-1 space-y-4">
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Requested By (Name & Sign)</p>
                 <div className="h-20 border-b border-slate-300 flex items-end pb-2">
-                  <span className="text-sm font-bold text-slate-900">{requisition.created_by_name || "Manager"}</span>
+                  <span className="text-sm font-bold text-slate-900">Manager</span>
                 </div>
               </div>
               <div className="flex-1 space-y-4 text-right">

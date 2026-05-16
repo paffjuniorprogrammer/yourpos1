@@ -34,7 +34,7 @@ import { formatCurrency } from "../lib/format";
 export function ProductsPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { can, activeLocationId } = useAuth();
+  const { can, activeLocationId, profile } = useAuth();
   const { showToast, confirm } = useNotification();
   
   const [products, setProducts] = useState<any[]>([]);
@@ -109,13 +109,12 @@ export function ProductsPage() {
   const filteredProducts = useMemo(() => {
     let filtered = [...products];
 
-    // 1. Search Filter (Name, Barcode, SKU)
+    // 1. Search Filter (Name, Barcode)
     if (search.trim()) {
       const query = search.toLowerCase();
       filtered = filtered.filter(p => 
         p.name.toLowerCase().includes(query) || 
-        p.barcode?.toLowerCase().includes(query) ||
-        p.sku?.toLowerCase().includes(query)
+        p.barcode?.toLowerCase().includes(query)
       );
     }
 
@@ -161,8 +160,7 @@ export function ProductsPage() {
       Barcode: p.barcode || "",
       Cost: p.cost_price,
       Price: p.selling_price,
-      Stock: p.stock_quantity,
-      Unit: p.unit || "pcs"
+      Stock: p.stock_quantity
     }));
     const csv = Papa.unparse(data);
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -196,8 +194,7 @@ export function ProductsPage() {
             barcode: r.Barcode || r.barcode,
             cost_price: parseFloat(r.Cost || r.cost_price || 0),
             selling_price: parseFloat(r.Price || r.selling_price || 0),
-            initial_stock: parseInt(r.Stock || r.stock_quantity || 0),
-            unit: r.Unit || r.unit || "pcs"
+            initial_stock: parseInt(r.Stock || r.stock_quantity || 0)
           })));
           showToast("success", "Import successful");
           loadData();
@@ -249,7 +246,7 @@ export function ProductsPage() {
         </div>
       </div>
 
-      <SectionCard>
+      <SectionCard title="Products List">
         {/* Filters Row */}
         <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-4">
           <div className="relative lg:col-span-1">
@@ -344,7 +341,7 @@ export function ProductsPage() {
                             <div className="min-w-0">
                               <p className="font-bold text-ink truncate">{product.name}</p>
                               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                                {product.barcode || product.sku || 'No Code'}
+                                {product.barcode || 'No Code'}
                               </p>
                             </div>
                           </div>
@@ -367,7 +364,7 @@ export function ProductsPage() {
                             'bg-emerald-50 text-emerald-600'
                           }`}>
                             <div className={`h-1.5 w-1.5 rounded-full ${isOut ? 'bg-rose-500 animate-pulse' : isLow ? 'bg-amber-500' : 'bg-emerald-500'}`} />
-                            {product.stock_quantity} {product.unit || 'pcs'}
+                            {product.stock_quantity} pcs
                           </div>
                         </td>
                         <td className="border-b border-slate-100 px-5 py-4 text-right">
@@ -388,7 +385,7 @@ export function ProductsPage() {
                                 <Pencil size={18} />
                               </button>
                             )}
-                            {can("Products", "remove") && (
+                            {can("Products", "delete") && (
                               <button
                                 onClick={() => handleDelete(product.id)}
                                 className="rounded-xl bg-slate-100 p-2 text-slate-600 transition hover:bg-rose-500 hover:text-white"
@@ -494,14 +491,6 @@ export function ProductsPage() {
                       <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Category</p>
                       <p className="text-lg font-bold text-ink">{selectedProduct.category || 'General'}</p>
                     </div>
-                    <div>
-                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Internal SKU</p>
-                      <p className="text-lg font-bold text-ink">{selectedProduct.sku || '—'}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Unit Type</p>
-                      <p className="text-lg font-bold text-ink">{selectedProduct.unit || 'pcs'}</p>
-                    </div>
                   </div>
 
                   <div className="space-y-6">
@@ -522,7 +511,7 @@ export function ProductsPage() {
                       <div className="flex justify-between items-center py-2 border-b border-white/50">
                         <span className="text-sm text-slate-500">In Stock</span>
                         <span className={`text-xl font-black ${selectedProduct.stock_quantity <= 0 ? 'text-rose-600' : 'text-ink'}`}>
-                          {selectedProduct.stock_quantity} {selectedProduct.unit || 'pcs'}
+                          {selectedProduct.stock_quantity} pcs
                         </span>
                       </div>
                       <div className="flex justify-between items-center py-2">
@@ -550,7 +539,7 @@ export function ProductsPage() {
                                 <p className="text-[10px] font-bold text-slate-400 uppercase">{s.reference} • {new Date(s.date).toLocaleDateString()}</p>
                               </div>
                               <div className="text-right">
-                                <p className="text-sm font-black text-emerald-600">+{s.quantity} {selectedProduct.unit || 'pcs'}</p>
+                                <p className="text-sm font-black text-emerald-600">+{s.quantity} pcs</p>
                                 <p className="text-xs text-slate-500">{formatCurrency(s.total)}</p>
                               </div>
                             </div>
@@ -568,7 +557,7 @@ export function ProductsPage() {
                                 <p className="text-[10px] font-bold text-slate-400 uppercase">{p.reference || 'Stock Count'} • {new Date(p.date).toLocaleDateString()}</p>
                               </div>
                               <div className="text-right">
-                                <p className="text-sm font-black text-brand-600">-{p.quantity} {selectedProduct.unit || 'pcs'}</p>
+                                <p className="text-sm font-black text-brand-600">-{p.quantity} pcs</p>
                                 <p className="text-xs text-slate-500">{formatCurrency(p.total)}</p>
                               </div>
                             </div>

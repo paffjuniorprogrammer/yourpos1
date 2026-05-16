@@ -272,7 +272,6 @@ export function SettingsPage() {
             email: user.email,
             phone: "",
             role: user.role,
-            language: user.language,
             locationId: user.location_id,
             assignedLocationIds: (user as any).user_locations?.map((ul: any) => ul.location_id) || [],
             permissions: buildStaffPermissions(
@@ -323,11 +322,11 @@ export function SettingsPage() {
     try {
       const saved = await upsertShopSettings({
         id: shopSettingsId ?? undefined,
-        business_id: profile?.business_id ?? null,
-        shop_name: businessSettings.name,
-        address: businessSettings.address,
-        contact_phone: businessSettings.contact,
-        logo_url: businessSettings.logoUrl,
+        business_id: profile?.business_id || '',
+        shop_name: businessSettings.name || '',
+        address: businessSettings.address || '',
+        contact_phone: businessSettings.contact || '',
+        logo_url: businessSettings.logoUrl || '',
         currency_code: "RWF",
         default_profit_percentage: Number(businessSettings.defaultProfitPercentage) || 0,
         tax_percentage: Number(businessSettings.taxPercentage) || 0,

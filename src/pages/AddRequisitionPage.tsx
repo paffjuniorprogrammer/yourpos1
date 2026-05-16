@@ -350,15 +350,6 @@ export function AddRequisitionPage() {
           <SectionCard 
             title="Products Needed" 
             subtitle="Showing low-stock items for selection"
-            headerAction={
-              <button
-                onClick={loadAllLowStock}
-                className="flex items-center gap-2 rounded-xl bg-brand-50 px-3 py-1.5 text-xs font-bold text-brand-600 transition hover:bg-brand-100"
-              >
-                <Plus size={14} />
-                Load All Low Stock
-              </button>
-            }
           >
             <div className="mb-6">
               <div className="relative">

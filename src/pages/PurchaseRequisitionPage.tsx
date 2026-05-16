@@ -212,7 +212,7 @@ export function PurchaseRequisitionPage() {
           <RequisitionPrint 
             requisition={printingReq} 
             shopName={settings?.shop_name}
-            address={settings?.address}
+            address={settings?.address || undefined}
           />
           <style dangerouslySetInnerHTML={{ __html: `
             @media print {

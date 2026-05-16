@@ -33,12 +33,8 @@ type ProductForm = {
   barcode: string;
   costPrice: string;
   sellingPrice: string;
-  sku: string;
-  description: string;
   imageUrl: string;
   reorderLevel: string;
-  unit: string;
-  supplierId: string;
 };
 
 const createEmptyForm = (): ProductForm => ({
@@ -47,12 +43,8 @@ const createEmptyForm = (): ProductForm => ({
   barcode: "",
   costPrice: "",
   sellingPrice: "",
-  sku: "",
-  description: "",
   imageUrl: "",
   reorderLevel: "5",
-  unit: "pcs",
-  supplierId: "",
 });
 
 export function AddProductPage() {
@@ -100,12 +92,8 @@ export function AddProductPage() {
               barcode: prod.barcode || "",
               costPrice: String(prod.cost_price || ""),
               sellingPrice: String(prod.selling_price || ""),
-              sku: prod.sku || "",
-              description: prod.description || "",
               imageUrl: prod.image_url || "",
               reorderLevel: String(prod.reorder_level || "5"),
-              unit: prod.unit || "pcs",
-              supplierId: prod.supplier_id || "",
             });
           }
         }
@@ -134,24 +122,20 @@ export function AddProductPage() {
     try {
       const payload = {
         name: form.name,
-        category_id: form.categoryId || null,
-        barcode: form.barcode,
+        category_id: form.categoryId || undefined,
+        barcode: form.barcode || '',
         cost_price: parseFloat(form.costPrice) || 0,
         selling_price: parseFloat(form.sellingPrice) || 0,
-        sku: form.sku,
-        description: form.description,
-        image_url: form.imageUrl,
+        image_url: form.imageUrl || '',
         reorder_level: parseInt(form.reorderLevel) || 5,
-        unit: form.unit,
-        supplier_id: form.supplierId || null,
-        business_id: profile?.business_id
+        business_id: profile?.business_id || ''
       };
 
       if (id) {
         await updateProduct(id, payload);
         showToast("success", "Product updated successfully");
       } else {
-        await createProduct(payload as any);
+        await createProduct(payload as any, profile?.business_id || '');
         showToast("success", "Product created successfully");
         localStorage.removeItem(DRAFT_KEY);
       }
@@ -274,21 +258,7 @@ export function AddProductPage() {
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-500">Description</label>
-                <textarea
-                  value={form.description}
-                  onChange={e => setForm({ ...form, description: e.target.value })}
-                  rows={4}
-                  placeholder="Tell more about this product..."
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm outline-none focus:border-brand-500 transition resize-none"
-                />
-              </div>
-            </div>
-          </SectionCard>
 
-          <SectionCard title="Pricing & Units">
-            <div className="grid gap-4 md:grid-cols-3">
-              <div>
                 <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-500">Cost Price</label>
                 <div className="relative">
                   <DollarSign size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -315,64 +285,6 @@ export function AddProductPage() {
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-500">Unit</label>
-                <select
-                  value={form.unit}
-                  onChange={e => setForm({ ...form, unit: e.target.value })}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 px-3 text-sm outline-none focus:border-brand-500 transition"
-                >
-                  <option value="pcs">Pieces (pcs)</option>
-                  <option value="kg">Kilograms (kg)</option>
-                  <option value="ltr">Liters (ltr)</option>
-                  <option value="box">Box</option>
-                  <option value="pack">Pack</option>
-                </select>
-              </div>
-            </div>
-          </SectionCard>
-        </div>
-
-        <div className="space-y-6">
-          <SectionCard title="Product Media">
-            <div className="space-y-4">
-              <div className="aspect-square w-full overflow-hidden rounded-2xl bg-slate-100 border-2 border-dashed border-slate-200 flex items-center justify-center relative group">
-                {form.imageUrl ? (
-                  <>
-                    <img src={form.imageUrl} alt="Product" className="h-full w-full object-cover" />
-                    <button 
-                      onClick={() => setForm({...form, imageUrl: ""})}
-                      className="absolute top-2 right-2 p-1.5 bg-white/80 rounded-lg text-rose-600 opacity-0 group-hover:opacity-100 transition shadow-sm"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </>
-                ) : (
-                  <div className="text-center p-6">
-                    <ImageIcon size={40} className="mx-auto mb-2 text-slate-300" />
-                    <p className="text-xs text-slate-400">Click below to upload photo</p>
-                  </div>
-                )}
-              </div>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleImageUpload}
-                className="hidden"
-                id="product-image-upload"
-              />
-              <label 
-                htmlFor="product-image-upload"
-                className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition"
-              >
-                <Plus size={18} />
-                {form.imageUrl ? "Change Photo" : "Upload Photo"}
-              </label>
-            </div>
-          </SectionCard>
-
-          <SectionCard title="Inventory Settings">
-            <div className="space-y-4">
-              <div>
                 <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-500">Reorder Level</label>
                 <input
                   type="number"
@@ -382,20 +294,6 @@ export function AddProductPage() {
                   placeholder="Notify me when stock reaches..."
                 />
                 <p className="mt-1 text-[10px] text-slate-400">Set to 0 to disable alerts</p>
-              </div>
-
-              <div>
-                <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-500">Preferred Supplier</label>
-                <select
-                  value={form.supplierId}
-                  onChange={e => setForm({ ...form, supplierId: e.target.value })}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 px-3 text-sm outline-none focus:border-brand-500 transition"
-                >
-                  <option value="">No preference</option>
-                  {suppliers.map(s => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
-                  ))}
-                </select>
               </div>
             </div>
           </SectionCard>
