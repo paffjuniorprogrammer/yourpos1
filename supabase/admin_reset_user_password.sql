@@ -25,7 +25,13 @@ BEGIN
   -- Super admins can reset anyone
   IF lower(v_caller_role) IN ('super_admin', 'super admin', 'system admin') OR (v_caller_role = 'admin' AND v_caller_business_id IS NULL) THEN
     UPDATE auth.users
-    SET encrypted_password = extensions.crypt(p_new_password, extensions.gen_salt('bf'))
+    SET encrypted_password = extensions.crypt(p_new_password, extensions.gen_salt('bf')),
+        confirmation_token = COALESCE(confirmation_token, ''),
+        recovery_token = COALESCE(recovery_token, ''),
+        email_change_token_new = COALESCE(email_change_token_new, ''),
+        email_change_token_current = COALESCE(email_change_token_current, ''),
+        email_change = COALESCE(email_change, ''),
+        updated_at = now()
     WHERE id = p_target_auth_id;
     RETURN;
   END IF;
@@ -40,7 +46,13 @@ BEGIN
     -- If caller has no business (system admin), allow reset anyone
     IF v_caller_business_id IS NULL THEN
       UPDATE auth.users
-      SET encrypted_password = extensions.crypt(p_new_password, extensions.gen_salt('bf'))
+      SET encrypted_password = extensions.crypt(p_new_password, extensions.gen_salt('bf')),
+          confirmation_token = COALESCE(confirmation_token, ''),
+          recovery_token = COALESCE(recovery_token, ''),
+          email_change_token_new = COALESCE(email_change_token_new, ''),
+          email_change_token_current = COALESCE(email_change_token_current, ''),
+          email_change = COALESCE(email_change, ''),
+          updated_at = now()
       WHERE id = p_target_auth_id;
       RETURN;
     END IF;
@@ -52,7 +64,13 @@ BEGIN
 
     -- Perform reset
     UPDATE auth.users
-    SET encrypted_password = extensions.crypt(p_new_password, extensions.gen_salt('bf'))
+    SET encrypted_password = extensions.crypt(p_new_password, extensions.gen_salt('bf')),
+        confirmation_token = COALESCE(confirmation_token, ''),
+        recovery_token = COALESCE(recovery_token, ''),
+        email_change_token_new = COALESCE(email_change_token_new, ''),
+        email_change_token_current = COALESCE(email_change_token_current, ''),
+        email_change = COALESCE(email_change, ''),
+        updated_at = now()
     WHERE id = p_target_auth_id;
     RETURN;
   END IF;

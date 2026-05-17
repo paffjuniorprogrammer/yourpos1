@@ -249,9 +249,40 @@ export function AddPurchasePage() {
 
 
   const handleSave = async () => {
-    if (!form.supplierId || !form.locationId || form.items.length === 0) {
-      showToast("error", "Please fill in all required fields and add items");
+    // Comprehensive validation
+    if (!form.supplierId) {
+      showToast("error", "⚠️ Please select a supplier - it's required");
       return;
+    }
+
+    if (!form.locationId) {
+      showToast("error", "⚠️ Please select a location where stock will be stored");
+      return;
+    }
+
+    if (form.items.length === 0) {
+      showToast("error", "⚠️ Add at least one product to the purchase");
+      return;
+    }
+
+    // Validate all items have valid quantities and prices
+    for (const item of form.items) {
+      if (!item.quantity || item.quantity <= 0) {
+        showToast("error", `⚠️ Product "${item.product}" has invalid quantity`);
+        return;
+      }
+      if (!item.purchasePrice || item.purchasePrice < 0) {
+        showToast("error", `⚠️ Product "${item.product}" has invalid purchase price`);
+        return;
+      }
+    }
+
+    if (form.paymentStatus === "Partially Paid") {
+      const paidAmount = Number(form.paidAmount || 0);
+      if (paidAmount <= 0 || paidAmount >= purchaseTotal) {
+        showToast("error", "⚠️ Partial payment must be between 0 and total amount");
+        return;
+      }
     }
 
     try {
@@ -279,11 +310,13 @@ export function AddPurchasePage() {
         })),
       });
 
-      showToast("success", "Purchase recorded successfully");
+      showToast("success", "✓ Purchase recorded successfully");
       localStorage.removeItem(DRAFT_KEY);
       navigate("/purchases");
     } catch (error: any) {
-      showToast("error", error.message || "Failed to save purchase");
+      const message = error.message || "Failed to save purchase";
+      showToast("error", `⚠️ ${message}`);
+      console.error("Save error:", error);
     }
   };
 

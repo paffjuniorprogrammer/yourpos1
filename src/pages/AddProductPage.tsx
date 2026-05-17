@@ -113,8 +113,28 @@ export function AddProductPage() {
   }, [form, id, saving]);
 
   const handleSave = async () => {
-    if (!form.name || !form.sellingPrice) {
-      showToast("error", "Name and Selling Price are required");
+    // Comprehensive validation
+    const name = (form.name || '').trim();
+    const sellingPrice = parseFloat(form.sellingPrice);
+
+    if (!name) {
+      showToast("error", "⚠️ Product name is required");
+      return;
+    }
+
+    if (name.length < 2) {
+      showToast("error", "⚠️ Product name must be at least 2 characters");
+      return;
+    }
+
+    if (!form.sellingPrice || sellingPrice <= 0) {
+      showToast("error", "⚠️ Selling price must be greater than 0");
+      return;
+    }
+
+    const costPrice = parseFloat(form.costPrice) || 0;
+    if (costPrice < 0) {
+      showToast("error", "⚠️ Cost price cannot be negative");
       return;
     }
 
@@ -124,8 +144,8 @@ export function AddProductPage() {
         name: form.name,
         category_id: form.categoryId || undefined,
         barcode: form.barcode || '',
-        cost_price: parseFloat(form.costPrice) || 0,
-        selling_price: parseFloat(form.sellingPrice) || 0,
+        cost_price: costPrice,
+        selling_price: sellingPrice,
         image_url: form.imageUrl || '',
         reorder_level: parseInt(form.reorderLevel) || 5,
         business_id: profile?.business_id || ''
@@ -133,15 +153,17 @@ export function AddProductPage() {
 
       if (id) {
         await updateProduct(id, payload);
-        showToast("success", "Product updated successfully");
+        showToast("success", "✓ Product updated successfully");
       } else {
         await createProduct(payload as any, profile?.business_id || '');
-        showToast("success", "Product created successfully");
+        showToast("success", "✓ Product created successfully");
         localStorage.removeItem(DRAFT_KEY);
       }
       navigate("/products");
     } catch (error: any) {
-      showToast("error", error.message || "Failed to save product");
+      const message = error.message || "Failed to save product";
+      showToast("error", `⚠️ ${message}`);
+      console.error("Save error:", error);
     } finally {
       setSaving(false);
     }

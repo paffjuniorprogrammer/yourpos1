@@ -212,7 +212,47 @@ export async function createCategory(name: string, businessId: string) {
   return data as Category;
 }
 
+export async function checkProductExists(name: string, businessId: string, excludeId?: string): Promise<boolean> {
+  const client = await ensureSupabaseConfigured();
+  const query = client
+    .from("products")
+    .select("id")
+    .eq("business_id", businessId)
+    .ilike("name", name.trim())
+    .eq("is_active", true);
+
+  if (excludeId) {
+    query.neq("id", excludeId);
+  }
+
+  const { data, error } = await query.maybeSingle();
+  
+  if (error && error.code !== 'PGRST116') { // PGRST116 is "no rows found" which is expected
+    throw error;
+  }
+
+  return !!data;
+}
+
 export async function createProduct(values: ProductFormValues, businessId: string) {
+  // Validate required fields
+  const name = (values.name || '').trim();
+  const sellingPrice = Number(values.selling_price || 0);
+
+  if (!name) {
+    throw new Error("Product name is required.");
+  }
+
+  if (sellingPrice <= 0) {
+    throw new Error("Selling price must be greater than 0.");
+  }
+
+  // Check for duplicates
+  const exists = await checkProductExists(name, businessId);
+  if (exists) {
+    throw new Error(`A product named "${name}" already exists. Please use a different name.`);
+  }
+
   const client = await ensureSupabaseConfigured();
   const { data, error } = await client
     .from("products")
@@ -222,6 +262,9 @@ export async function createProduct(values: ProductFormValues, businessId: strin
 
   if (error) {
     console.error("Product creation error:", error);
+    if (error.code === '23505') {
+      throw new Error("Product with this name or barcode already exists.");
+    }
     throw error;
   }
 
@@ -229,7 +272,36 @@ export async function createProduct(values: ProductFormValues, businessId: strin
 }
 
 export async function updateProduct(productId: string, values: ProductFormValues) {
+  // Validate required fields
+  const name = (values.name || '').trim();
+  const sellingPrice = Number(values.selling_price || 0);
+
+  if (!name) {
+    throw new Error("Product name is required.");
+  }
+
+  if (sellingPrice <= 0) {
+    throw new Error("Selling price must be greater than 0.");
+  }
+
+  // Get business_id from product
   const client = await ensureSupabaseConfigured();
+  const { data: existingProduct, error: getError } = await client
+    .from("products")
+    .select("business_id")
+    .eq("id", productId)
+    .single();
+
+  if (getError || !existingProduct) {
+    throw new Error("Product not found.");
+  }
+
+  // Check for duplicate names (excluding this product)
+  const exists = await checkProductExists(name, existingProduct.business_id, productId);
+  if (exists) {
+    throw new Error(`Another product named "${name}" already exists. Please use a different name.`);
+  }
+
   const { data, error } = await client
     .from("products")
     .update(mapProductPayload(values))

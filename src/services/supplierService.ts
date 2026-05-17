@@ -135,6 +135,23 @@ export async function listSuppliersWithMetrics() {
 }
 
 export async function createSupplier(values: SupplierFormValues, businessId: string) {
+  // Validate required fields
+  const name = (values.name || '').trim();
+  const phone = (values.phone || '').trim();
+  const address = (values.address || '').trim();
+
+  if (!name) {
+    throw new Error("Supplier name is required.");
+  }
+
+  if (!phone) {
+    throw new Error("Supplier phone number is required.");
+  }
+
+  if (!address) {
+    throw new Error("Supplier address is required.");
+  }
+
   const client = await ensureSupabaseConfigured();
   const { data, error } = await client
     .from("suppliers")
@@ -143,6 +160,9 @@ export async function createSupplier(values: SupplierFormValues, businessId: str
     .single();
 
   if (error) {
+    if (error.code === '23505') {
+      throw new Error("Supplier with this name already exists.");
+    }
     throw error;
   }
 
@@ -151,6 +171,23 @@ export async function createSupplier(values: SupplierFormValues, businessId: str
 }
 
 export async function updateSupplier(supplierId: string, values: SupplierFormValues) {
+  // Validate required fields
+  const name = (values.name || '').trim();
+  const phone = (values.phone || '').trim();
+  const address = (values.address || '').trim();
+
+  if (!name) {
+    throw new Error("Supplier name is required.");
+  }
+
+  if (!phone) {
+    throw new Error("Supplier phone number is required.");
+  }
+
+  if (!address) {
+    throw new Error("Supplier address is required.");
+  }
+
   const client = await ensureSupabaseConfigured();
   const { data, error } = await client
     .from("suppliers")

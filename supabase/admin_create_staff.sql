@@ -39,6 +39,8 @@ BEGIN
     confirmation_token,
     recovery_token,
     email_change_token_new,
+    email_change_token_current,
+    email_change,
     is_super_admin
   ) VALUES (
     v_auth_user_id,
@@ -52,6 +54,8 @@ BEGIN
     'authenticated',
     now(),
     now(),
+    '',
+    '',
     '',
     '',
     '',
