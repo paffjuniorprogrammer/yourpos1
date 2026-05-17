@@ -3,7 +3,6 @@ import { type ReactNode, createContext, useContext, useEffect, useMemo, useState
 import { supabase, supabaseConfigured } from "../lib/supabase";
 import { getCurrentProfile, getSession, signInWithPassword, signOut } from "../services/authService";
 import type { AppRole, UserProfile, LocationRecord, BusinessRecord } from "../types/database";
-import { LoadingPOS } from "../components/ui/LoadingPOS";
 import i18n from "../i18n";
 
 type AuthContextValue = {
@@ -264,10 +263,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }),
     [loading, profile, session, business, isSubscriptionActive, subscriptionDaysLeft, activeLocationId, assignedLocations, impersonatedBusinessId],
   );
-
-  if (loading) {
-    return <LoadingPOS />;
-  }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

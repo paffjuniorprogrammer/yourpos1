@@ -1,9 +1,9 @@
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Route, Routes, useLocation } from "react-router-dom";
 import { ProtectedRoute } from "./components/auth/ProtectedRoute";
-import { useAuth } from "./context/AuthContext";
 import { AppShell } from "./components/layout/AppShell";
 import { CustomersPage } from "./pages/CustomersPage";
 import { DashboardPage } from "./pages/DashboardPage";
+import { HomePage } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
 import { PosPage } from "./pages/PosPage";
 import { ProductsPage } from "./pages/ProductsPage";
@@ -33,10 +33,14 @@ import { SubscriptionBillingPage } from "./pages/SubscriptionBillingPage";
 import { SubscriptionExpiredPage } from "./pages/SubscriptionExpiredPage";
 
 export default function App() {
-  const { profile } = useAuth();
+  const location = useLocation();
+  const isPublicPage = ["/", "/home", "/login"].includes(location.pathname);
+
   return (
     <>
       <Routes>
+        <Route path="/" element={<HomePage />} />
+        <Route path="/home" element={<HomePage />} />
         <Route path="/login" element={<LoginPage />} />
         
         {/* Regular POS Tenant Routes */}
@@ -56,12 +60,7 @@ export default function App() {
             }
           />
           <Route element={<SubscriptionGuard />}>
-          <Route index element={
-            profile?.role === 'super_admin' 
-              ? <Navigate to="/super-admin" replace /> 
-              : <Navigate to="/dashboard" replace />
-          } />
-          <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/dashboard" element={<DashboardPage />} />
             <Route
               path="/pos"
               element={
@@ -211,8 +210,8 @@ export default function App() {
         <Route path="/subscription-expired" element={<SubscriptionExpiredPage />} />
       </Routes>
       <Toaster />
-      <ConnectionStatus />
-      <PWAInstallPrompt />
+      {!isPublicPage ? <ConnectionStatus /> : null}
+      {!isPublicPage ? <PWAInstallPrompt /> : null}
     </>
   );
 }

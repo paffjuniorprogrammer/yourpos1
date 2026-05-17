@@ -62,6 +62,7 @@ export function SuppliersPage() {
   const [selectedSupplier, setSelectedSupplier] = useState<SupplierRow | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [formValues, setFormValues] = useState<SupplierRow>(initialForm as SupplierRow);
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 10;
 
@@ -101,16 +102,39 @@ export function SuppliersPage() {
 
   function openCreateModal() {
     setFormValues(initialForm as SupplierRow);
+    setFormErrors({});
     setFormOpen(true);
   }
 
   function openEditModal(row: SupplierRow) {
     setFormValues(row);
+    setFormErrors({});
     setFormOpen(true);
   }
 
   async function saveSupplier() {
-    if (!formValues.name.trim()) return;
+    const errors: Record<string, string> = {};
+
+    if (!formValues.name.trim()) {
+      errors.name = "Supplier name is required.";
+    }
+    if (!formValues.phone.trim()) {
+      errors.phone = "Supplier phone number is required.";
+    }
+    if (!formValues.location.trim()) {
+      errors.location = "Supplier address is required.";
+    }
+    if (!formValues.contact.trim()) {
+      errors.contact = "Contact person is required.";
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      showToast('error', 'Please complete all required supplier fields.');
+      return;
+    }
+
+    setFormErrors({});
 
     const nextRow: SupplierRow = {
       ...formValues,
@@ -139,8 +163,9 @@ export function SuppliersPage() {
           address: nextRow.location,
         }, business.id);
         nextRow.id = supplier.id;
-      } catch (error) {
+      } catch (error: any) {
         console.error("Failed to create supplier:", error);
+        showToast("error", error?.message || "Failed to create supplier.");
         return; // Stop if creation fails
       }
     } else {
@@ -153,8 +178,9 @@ export function SuppliersPage() {
           address: nextRow.location,
         });
         // ID remains the same
-      } catch (error) {
+      } catch (error: any) {
         console.error("Failed to update supplier:", error);
+        showToast("error", error?.message || "Failed to update supplier.");
         return; // Stop if update fails
       }
     }
@@ -422,9 +448,12 @@ export function SuppliersPage() {
                   <input
                     value={value}
                     onChange={(event) => setFormValues((current) => ({ ...current, [key]: event.target.value }))}
-                    className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none"
+                    className={`mt-2 w-full rounded-xl border px-3 py-2.5 text-sm outline-none transition ${formErrors[key] ? 'border-rose-400 bg-rose-50' : 'border-slate-200 bg-white'}`}
                     placeholder={label}
                   />
+                  {formErrors[key] ? (
+                    <p className="mt-2 text-xs text-rose-600">{formErrors[key]}</p>
+                  ) : null}
                 </label>
               ))}
             </div>

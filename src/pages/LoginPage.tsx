@@ -63,6 +63,9 @@ export function LoginPage() {
           <p className="mt-3 text-sm text-slate-500">
             {t('login.welcome_desc')}
           </p>
+          <p className="mt-4 text-sm text-brand-600 hover:underline cursor-pointer" onClick={() => navigate('/home')}>
+            Learn more about our subscription and how this POS helps your business.
+          </p>
 
           {!authConfigured ? (
             <div className="mt-8 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">

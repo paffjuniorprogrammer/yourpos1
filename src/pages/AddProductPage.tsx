@@ -18,14 +18,17 @@ import {
 
 import { useAuth } from "../context/AuthContext";
 import { useNotification } from "../context/NotificationContext";
+import { useSettings } from "../hooks/useSettings";
 import { SectionCard } from "../components/ui/SectionCard";
 import { 
+  createCategory,
   createProduct, 
   updateProduct, 
   listProducts,
   listCategories
 } from "../services/productService";
 import { listSuppliers } from "../services/supplierService";
+import { formatCurrency } from "../lib/format";
 
 type ProductForm = {
   name: string;
@@ -66,8 +69,13 @@ export function AddProductPage() {
     return createEmptyForm();
   });
 
+  const { settings, loading: settingsLoading } = useSettings();
   const [categories, setCategories] = useState<any[]>([]);
   const [suppliers, setSuppliers] = useState<any[]>([]);
+  const [creatingCategory, setCreatingCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [categorySaving, setCategorySaving] = useState(false);
+  const [lastComputedSellingPrice, setLastComputedSellingPrice] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -106,6 +114,18 @@ export function AddProductPage() {
     loadData();
   }, [id]);
 
+  const defaultProfit = settings?.default_profit_percentage;
+  const hasAdminProfit = typeof defaultProfit === "number";
+  const costPrice = Number(form.costPrice || 0);
+  const suggestedSellingPrice = hasAdminProfit && costPrice > 0 ? Math.round(costPrice + costPrice * defaultProfit / 100) : 0;
+
+  useEffect(() => {
+    if (!id && hasAdminProfit && costPrice > 0 && (!form.sellingPrice || Number(form.sellingPrice) === lastComputedSellingPrice || Number(form.sellingPrice) === 0)) {
+      setForm(prev => ({ ...prev, sellingPrice: suggestedSellingPrice ? String(suggestedSellingPrice) : prev.sellingPrice }));
+      setLastComputedSellingPrice(suggestedSellingPrice);
+    }
+  }, [costPrice, hasAdminProfit, suggestedSellingPrice, id, form.sellingPrice, lastComputedSellingPrice]);
+
   useEffect(() => {
     if (!id && !saving) {
       localStorage.setItem(DRAFT_KEY, JSON.stringify(form));
@@ -116,6 +136,7 @@ export function AddProductPage() {
     // Comprehensive validation
     const name = (form.name || '').trim();
     const sellingPrice = parseFloat(form.sellingPrice);
+    const costPrice = parseFloat(form.costPrice) || 0;
 
     if (!name) {
       showToast("error", "⚠️ Product name is required");
@@ -127,14 +148,18 @@ export function AddProductPage() {
       return;
     }
 
+    if (costPrice < 0) {
+      showToast("error", "⚠️ Cost price cannot be negative");
+      return;
+    }
+
     if (!form.sellingPrice || sellingPrice <= 0) {
       showToast("error", "⚠️ Selling price must be greater than 0");
       return;
     }
 
-    const costPrice = parseFloat(form.costPrice) || 0;
-    if (costPrice < 0) {
-      showToast("error", "⚠️ Cost price cannot be negative");
+    if (costPrice > 0 && sellingPrice < costPrice) {
+      showToast("warning", "⚠️ Selling price is below cost. Check the profit percentage or price input.");
       return;
     }
 
@@ -248,7 +273,16 @@ export function AddProductPage() {
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
-                  <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-500">Category</label>
+                  <div className="flex items-center justify-between gap-3">
+                    <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-500">Category</label>
+                    <button
+                      type="button"
+                      onClick={() => setCreatingCategory(true)}
+                      className="inline-flex items-center gap-2 rounded-full border border-brand-200 bg-brand-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-brand-700 transition hover:bg-brand-100"
+                    >
+                      <Plus size={12} /> Add Category
+                    </button>
+                  </div>
                   <div className="relative">
                     <Layers size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                     <select
@@ -262,6 +296,46 @@ export function AddProductPage() {
                       ))}
                     </select>
                   </div>
+                  {creatingCategory ? (
+                    <div className="mt-3 flex items-center gap-2">
+                      <input
+                        value={newCategoryName}
+                        onChange={(e) => setNewCategoryName(e.target.value)}
+                        placeholder="New category name"
+                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-brand-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (!newCategoryName.trim()) {
+                            showToast("error", "⚠️ Category name is required");
+                            return;
+                          }
+                          if (!profile?.business_id) {
+                            showToast("error", "⚠️ Business context is missing");
+                            return;
+                          }
+                          setCategorySaving(true);
+                          try {
+                            const category = await createCategory(newCategoryName.trim(), profile.business_id);
+                            setCategories((current) => [category, ...current]);
+                            setForm((current) => ({ ...current, categoryId: category.id }));
+                            setCreatingCategory(false);
+                            setNewCategoryName("");
+                            showToast("success", "✓ Category created successfully");
+                          } catch (error: any) {
+                            showToast("error", `⚠️ ${error?.message || "Failed to create category"}`);
+                          } finally {
+                            setCategorySaving(false);
+                          }
+                        }}
+                        disabled={categorySaving}
+                        className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:opacity-50"
+                      >
+                        Save
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
 
                 <div>
@@ -304,6 +378,24 @@ export function AddProductPage() {
                     className="w-full rounded-xl border border-brand-100 bg-brand-50 py-2.5 pl-10 pr-3 text-sm font-bold text-brand-700 outline-none focus:border-brand-500 transition"
                   />
                 </div>
+                {settingsLoading ? (
+                  <p className="mt-2 text-sm text-slate-400">Loading admin profit setting...</p>
+                ) : costPrice > 0 && hasAdminProfit ? (
+                  <p className="mt-2 text-sm text-slate-500">
+                    Suggested price based on the admin default profit ({defaultProfit}%): <span className="font-semibold text-ink">{formatCurrency(suggestedSellingPrice)}</span>.
+                    <button
+                      type="button"
+                      onClick={() => setForm((prev) => ({ ...prev, sellingPrice: String(suggestedSellingPrice) }))}
+                      className="ml-2 font-semibold text-brand-600 underline"
+                    >
+                      Use suggested price
+                    </button>
+                  </p>
+                ) : costPrice > 0 ? (
+                  <p className="mt-2 text-sm text-amber-600">Set the admin default profit in Settings to enable automatic price suggestions.</p>
+                ) : (
+                  <p className="mt-2 text-sm text-slate-400">Enter cost price to see the suggested selling price.</p>
+                )}
               </div>
 
               <div>

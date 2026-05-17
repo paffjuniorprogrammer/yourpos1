@@ -20,7 +20,7 @@ export function QuickAddProductModal({ isOpen, onClose, onSuccess }: Props) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [profitPercent, setProfitPercent] = useState(30);
+  const [profitPercent, setProfitPercent] = useState<number | null>(null);
   const [manualPrice, setManualPrice] = useState(false);
 
   const [form, setForm] = useState({
@@ -46,11 +46,11 @@ export function QuickAddProductModal({ isOpen, onClose, onSuccess }: Props) {
       setLoading(true);
       const [cats, settings] = await Promise.all([
         listCategories(),
-        getShopSettingsRecord()
+        getShopSettingsRecord(business?.id)
       ]);
       setCategories(cats);
-      if (settings) {
-        setProfitPercent(settings.default_profit_percentage || 30);
+      if (typeof settings?.default_profit_percentage === "number") {
+        setProfitPercent(settings.default_profit_percentage);
       }
     } catch (err) {
       console.error("Failed to load initial data:", err);
@@ -59,11 +59,11 @@ export function QuickAddProductModal({ isOpen, onClose, onSuccess }: Props) {
     }
   }
 
-  function handleCostOrProfitChange(nextCost: string, nextProfit: number) {
+  function handleCostOrProfitChange(nextCost: string, nextProfit: number | null) {
     setForm(f => ({ ...f, cost_price: nextCost }));
     setProfitPercent(nextProfit);
 
-    if (!manualPrice) {
+    if (!manualPrice && typeof nextProfit === "number") {
       const cost = Number(nextCost || 0);
       setForm(f => ({ ...f, selling_price: String(Math.round(cost + cost * (nextProfit / 100))) }));
     }
@@ -190,12 +190,15 @@ export function QuickAddProductModal({ isOpen, onClose, onSuccess }: Props) {
                 <div className="flex items-center justify-between">
                   <div>
                     <span className="text-xs font-bold uppercase tracking-widest text-brand-600">Profit % (Admin Default)</span>
-                    <p className="mt-1 text-xs text-brand-600/80">Auto-calculates selling price</p>
+                    <p className="mt-1 text-xs text-brand-600/80">
+                      {profitPercent === null ? "Set in Settings to auto-calculate selling price" : "Auto-calculates selling price"}
+                    </p>
                   </div>
                   <input
                     type="number"
-                    value={profitPercent}
+                    value={profitPercent ?? ""}
                     onChange={e => handleCostOrProfitChange(form.cost_price, Number(e.target.value || 0))}
+                    placeholder="Not set"
                     className="w-20 rounded-xl border border-brand-200 bg-white px-3 py-2 text-sm font-bold text-ink outline-none"
                   />
                 </div>

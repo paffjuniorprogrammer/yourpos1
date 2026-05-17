@@ -37,6 +37,39 @@ function mapCustomerPayload(values: CustomerFormValues, businessId?: string) {
   };
 }
 
+export async function checkCustomerExists(full_name: string, phone: string, email: string, businessId: string, excludeId?: string) {
+  const client = await ensureSupabaseConfigured();
+  const normalizedName = full_name.trim();
+  const normalizedPhone = phone.trim();
+  const normalizedEmail = email.trim();
+
+  const conditions = [];
+  if (normalizedName) conditions.push(`full_name.ilike.${normalizedName}`);
+  if (normalizedPhone) conditions.push(`phone.eq.${normalizedPhone}`);
+  if (normalizedEmail) conditions.push(`email.eq.${normalizedEmail}`);
+
+  if (conditions.length === 0) {
+    return false;
+  }
+
+  let query = client
+    .from("customers")
+    .select("id")
+    .eq("business_id", businessId)
+    .or(conditions.join(","));
+
+  if (excludeId) {
+    query = query.neq("id", excludeId);
+  }
+
+  const { data, error } = await query;
+  if (error) {
+    throw error;
+  }
+
+  return Array.isArray(data) && data.length > 0;
+}
+
 export async function listCustomers() {
   const client = await ensureSupabaseConfigured();
   const { data, error } = await client
@@ -94,6 +127,28 @@ export async function listCustomersWithMetrics() {
 }
 
 export async function createCustomer(values: CustomerFormValues, businessId: string) {
+  const fullName = (values.full_name || '').trim();
+  const phone = (values.phone || '').trim();
+  const address = (values.address || '').trim();
+  const email = (values.email || '').trim();
+
+  if (!fullName) {
+    throw new Error("Customer name is required.");
+  }
+
+  if (!phone) {
+    throw new Error("Customer phone number is required.");
+  }
+
+  if (!address) {
+    throw new Error("Customer address is required.");
+  }
+
+  const exists = await checkCustomerExists(fullName, phone, email, businessId);
+  if (exists) {
+    throw new Error("Customer with this name or contact already exists.");
+  }
+
   const isOnline = navigator.onLine;
 
   if (isOnline) {
@@ -178,7 +233,39 @@ export async function getCustomer(customerId: string) {
 }
 
 export async function updateCustomer(customerId: string, values: CustomerFormValues) {
+  const fullName = (values.full_name || '').trim();
+  const phone = (values.phone || '').trim();
+  const address = (values.address || '').trim();
+  const email = (values.email || '').trim();
+
+  if (!fullName) {
+    throw new Error("Customer name is required.");
+  }
+
+  if (!phone) {
+    throw new Error("Customer phone number is required.");
+  }
+
+  if (!address) {
+    throw new Error("Customer address is required.");
+  }
+
   const client = await ensureSupabaseConfigured();
+  const { data: existingCustomer, error: existingError } = await client
+    .from("customers")
+    .select("business_id")
+    .eq("id", customerId)
+    .single();
+
+  if (existingError || !existingCustomer) {
+    throw new Error("Customer not found.");
+  }
+
+  const exists = await checkCustomerExists(fullName, phone, email, existingCustomer.business_id, customerId);
+  if (exists) {
+    throw new Error("Another customer with this name or contact already exists.");
+  }
+
   const { data, error } = await client
     .from("customers")
     .update(mapCustomerPayload(values))

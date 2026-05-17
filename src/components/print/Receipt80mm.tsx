@@ -53,6 +53,35 @@ export function Receipt80mm({
   };
 
   const line = (char: string) => char.repeat(WIDTH);
+  const wrapText = (text: string, len: number) => {
+    const words = text.split(/\s+/).filter(Boolean);
+    const lines: string[] = [];
+    let current = "";
+
+    words.forEach((word) => {
+      if (word.length > len) {
+        if (current) {
+          lines.push(current);
+          current = "";
+        }
+        for (let i = 0; i < word.length; i += len) {
+          lines.push(word.slice(i, i + len));
+        }
+        return;
+      }
+
+      const next = current ? `${current} ${word}` : word;
+      if (next.length > len) {
+        lines.push(current);
+        current = word;
+      } else {
+        current = next;
+      }
+    });
+
+    if (current) lines.push(current);
+    return lines.length ? lines : [""];
+  };
 
   let output: string[] = [];
 
@@ -74,17 +103,17 @@ export function Receipt80mm({
   output.push("");
   output.push(line("="));
   
-  // "Item              Qty    Price" -> "Item" (18), "Qty" (4), "Price" (10 = right align)
-  // 18 + 4 + 10 = 32
   output.push(padRight("Item", 18) + padLeft("Qty", 4) + padLeft("Price", 10));
   output.push(line("-"));
 
   items.forEach(item => {
-    // If name > 17 chars, we could truncate or wrap. Truncate for now.
-    const nameStr = item.name.substring(0, 17);
+    const nameLines = wrapText(item.name, 18);
     const qtyStr = item.quantity.toString();
     const priceStr = fmt(item.line_total);
-    output.push(padRight(nameStr, 18) + padLeft(qtyStr, 4) + padLeft(priceStr, 10));
+    output.push(padRight(nameLines[0], 18) + padLeft(qtyStr, 4) + padLeft(priceStr, 10));
+    nameLines.slice(1).forEach((nameLine) => {
+      output.push(padRight(` ${nameLine}`, 18) + padLeft("", 4) + padLeft("", 10));
+    });
   });
 
   output.push(line("-"));
@@ -124,18 +153,23 @@ export function Receipt80mm({
         padding: "0",
         margin: "0",
         background: "#fff",
+        color: "#000",
         pageBreakInside: "avoid",
+        printColorAdjust: "exact",
+        WebkitPrintColorAdjust: "exact",
       }}
     >
       <pre style={{
-        fontFamily: "'Courier New', Courier, monospace",
-        fontSize: "11px",
-        lineHeight: "1.3",
+        fontFamily: "'Courier New', 'Lucida Console', monospace",
+        fontSize: "12.5px",
+        fontWeight: 800,
+        lineHeight: "1.35",
         color: "#000",
         margin: "0",
-        padding: "3mm",
+        padding: "3mm 2.5mm",
         whiteSpace: "pre",
-        wordBreak: "break-all",
+        letterSpacing: "0",
+        wordBreak: "normal",
         pageBreakInside: "avoid",
       }}>{output.join("\n")}</pre>
     </div>

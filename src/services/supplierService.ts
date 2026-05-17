@@ -52,6 +52,29 @@ function mapSupplierPayload(values: SupplierFormValues, businessId?: string) {
   };
 }
 
+export async function checkSupplierExists(name: string, phone: string, businessId: string, excludeId?: string) {
+  const client = await ensureSupabaseConfigured();
+  const normalizedName = name.trim();
+  const normalizedPhone = phone.trim();
+
+  let query = client
+    .from("suppliers")
+    .select("id")
+    .eq("business_id", businessId)
+    .or(`name.ilike.${normalizedName},phone.eq.${normalizedPhone}`);
+
+  if (excludeId) {
+    query = query.neq("id", excludeId);
+  }
+
+  const { data, error } = await query;
+  if (error) {
+    throw error;
+  }
+
+  return Array.isArray(data) && data.length > 0;
+}
+
 export async function listSuppliers() {
   const isOnline = navigator.onLine;
 
@@ -152,6 +175,11 @@ export async function createSupplier(values: SupplierFormValues, businessId: str
     throw new Error("Supplier address is required.");
   }
 
+  const exists = await checkSupplierExists(name, phone, businessId);
+  if (exists) {
+    throw new Error("Supplier with this name or phone already exists.");
+  }
+
   const client = await ensureSupabaseConfigured();
   const { data, error } = await client
     .from("suppliers")
@@ -189,6 +217,21 @@ export async function updateSupplier(supplierId: string, values: SupplierFormVal
   }
 
   const client = await ensureSupabaseConfigured();
+  const { data: existingSupplier, error: existingError } = await client
+    .from("suppliers")
+    .select("business_id")
+    .eq("id", supplierId)
+    .single();
+
+  if (existingError || !existingSupplier) {
+    throw new Error("Supplier not found.");
+  }
+
+  const exists = await checkSupplierExists(name, phone, existingSupplier.business_id, supplierId);
+  if (exists) {
+    throw new Error("Another supplier with this name or phone already exists.");
+  }
+
   const { data, error } = await client
     .from("suppliers")
     .update(mapSupplierPayload(values))

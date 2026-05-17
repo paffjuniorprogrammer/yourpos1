@@ -45,6 +45,7 @@ export function CustomersPage() {
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerRow | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [formValues, setFormValues] = useState<CustomerForm>(initialForm);
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 10;
 
@@ -107,6 +108,7 @@ export function CustomersPage() {
 
   function openCreateModal() {
     setFormValues(initialForm);
+    setFormErrors({});
     setFormOpen(true);
   }
 
@@ -117,13 +119,30 @@ export function CustomersPage() {
       contact: row.contact,
       address: row.address,
     });
+    setFormErrors({});
     setFormOpen(true);
   }
 
   async function saveCustomer() {
+    const errors: Record<string, string> = {};
+
     if (!formValues.name.trim()) {
+      errors.name = "Customer name is required.";
+    }
+    if (!formValues.contact.trim()) {
+      errors.contact = "Customer phone number is required.";
+    }
+    if (!formValues.address.trim()) {
+      errors.address = "Customer address is required.";
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      showToast("error", "Please complete all required customer fields.");
       return;
     }
+
+    setFormErrors({});
 
     const nextRow: CustomerRow = {
       id: formValues.id ?? `CUS-${String(rows.length + 201).padStart(4, "0")}`,
@@ -150,8 +169,9 @@ export function CustomersPage() {
           address: formValues.address.trim(),
         }, business.id);
         nextRow.id = customer.id;
-      } catch (error) {
+      } catch (error: any) {
         console.error("Failed to create customer:", error);
+        showToast("error", error?.message || "Failed to create customer.");
         return; // Stop if creation fails
       }
     } else {
@@ -163,8 +183,9 @@ export function CustomersPage() {
           address: formValues.address.trim(),
         });
         // ID remains the same
-      } catch (error) {
+      } catch (error: any) {
         console.error("Failed to update customer:", error);
+        showToast("error", error?.message || "Failed to update customer.");
         return; // Stop if update fails
       }
     }
@@ -363,9 +384,10 @@ export function CustomersPage() {
                 <input
                   value={formValues.name}
                   onChange={(event) => setFormValues((current) => ({ ...current, name: event.target.value }))}
-                  className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none"
+                  className={`mt-2 w-full rounded-xl border px-3 py-2.5 text-sm outline-none transition ${formErrors.name ? 'border-rose-400 bg-rose-50' : 'border-slate-200 bg-white'}`}
                   placeholder={t('customers.modal.name_placeholder')}
                 />
+                {formErrors.name ? <p className="mt-2 text-xs text-rose-600">{formErrors.name}</p> : null}
               </label>
 
 
@@ -374,9 +396,10 @@ export function CustomersPage() {
                 <input
                   value={formValues.contact}
                   onChange={(event) => setFormValues((current) => ({ ...current, contact: event.target.value }))}
-                  className="mt-2 w-full rounded-xl border border-sky-100 bg-white px-3 py-2.5 text-sm outline-none"
+                  className={`mt-2 w-full rounded-xl border px-3 py-2.5 text-sm outline-none transition ${formErrors.contact ? 'border-rose-400 bg-rose-50' : 'border-sky-100 bg-white'}`}
                   placeholder={t('customers.modal.contact_placeholder')}
                 />
+                {formErrors.contact ? <p className="mt-2 text-xs text-rose-600">{formErrors.contact}</p> : null}
               </label>
 
 
@@ -385,9 +408,10 @@ export function CustomersPage() {
                 <input
                   value={formValues.address}
                   onChange={(event) => setFormValues((current) => ({ ...current, address: event.target.value }))}
-                  className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none"
+                  className={`mt-2 w-full rounded-xl border px-3 py-2.5 text-sm outline-none transition ${formErrors.address ? 'border-rose-400 bg-rose-50' : 'border-slate-200 bg-white'}`}
                   placeholder={t('customers.modal.address_placeholder')}
                 />
+                {formErrors.address ? <p className="mt-2 text-xs text-rose-600">{formErrors.address}</p> : null}
               </label>
 
             </div>
