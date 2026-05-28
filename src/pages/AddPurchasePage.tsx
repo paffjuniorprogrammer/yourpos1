@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useTranslation } from "react-i18next";
 import { 
   ArrowLeft, 
   Plus, 
@@ -23,13 +22,13 @@ import { useAuth } from "../context/AuthContext";
 import { useNotification } from "../context/NotificationContext";
 import { SectionCard } from "../components/ui/SectionCard";
 import { QuickAddProductModal } from "../components/ui/QuickAddProductModal";
-import { useAsyncAction } from "../hooks/useAsyncAction";
 import { 
   createPurchase, 
+  type PurchaseRequisition,
   listPurchaseRequisitions
 } from "../services/purchaseService";
 import { listProducts } from "../services/productService";
-import { listSuppliers, createSupplier } from "../services/supplierService";
+import { listSuppliers } from "../services/supplierService";
 import { listLocations } from "../services/settingsService";
 import { useSettings } from "../hooks/useSettings";
 import type { PaymentMethod } from "../types/database";
@@ -59,6 +58,7 @@ type PurchaseFormState = {
   date: string;
   items: PurchaseLine[];
   notes: string;
+  requisitionId?: string;
 };
 
 const createEmptyForm = (): PurchaseFormState => ({
@@ -75,12 +75,10 @@ const createEmptyForm = (): PurchaseFormState => ({
 });
 
 export function AddPurchasePage() {
-  const { t } = useTranslation();
   const { business, activeLocationId, profile } = useAuth();
   const navigate = useNavigate();
   const { showToast } = useNotification();
   const { settings } = useSettings();
-  const { run } = useAsyncAction();
 
   const DRAFT_KEY = `pos_purchase_draft_${profile?.id || 'guest'}`;
 
@@ -104,38 +102,65 @@ export function AddPurchasePage() {
   const [productSearch, setProductSearch] = useState("");
   const [productFocus, setProductFocus] = useState(false);
   const [quickProductOpen, setQuickProductOpen] = useState(false);
-  const [pendingRequisitions, setPendingRequisitions] = useState<any[]>([]);
+  const [pendingRequisitions, setPendingRequisitions] = useState<PurchaseRequisition[]>([]);
   const [selectedReqId, setSelectedReqId] = useState("");
   const [importing, setImporting] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const savingRef = useRef(false);
 
   useEffect(() => {
+    let cancelled = false;
+
     async function loadData() {
+      if (!business?.id) {
+        setLoading(false);
+        return;
+      }
+
       try {
-        const [p, s, l] = await Promise.all([
-          listProducts(),
-          listSuppliers(),
-          listLocations()
-        ]);
-        setProducts(p);
-        setSuppliers(s);
-        setLocations(l);
+        const productPromise = listProducts(null, business.id)
+          .then(data => {
+            if (!cancelled) setProducts(data);
+          });
+
+        const supplierPromise = listSuppliers(business.id)
+          .then(data => {
+            if (!cancelled) setSuppliers(data);
+          });
+
+        const locationPromise = listLocations(business.id)
+          .then(data => {
+            if (!cancelled) setLocations(data);
+          });
+
+        await Promise.allSettled([productPromise, supplierPromise, locationPromise]);
+
+        if (cancelled) return;
         
         if (!form.locationId && activeLocationId) {
           setForm(prev => ({ ...prev, locationId: activeLocationId }));
         }
 
-        const allReqs = await listPurchaseRequisitions();
-        setPendingRequisitions(allReqs.filter(r => r.status === 'pending'));
+        setLoading(false);
+
+        listPurchaseRequisitions('pending', business.id)
+          .then(data => {
+            if (!cancelled) setPendingRequisitions(data);
+          })
+          .catch(error => console.error("Failed to load requisitions:", error));
       } catch (error) {
         console.error("Failed to load data:", error);
-      } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     }
+
     loadData();
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [activeLocationId, business?.id]);
 
   useEffect(() => {
     localStorage.setItem(DRAFT_KEY, JSON.stringify(form));
@@ -163,11 +188,14 @@ export function AddPurchasePage() {
         return {
           id: `${item.product_id}-${Date.now()}-${Math.random()}`,
           productId: item.product_id,
-          name: item.product_name || "Unknown Product",
+          product: prod?.name || item.product_name || "Unknown Product",
+          barcode: prod?.barcode || undefined,
           quantity: item.quantity,
-          purchasePrice: prod?.cost_price || item.unit_cost || 0,
-          sellingPrice: prod?.selling_price || 0,
-          expiryDate: ""
+          purchasePrice: prod?.cost_price ?? item.unit_cost ?? 0,
+          profitPercentage: prod?.cost_price > 0
+            ? Math.round((((prod?.selling_price || 0) - (prod?.cost_price || 0)) / (prod?.cost_price || 1)) * 100)
+            : 0,
+          sellingPrice: prod?.selling_price ?? 0,
         };
       });
 
@@ -175,6 +203,7 @@ export function AddPurchasePage() {
         ...prev,
         locationId: req.location_id || prev.locationId,
         supplierId: req.supplier_id || prev.supplierId,
+        requisitionId: req.id,
         items: [...prev.items, ...newItems].filter((v, i, a) => a.findIndex(t => t.productId === v.productId) === i)
       }));
 
@@ -249,6 +278,8 @@ export function AddPurchasePage() {
 
 
   const handleSave = async () => {
+    if (savingRef.current) return;
+
     // Comprehensive validation
     if (!form.supplierId) {
       showToast("error", "⚠️ Please select a supplier - it's required");
@@ -286,6 +317,8 @@ export function AddPurchasePage() {
     }
 
     try {
+      savingRef.current = true;
+      setSaving(true);
       const initialPaidAmount =
         form.paymentStatus === "Paid"
           ? purchaseTotal
@@ -301,7 +334,10 @@ export function AddPurchasePage() {
         paid_amount: initialPaidAmount,
         payment_method: form.paymentMethod,
         paid_at: form.paymentDate,
+        delivery_status: form.deliveryStatus === "Received" ? "received" : "pending",
+        purchase_date: form.date,
         notes: form.notes,
+        requisition_id: form.requisitionId,
         items: form.items.map(item => ({
           product_id: item.productId,
           quantity: item.quantity,
@@ -311,12 +347,16 @@ export function AddPurchasePage() {
       });
 
       showToast("success", "✓ Purchase recorded successfully");
+      showToast("success", "✓ Stock updated");
       localStorage.removeItem(DRAFT_KEY);
       navigate("/purchases");
     } catch (error: any) {
       const message = error.message || "Failed to save purchase";
       showToast("error", `⚠️ ${message}`);
       console.error("Save error:", error);
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
     }
   };
 
@@ -358,10 +398,11 @@ export function AddPurchasePage() {
           </button>
           <button
             onClick={handleSave}
-            className="flex items-center gap-2 rounded-xl bg-brand-600 px-6 py-2 text-sm font-semibold text-white shadow-lg transition hover:bg-brand-700"
+            disabled={saving}
+            className="flex items-center gap-2 rounded-xl bg-brand-600 px-6 py-2 text-sm font-semibold text-white shadow-lg transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            <Save size={18} />
-            Save Purchase
+            {saving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+            {saving ? "Saving..." : "Save Purchase"}
           </button>
         </div>
       </div>
@@ -682,7 +723,7 @@ export function AddPurchasePage() {
         isOpen={quickProductOpen}
         onClose={() => setQuickProductOpen(false)}
         onSuccess={() => {
-          listProducts().then(setProducts);
+          listProducts(null, business?.id).then(setProducts);
           setQuickProductOpen(false);
         }}
       />

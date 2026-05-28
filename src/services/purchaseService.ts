@@ -2,7 +2,7 @@ import { ensureSupabaseConfigured } from "./supabaseUtils";
 import { db } from "../lib/db";
 import type { PaymentMethod } from "../types/database";
 
-const FAST_CACHE_TIMEOUT_MS = 500;
+const FAST_CACHE_TIMEOUT_MS = 5000;
 
 function withFastCacheTimeout<T>(promise: PromiseLike<T>) {
   return Promise.race([
@@ -77,8 +77,9 @@ export async function listPurchases(params: {
   page: number;
   pageSize: number;
   search?: string;
+  businessId?: string;
 }): Promise<{ data: PurchaseSummary[]; count: number }> {
-  const cacheKey = `purchases:${params.page}:${params.pageSize}:${params.search ?? ""}`;
+  const cacheKey = `purchases:${params.businessId || 'all'}:${params.page}:${params.pageSize}:${params.search ?? ""}`;
   const isOnline = navigator.onLine;
 
   const from = (params.page - 1) * params.pageSize;
@@ -129,6 +130,10 @@ export async function listPurchases(params: {
         query = query.or(orConditions.join(','));
       }
 
+      if (params.businessId) {
+        query = query.eq('business_id', params.businessId);
+      }
+
       const { data, error, count } = await withFastCacheTimeout(query
         .order("purchase_date", { ascending: false })
         .range(from, to));
@@ -148,6 +153,7 @@ export async function listPurchases(params: {
       if (error?.message !== "Failed to fetch" && !error?.message?.includes("network") && !error?.message?.includes("timeout")) {
         throw error;
       }
+      console.warn("Network error, falling back to offline purchases cache.", error);
     }
   }
 
@@ -224,7 +230,7 @@ export async function addPurchasePayment(
   const client = await ensureSupabaseConfigured();
   const { data: purchase, error: purchaseError } = await client
     .from("purchases")
-    .select("id,total_cost,purchase_payments(amount)")
+    .select("id,business_id,total_cost,purchase_payments(amount)")
     .eq("id", purchaseId)
     .single();
 
@@ -245,6 +251,7 @@ export async function addPurchasePayment(
   const { error: paymentError } = await client
     .from("purchase_payments")
     .insert({
+      business_id: (purchase as any).business_id,
       purchase_id: purchaseId,
       payment_method: paymentMethod,
       amount: safeAmount,
@@ -267,6 +274,37 @@ export async function addPurchasePayment(
 
 export async function deletePurchase(purchaseId: string) {
   const client = await ensureSupabaseConfigured();
+  const { data: purchase, error: purchaseError } = await client
+    .from("purchases")
+    .select("id,business_id,purchase_date,purchase_items(product_id,products(name))")
+    .eq("id", purchaseId)
+    .single();
+
+  if (purchaseError) throw purchaseError;
+
+  const productIds = ((purchase as any).purchase_items || [])
+    .map((item: any) => item.product_id)
+    .filter(Boolean);
+
+  if (productIds.length > 0) {
+    const { data: soldItems, error: soldItemsError } = await client
+      .from("sale_items")
+      .select("id,product_id,sales!inner(id,sale_number,created_at,business_id)")
+      .in("product_id", productIds)
+      .eq("sales.business_id", (purchase as any).business_id)
+      .gte("sales.created_at", (purchase as any).purchase_date)
+      .limit(1);
+
+    if (soldItemsError) throw soldItemsError;
+
+    if ((soldItems || []).length > 0) {
+      const productName =
+        ((purchase as any).purchase_items || []).find((item: any) => item.product_id === (soldItems as any[])[0].product_id)
+          ?.products?.name || "one of these products";
+      throw new Error(`This purchase cannot be deleted because ${productName} has already been sold after this purchase.`);
+    }
+  }
+
   const { error } = await client.rpc("delete_purchase_transaction", {
     p_purchase_id: purchaseId
   });
@@ -286,11 +324,15 @@ export async function createPurchase(input: {
   paid_amount?: number;
   payment_method?: PaymentMethod;
   paid_at?: string;
+  delivery_status?: "pending" | "received";
+  purchase_date?: string;
   notes?: string;
+  requisition_id?: string;
   items: Array<{
     product_id: string;
     quantity: number;
     cost_price: number;
+    selling_price?: number;
   }>;
 }) {
   const client = await ensureSupabaseConfigured();
@@ -300,11 +342,23 @@ export async function createPurchase(input: {
   // Get local user id
   const { data: dbUser } = await client
     .from("users")
-    .select("id")
+    .select("id,business_id")
     .eq("auth_user_id", user.id)
     .single();
   
   if (!dbUser) throw new Error("Local user record not found");
+  const businessId = (dbUser as any).business_id as string;
+  const productIds = input.items.map(item => item.product_id);
+
+  const { data: stockBefore } = await client
+    .from("product_stocks")
+    .select("product_id,quantity")
+    .eq("location_id", input.location_id)
+    .in("product_id", productIds);
+
+  const beforeByProduct = new Map(
+    (stockBefore || []).map((row: any) => [row.product_id, Number(row.quantity || 0)]),
+  );
 
   const { data, error } = await client.rpc("create_purchase_transaction", {
     p_supplier_id: input.supplier_id,
@@ -323,6 +377,32 @@ export async function createPurchase(input: {
 
   if (error) throw error;
   const purchaseId = String(data);
+
+  await ensurePurchaseRowsVisible(purchaseId, businessId);
+  await ensurePurchaseStockApplied({
+    businessId,
+    locationId: input.location_id,
+    beforeByProduct,
+    items: input.items,
+  });
+
+  const purchaseUpdates: Record<string, string> = {};
+  if (input.delivery_status) {
+    purchaseUpdates.delivery_status = input.delivery_status;
+  }
+  if (input.purchase_date) {
+    purchaseUpdates.purchase_date = new Date(input.purchase_date).toISOString();
+  }
+
+  if (Object.keys(purchaseUpdates).length > 0) {
+    const { error: updateError } = await client
+      .from("purchases")
+      .update(purchaseUpdates)
+      .eq("id", purchaseId);
+
+    if (updateError) throw updateError;
+  }
+
   const initialPaidAmount =
     input.payment_status === "paid"
       ? input.total_cost
@@ -339,8 +419,142 @@ export async function createPurchase(input: {
     );
   }
 
+  if (input.requisition_id) {
+    await markPurchaseRequisitionConverted(input.requisition_id);
+  }
+
+  // Clear both purchase and product caches so UI reflects updated stock immediately
   await db.cached_purchases.clear();
+  await db.cached_products.clear();
   return data;
+}
+
+async function ensurePurchaseRowsVisible(purchaseId: string, businessId: string) {
+  const client = await ensureSupabaseConfigured();
+
+  const [itemsResult, paymentsResult] = await Promise.allSettled([
+    client
+      .from("purchase_items")
+      .update({ business_id: businessId })
+      .eq("purchase_id", purchaseId),
+    client
+      .from("purchase_payments")
+      .update({ business_id: businessId })
+      .eq("purchase_id", purchaseId),
+  ]);
+
+  itemsResult.status === "rejected" && console.warn("Could not backfill purchase item business_id", itemsResult.reason);
+  paymentsResult.status === "rejected" && console.warn("Could not backfill purchase payment business_id", paymentsResult.reason);
+  if (itemsResult.status === "fulfilled" && itemsResult.value.error) {
+    console.warn("Could not backfill purchase item business_id", itemsResult.value.error);
+  }
+  if (paymentsResult.status === "fulfilled" && paymentsResult.value.error) {
+    console.warn("Could not backfill purchase payment business_id", paymentsResult.value.error);
+  }
+}
+
+async function ensurePurchaseStockApplied(input: {
+  businessId: string;
+  locationId: string;
+  beforeByProduct: Map<string, number>;
+  items: Array<{
+    product_id: string;
+    quantity: number;
+    cost_price: number;
+    selling_price?: number;
+  }>;
+}) {
+  const client = await ensureSupabaseConfigured();
+  const productIds = input.items.map(item => item.product_id);
+
+  const { data: stockAfter, error: stockAfterError } = await client
+    .from("product_stocks")
+    .select("product_id,quantity")
+    .eq("location_id", input.locationId)
+    .in("product_id", productIds);
+
+  if (stockAfterError) {
+    console.warn("Could not verify purchase stock after save", stockAfterError);
+    return;
+  }
+
+  const afterByProduct = new Map(
+    (stockAfter || []).map((row: any) => [row.product_id, Number(row.quantity || 0)]),
+  );
+
+  const corrections = input.items
+    .map(item => {
+      const before = input.beforeByProduct.get(item.product_id) || 0;
+      const expected = before + Number(item.quantity || 0);
+      const actual = afterByProduct.get(item.product_id);
+      return { item, expected, actual };
+    })
+    .filter(({ actual, expected }) => actual === undefined || actual < expected);
+
+  if (corrections.length > 0) {
+    await Promise.all(corrections.map(async ({ item, expected, actual }) => {
+      if (actual === undefined) {
+        const { error } = await client.from("product_stocks").insert({
+          business_id: input.businessId,
+          product_id: item.product_id,
+          location_id: input.locationId,
+          quantity: expected,
+        });
+        if (error) throw error;
+      } else {
+        const { error } = await client
+          .from("product_stocks")
+          .update({ business_id: input.businessId, quantity: expected })
+          .eq("product_id", item.product_id)
+          .eq("location_id", input.locationId);
+        if (error) throw error;
+      }
+    }));
+  }
+
+  const { data: allStocks, error: allStocksError } = await client
+    .from("product_stocks")
+    .select("product_id,quantity")
+    .eq("business_id", input.businessId)
+    .in("product_id", productIds);
+
+  if (allStocksError) {
+    console.warn("Could not calculate product stock totals", allStocksError);
+    return;
+  }
+
+  const totals = new Map<string, number>();
+  (allStocks || []).forEach((row: any) => {
+    totals.set(row.product_id, (totals.get(row.product_id) || 0) + Number(row.quantity || 0));
+  });
+
+  await Promise.all(input.items.map(async item => {
+    const update: Record<string, number> = {
+      stock_quantity: totals.get(item.product_id) || 0,
+      cost_price: Number(item.cost_price || 0),
+    };
+
+    if (Number(item.selling_price || 0) > 0) {
+      update.selling_price = Number(item.selling_price);
+    }
+
+    const { error } = await client
+      .from("products")
+      .update(update)
+      .eq("id", item.product_id)
+      .eq("business_id", input.businessId);
+
+    if (error) throw error;
+  }));
+}
+
+export async function markPurchaseRequisitionConverted(requisitionId: string) {
+  const client = await ensureSupabaseConfigured();
+  const { error } = await client
+    .from('purchase_requisitions')
+    .update({ status: 'converted' })
+    .eq('id', requisitionId);
+  if (error) throw error;
 }
 
 export async function updatePurchase(
@@ -370,9 +584,12 @@ export async function updatePurchase(
   return data;
 }
 
-export async function listPurchaseRequisitions(): Promise<PurchaseRequisition[]> {
+export async function listPurchaseRequisitions(
+  status: 'pending' | 'converted' | 'cancelled' | 'all' = 'all',
+  businessId?: string,
+): Promise<PurchaseRequisition[]> {
   const client = await ensureSupabaseConfigured();
-  const { data, error } = await client
+  let query = client
     .from('purchase_requisitions')
     .select(`
       *,
@@ -385,6 +602,15 @@ export async function listPurchaseRequisitions(): Promise<PurchaseRequisition[]>
     `)
     .order('created_at', { ascending: false });
 
+  if (status !== 'all') {
+    query = query.eq('status', status);
+  }
+
+  if (businessId) {
+    query = query.eq('business_id', businessId);
+  }
+
+  const { data, error } = await query;
   if (error) throw error;
 
   return (data || []).map(req => ({
@@ -393,8 +619,8 @@ export async function listPurchaseRequisitions(): Promise<PurchaseRequisition[]>
     supplier_name: req.suppliers?.name,
     items: (req.purchase_requisition_items || []).map((item: any) => ({
       ...item,
-      product_name: item.products?.name
-    }))
+      product_name: item.products?.name,
+    })),
   }));
 }
 

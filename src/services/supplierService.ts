@@ -4,7 +4,7 @@ import { db } from "../lib/db";
 // Performance cache
 let suppliersCache: { data: SupplierRecord[], timestamp: number } | null = null;
 const CACHE_DURATION_MS = 30000; // 30 seconds
-const FAST_CACHE_TIMEOUT_MS = 5000;
+const FAST_CACHE_TIMEOUT_MS = 800;
 
 function withFastCacheTimeout<T>(promise: PromiseLike<T>) {
   return Promise.race([
@@ -75,16 +75,22 @@ export async function checkSupplierExists(name: string, phone: string, businessI
   return Array.isArray(data) && data.length > 0;
 }
 
-export async function listSuppliers() {
+export async function listSuppliers(businessId?: string) {
   const isOnline = navigator.onLine;
 
   if (isOnline) {
     try {
       const client = await ensureSupabaseConfigured();
-      const { data, error } = await withFastCacheTimeout(client
+      let query = client
         .from("suppliers")
         .select("*")
-        .order("created_at", { ascending: false }));
+        .order("created_at", { ascending: false });
+
+      if (businessId) {
+        query = query.eq("business_id", businessId);
+      }
+
+      const { data, error } = await withFastCacheTimeout(query);
 
       if (error) {
         throw error;

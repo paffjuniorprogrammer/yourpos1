@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
-import { CalendarClock, CreditCard, Pencil, Plus, Printer, Search, Trash2, X } from "lucide-react";
+import { CalendarClock, CreditCard, Loader2, Pencil, Plus, Printer, Search, Trash2, X } from "lucide-react";
 import { formatCurrency } from "../lib/format";
 
 import { useAuth } from "../context/AuthContext";
@@ -159,6 +159,10 @@ export function PurchasesPage() {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split("T")[0]);
   const [savingPayment, setSavingPayment] = useState(false);
+  const [savingPurchase, setSavingPurchase] = useState(false);
+  const [deletingPurchaseId, setDeletingPurchaseId] = useState<string | null>(null);
+  const savingPurchaseRef = useRef(false);
+  const deletingPurchaseRef = useRef<string | null>(null);
 
   const { run } = useAsyncAction();
 
@@ -201,10 +205,10 @@ export function PurchasesPage() {
     if (showLoading) setLoading(true);
     try {
       const [{ data: purchases, count }, products, suppliers, locations] = await Promise.all([
-        listPurchases({ page: currentPage, pageSize: ITEMS_PER_PAGE, search: search }),
-        listProducts(),
-        listSuppliers(),
-        listLocations(),
+        listPurchases({ page: currentPage, pageSize: ITEMS_PER_PAGE, search: search, businessId: business?.id }),
+        listProducts(null, business?.id),
+        listSuppliers(business?.id),
+        listLocations(business?.id),
       ]);
 
       setRows(purchases);
@@ -262,7 +266,7 @@ export function PurchasesPage() {
 
   useEffect(() => {
     run(loadPage);
-  }, [run, currentPage, search]);
+  }, [run, currentPage, search, business?.id]);
 
   const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE);
   const paginatedRows = rows;
@@ -330,10 +334,14 @@ export function PurchasesPage() {
   }
 
   async function handleDeletePurchase(id: string) {
+    if (deletingPurchaseRef.current) return;
+
     const confirmed = await confirm(t('purchases.modal.delete_title'), t('purchases.modal.delete_desc'));
     if (!confirmed) return;
 
     try {
+      deletingPurchaseRef.current = id;
+      setDeletingPurchaseId(id);
       await run(async () => {
         await deletePurchase(id);
         setRows((current) => current.filter((row) => row.id !== id));
@@ -342,8 +350,12 @@ export function PurchasesPage() {
         }
         showToast("success", t('purchases.success.deleted'));
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to delete purchase:", error);
+      showToast("error", error?.message || "Failed to delete purchase.");
+    } finally {
+      deletingPurchaseRef.current = null;
+      setDeletingPurchaseId(null);
     }
   }
 
@@ -482,6 +494,7 @@ export function PurchasesPage() {
   }
 
   async function savePurchase() {
+    if (savingPurchaseRef.current) return;
     if (!purchaseForm.items.length) return;
 
     const supplierId = supplierObjects.find(s => s.name === purchaseForm.supplier)?.id;
@@ -496,8 +509,10 @@ export function PurchasesPage() {
       return;
     }
 
-    await run(async () => {
-      try {
+    try {
+      savingPurchaseRef.current = true;
+      setSavingPurchase(true);
+      await run(async () => {
         const initialPaidAmount =
           purchaseForm.paymentStatus === "Paid"
             ? purchaseTotal
@@ -535,18 +550,21 @@ export function PurchasesPage() {
         }
         
         // Refresh full list to get correct IDs and formatted data from DB
-        const purchases = await listPurchases({ page: currentPage, pageSize: ITEMS_PER_PAGE, search: search });
+        const purchases = await listPurchases({ page: currentPage, pageSize: ITEMS_PER_PAGE, search: search, businessId: business?.id });
         setRows(purchases.data);
         setTotalCount(purchases.count);
         showToast("success", purchaseForm.id ? t('purchases.success.updated') : t('purchases.success.created'));
         setPurchaseModalOpen(false);
         setPurchaseForm(createEmptyForm());
-      } catch (error: any) {
-        const msg = error?.message || JSON.stringify(error);
-        showToast("error", t('purchases.errors.save_failed', { error: msg }));
-        console.error("Failed to save purchase:", error);
-      }
-    });
+      });
+    } catch (error: any) {
+      const msg = error?.message || JSON.stringify(error);
+      showToast("error", t('purchases.errors.save_failed', { error: msg }));
+      console.error("Failed to save purchase:", error);
+    } finally {
+      savingPurchaseRef.current = false;
+      setSavingPurchase(false);
+    }
   }
 
   const noResults = rows.length === 0;
@@ -721,8 +739,13 @@ export function PurchasesPage() {
                             </button>
                           )}
                           {can("Purchases", "delete") && (
-                            <button onClick={() => handleDeletePurchase(row.id)} className="rounded-lg bg-rose-50 p-1.5 text-rose-600 transition hover:bg-rose-100" title="Delete">
-                              <Trash2 size={14} />
+                            <button
+                              onClick={() => handleDeletePurchase(row.id)}
+                              disabled={!!deletingPurchaseId}
+                              className="rounded-lg bg-rose-50 p-1.5 text-rose-600 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-50"
+                              title="Delete"
+                            >
+                              {deletingPurchaseId === row.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
                             </button>
                           )}
                         </div>
@@ -1151,10 +1174,11 @@ export function PurchasesPage() {
                 </button>
                 <button
                   onClick={savePurchase}
-                  disabled={!purchaseForm.items.length || !purchaseForm.supplier}
-                  className="flex-1 sm:flex-none py-4 px-8 rounded-2xl bg-brand-600 font-bold text-white transition hover:bg-brand-700 shadow-xl shadow-brand-100 disabled:opacity-50"
+                  disabled={savingPurchase || !purchaseForm.items.length || !purchaseForm.supplier}
+                  className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 py-4 px-8 rounded-2xl bg-brand-600 font-bold text-white transition hover:bg-brand-700 shadow-xl shadow-brand-100 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {t('purchases.modal.save_purchase')}
+                  {savingPurchase && <Loader2 size={18} className="animate-spin" />}
+                  {savingPurchase ? t('common.saving') : t('purchases.modal.save_purchase')}
 
                 </button>
               </div>

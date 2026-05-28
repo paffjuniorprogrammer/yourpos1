@@ -2,7 +2,7 @@ import type { AppRole, ShopSettingsRecord, UserPermissionRecord, UserProfile } f
 import { ensureSupabaseConfigured } from "./supabaseUtils";
 import { db } from "../lib/db";
 
-const FAST_CACHE_TIMEOUT_MS = 5000;
+const FAST_CACHE_TIMEOUT_MS = 800;
 
 function withFastCacheTimeout<T>(promise: PromiseLike<T>) {
   return Promise.race([
@@ -250,14 +250,20 @@ export async function upsertShopSettings(
   return data as ShopSettingsRecord;
 }
 
-export async function listLocations() {
+export async function listLocations(businessId?: string) {
   if (navigator.onLine) {
     try {
       const client = await ensureSupabaseConfigured();
-      const { data, error } = await withFastCacheTimeout(client
+      let query = client
         .from("locations")
         .select("*")
-        .order("created_at", { ascending: true }));
+        .order("created_at", { ascending: true });
+
+      if (businessId) {
+        query = query.eq("business_id", businessId);
+      }
+
+      const { data, error } = await withFastCacheTimeout(query);
 
       if (error) {
         throw error;
