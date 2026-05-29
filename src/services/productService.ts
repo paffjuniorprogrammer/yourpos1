@@ -70,7 +70,7 @@ function mapProductPayload(values: ProductFormValues, businessId?: string) {
   };
 }
 
-export async function listProducts(locationId?: string | null) {
+export async function listProducts(locationId?: string | null, businessId?: string) {
   const isOnline = navigator.onLine;
 
   if (isOnline) {
@@ -80,11 +80,16 @@ export async function listProducts(locationId?: string | null) {
       const baseColumns = "id, name, barcode, cost_price, selling_price, stock_quantity, reorder_level, image_url, is_active, created_at, business_id, category_id";
       const selectQuery = `${baseColumns}, categories(name), product_stocks(quantity, location_id)`;
 
-      const { data, error } = await client
+      let query = client
         .from("products")
         .select(selectQuery)
-        .eq("is_active", true)
-        .order("created_at", { ascending: false });
+        .eq("is_active", true);
+
+      if (businessId) {
+        query = query.eq("business_id", businessId);
+      }
+
+      const { data, error } = await query.order("created_at", { ascending: false });
 
       if (error) {
         throw error;
@@ -118,10 +123,10 @@ export async function listProducts(locationId?: string | null) {
 
       // Cache the result in Dexie
       try {
-        const businessId = parsedData.length > 0 ? parsedData[0].business_id : 'unknown';
+        const bid = businessId || (parsedData.length > 0 ? parsedData[0].business_id : 'unknown');
         await db.cached_products.bulkPut(parsedData.map(p => ({
           id: p.id,
-          business_id: businessId,
+          business_id: bid,
           data: p,
           updated_at: new Date().toISOString()
         })));

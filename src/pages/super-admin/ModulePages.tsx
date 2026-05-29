@@ -666,7 +666,7 @@ function DeleteBusinessModal({ business, onClose, onComplete }: any) {
       showToast("success", "Business node completely wiped out successfully.");
       onComplete();
     } catch (err: any) {
-      showToast(err.message, "error");
+      showToast("error", err?.message || t('common.error'));
       setIsDeleting(false);
     }
   };

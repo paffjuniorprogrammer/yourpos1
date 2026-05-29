@@ -103,7 +103,8 @@ export function ProductsPage() {
   useRealtimeSync({
     onProductChanged: loadData,
     onStockChanged: loadData,
-    onCategoryChanged: loadData
+    onCategoryChanged: loadData,
+    onPurchaseCreated: loadData
   });
 
   const filteredProducts = useMemo(() => {
