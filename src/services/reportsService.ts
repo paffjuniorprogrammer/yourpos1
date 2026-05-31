@@ -129,13 +129,13 @@ export async function getDailyReport(forceRefresh = false) {
   }
   const client = await ensureSupabaseConfigured();
 
-  // 1. First, try to get ANY closed shift from TODAY to show as the "Last Completed Report"
+  // 1. First, try to get ANY closed POS day from TODAY to show as the "Last Completed Report"
   const today = new Date().toISOString().split('T')[0];
   const { data: lastClosedToday, error: closedError } = await client
-    .from('cash_registers')
-    .select('*, users:users(full_name)')
+    .from('day_closures')
+    .select('*, users:user_id(full_name)')
     .eq('status', 'closed')
-    .gte('closed_at', `${today}T00:00:00.000Z`)
+    .eq('closing_date', today)
     .order('closed_at', { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -146,8 +146,8 @@ export async function getDailyReport(forceRefresh = false) {
   let targetShift = lastClosedToday;
   if (!targetShift) {
     const { data: currentOpen, error: openError } = await client
-      .from('cash_registers')
-      .select('*, users:users(full_name)')
+      .from('day_closures')
+      .select('*, users:user_id(full_name)')
       .eq('status', 'open')
       .order('opened_at', { ascending: false })
       .limit(1)
@@ -212,18 +212,22 @@ export async function getDailyReport(forceRefresh = false) {
 export async function getRecentShifts(limit = 10) {
   const client = await ensureSupabaseConfigured();
   const { data, error } = await client
-    .from('cash_registers')
+    .from('day_closures')
     .select(`
       *,
-      users:users(full_name),
-      locations:locations(name)
+      users:user_id(full_name),
+      locations:location_id(name)
     `)
     .eq('status', 'closed')
     .order('closed_at', { ascending: false })
     .limit(limit);
 
   if (error) throw error;
-  return data;
+  return (data ?? []).map((shift: any) => ({
+    ...shift,
+    opening_amount: shift.opening_cash,
+    total_sales: shift.total_amount,
+  }));
 }
 
 export async function getShiftClosure(userId: string, locationId: string, date: string): Promise<DayClosureRecord | null> {
@@ -394,4 +398,4 @@ export async function getDebtPaymentsReport(startDate: string, endDate: string) 
   }) || [];
 
   return debtPayments.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-}
+}

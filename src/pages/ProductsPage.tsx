@@ -34,7 +34,7 @@ import { formatCurrency } from "../lib/format";
 export function ProductsPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { can, activeLocationId, profile } = useAuth();
+  const { can, activeLocationId, profile, business, assignedLocations } = useAuth();
   const { showToast, confirm } = useNotification();
   
   const [products, setProducts] = useState<any[]>([]);
@@ -64,11 +64,11 @@ export function ProductsPage() {
       const [loadedProducts, loadedCategories, loadedLocations] = await Promise.all([
         listProducts(fetchLocId),
         listCategories(),
-        listLocations()
+        listLocations(business?.id)
       ]);
       setProducts(loadedProducts || []);
       setCategories(loadedCategories || []);
-      setLocations(loadedLocations || []);
+      setLocations((loadedLocations?.length ? loadedLocations : assignedLocations) || []);
     } catch (err) {
       console.error("Failed to load products:", err);
       showToast("error", "Failed to load data");
@@ -98,7 +98,7 @@ export function ProductsPage() {
 
   useEffect(() => {
     loadData();
-  }, [locationFilter, activeLocationId]);
+  }, [locationFilter, activeLocationId, business?.id, assignedLocations]);
 
   useRealtimeSync({
     onProductChanged: loadData,

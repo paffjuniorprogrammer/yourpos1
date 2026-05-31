@@ -2,7 +2,7 @@ import type { AppRole, ShopSettingsRecord, UserPermissionRecord, UserProfile } f
 import { ensureSupabaseConfigured } from "./supabaseUtils";
 import { db } from "../lib/db";
 
-const FAST_CACHE_TIMEOUT_MS = 800;
+const FAST_CACHE_TIMEOUT_MS = 5000;
 
 function withFastCacheTimeout<T>(promise: PromiseLike<T>) {
   return Promise.race([
@@ -257,6 +257,7 @@ export async function listLocations(businessId?: string) {
       let query = client
         .from("locations")
         .select("*")
+        .eq("is_active", true)
         .order("created_at", { ascending: true });
 
       if (businessId) {

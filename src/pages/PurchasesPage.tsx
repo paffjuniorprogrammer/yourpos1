@@ -114,7 +114,7 @@ function formatScheduleCountdown(dueDate: string) {
 
 export function PurchasesPage() {
   const { t } = useTranslation();
-  const { can, business } = useAuth();
+  const { can, business, assignedLocations } = useAuth();
   const navigate = useNavigate();
 
   const { showToast, confirm } = useNotification();
@@ -250,12 +250,13 @@ export function PurchasesPage() {
     setSupplierObjects(suppliersList);
 
     // Set location options
-    setLocationOptions(locations);
+    const availableLocations = locations.length ? locations : assignedLocations;
+    setLocationOptions(availableLocations);
 
     setPurchaseForm((current) => ({
       ...current,
       supplier: suppliers[0]?.name || "",
-      location: locations[0]?.name || "",
+      location: availableLocations[0]?.name || "",
     }));
     } catch (error) {
       console.error("Failed to load purchases:", error);
@@ -266,7 +267,7 @@ export function PurchasesPage() {
 
   useEffect(() => {
     run(loadPage);
-  }, [run, currentPage, search, business?.id]);
+  }, [run, currentPage, search, business?.id, assignedLocations]);
 
   const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE);
   const paginatedRows = rows;

@@ -335,7 +335,7 @@ export function PosPage() {
 
 
   useEffect(() => {
-    if (!closeDayOpen || !profile?.id || !authConfigured || !activeLocationId || !activeShift?.opened_at) {
+    if (!closeDayOpen || !profile?.id || !authConfigured || !activeLocationId || !activeShift) {
       return;
     }
 
@@ -343,7 +343,11 @@ export function PosPage() {
 
     async function loadCloseDaySummary() {
       try {
-        const summary = await getCloseDaySummary(profile!.id, activeLocationId!);
+        const summary = await getCloseDaySummary(
+          profile!.id,
+          activeLocationId!,
+          activeShift.opened_at ?? activeShift.created_at ?? null,
+        );
         if (active) {
           setCloseDaySummary(summary);
         }
@@ -515,7 +519,7 @@ export function PosPage() {
           ].filter((payment) => payment.amount > 0)
         : paymentMode === "credit"
           ? []
-          : [{ payment_method: paymentMode as PaymentMethod, amount: Number(amountPaid || 0) || finalTotal }];
+          : [{ payment_method: paymentMode as PaymentMethod, amount: finalTotal }];
 
     try {
       setSubmitting(true);
@@ -653,9 +657,22 @@ export function PosPage() {
   async function confirmCloseDay() {
     if (profile?.id && authConfigured && activeLocationId && business?.id) {
       try {
-        await createDayClosure(profile.id, business.id, activeLocationId, closeDaySummary);
+        const finalSummary = await getCloseDaySummary(
+          profile.id,
+          activeLocationId,
+          activeShift?.opened_at ?? activeShift?.created_at ?? null,
+        );
+        await createDayClosure(profile.id, business.id, activeLocationId, finalSummary);
+        showToast('success', t('pos.shift.closed_success', 'Day closed successfully.'));
+        setCloseDayOpen(false);
+        setRegisterOpen(false);
+        setActiveShift(null);
+        await logout();
+        navigate("/login", { replace: true });
+        return;
       } catch (err) {
         console.error("Failed to close day:", err);
+        showToast("error", getErrorMessage(err));
       }
     }
     setCloseDayOpen(false);

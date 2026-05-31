@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import type { AppRole } from "../../types/database";
+import { LoadingPOS } from "../ui/LoadingPOS";
 
 type ProtectedRouteProps = {
   children: ReactNode;
@@ -18,13 +19,7 @@ export function ProtectedRoute({ children, allowedRoles, requiredPermission }: P
   }
 
   if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-canvas px-6">
-        <div className="rounded-3xl bg-white px-8 py-6 shadow-soft">
-          <p className="text-lg font-semibold text-ink">Loading your workspace...</p>
-        </div>
-      </div>
-    );
+    return <LoadingPOS />;
   }
 
   if (!session) {

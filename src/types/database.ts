@@ -172,13 +172,18 @@ export type DayClosureRecord = {
   id: string;
   business_id: string;
   user_id: string;
+  location_id: string | null;
   closing_date: string;
+  opened_at: string | null;
+  opening_cash: number;
   cash_amount: number;
   momo_amount: number;
   bank_amount: number;
   card_amount: number;
   credit_amount: number;
   total_amount: number;
+  status: "open" | "closed";
+  closed_at: string | null;
   created_at: string;
 };
 

@@ -75,7 +75,7 @@ const createEmptyForm = (): PurchaseFormState => ({
 });
 
 export function AddPurchasePage() {
-  const { business, activeLocationId, profile } = useAuth();
+  const { business, activeLocationId, profile, assignedLocations } = useAuth();
   const navigate = useNavigate();
   const { showToast } = useNotification();
   const { settings } = useSettings();
@@ -132,7 +132,7 @@ export function AddPurchasePage() {
 
         const locationPromise = listLocations(business.id)
           .then(data => {
-            if (!cancelled) setLocations(data);
+            if (!cancelled) setLocations(data.length ? data : assignedLocations);
           });
 
         await Promise.allSettled([productPromise, supplierPromise, locationPromise]);
@@ -160,7 +160,7 @@ export function AddPurchasePage() {
     return () => {
       cancelled = true;
     };
-  }, [activeLocationId, business?.id]);
+  }, [activeLocationId, business?.id, assignedLocations]);
 
   useEffect(() => {
     localStorage.setItem(DRAFT_KEY, JSON.stringify(form));

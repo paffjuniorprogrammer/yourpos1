@@ -58,7 +58,7 @@ export async function getCurrentProfile(authUserId: string): Promise<UserProfile
   return withRetry(async () => {
     try {
       // Fetch user data with relationships in ONE parallel query step for max speed
-      const [{ data: user, error: userError }, platformAdminResult, allLocsResult] = await Promise.all([
+      const [{ data: user, error: userError }, platformAdminResult] = await Promise.all([
         client
           .from("users")
           .select(`
@@ -70,7 +70,6 @@ export async function getCurrentProfile(authUserId: string): Promise<UserProfile
           .eq("auth_user_id", authUserId)
           .maybeSingle(),
         client.from("platform_admins").select("auth_user_id").eq("auth_user_id", authUserId).maybeSingle(),
-        client.from("locations").select("*").eq("is_active", true) // Fetch globals concurrently
       ]);
 
       if (userError) throw userError;
@@ -90,7 +89,14 @@ export async function getCurrentProfile(authUserId: string): Promise<UserProfile
       const assigned = (user.user_locations as any)?.map((ul: any) => ul.location) || [];
       
       if (data.role === "admin" || data.role === "super_admin") {
-        data.assigned_locations = allLocsResult.data || [];
+        let locQuery = client.from("locations").select("*").eq("is_active", true);
+        if (data.role !== "super_admin" && data.business_id) {
+          locQuery = locQuery.eq("business_id", data.business_id);
+        }
+
+        const { data: allLocs, error: allLocsError } = await locQuery.order("created_at", { ascending: true });
+        if (allLocsError) throw allLocsError;
+        data.assigned_locations = allLocs || [];
       } else {
         data.assigned_locations = assigned;
       }

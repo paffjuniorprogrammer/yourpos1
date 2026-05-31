@@ -305,6 +305,7 @@ export async function checkOpenRegister(userId: string, locationId: string) {
     .eq('user_id', userId)
     .eq('location_id', locationId)
     .eq('closing_date', today)
+    .eq('status', 'open')
     .maybeSingle();
 
   if (error) throw error;
@@ -315,16 +316,18 @@ export async function pushRegisterOpenToSupabase(payload: any) {
   const client = await ensureSupabaseConfigured();
   const { error } = await client
     .from('day_closures')
-    .upsert(payload, { onConflict: 'user_id, closing_date, location_id', ignoreDuplicates: true });
+    .insert(payload);
   if (error) throw error;
 }
 
 export async function openRegister(userId: string, businessId: string, locationId: string, startingAmount: number) {
+  const now = new Date().toISOString();
   const payload = {
     user_id: userId,
     business_id: businessId,
     location_id: locationId,
     closing_date: new Date().toISOString().split('T')[0],
+    opened_at: now,
     opening_cash: startingAmount,
     cash_amount: 0,
     momo_amount: 0,
@@ -332,7 +335,8 @@ export async function openRegister(userId: string, businessId: string, locationI
     card_amount: 0,
     credit_amount: 0,
     total_amount: 0,
-    status: 'open'
+    status: 'open',
+    closed_at: null
   };
 
   const isOnline = navigator.onLine;
@@ -350,25 +354,25 @@ export async function openRegister(userId: string, businessId: string, locationI
     type: 'register_open',
     payload,
     status: 'pending',
-    created_at: new Date().toISOString()
+    created_at: now
   });
 
-  return payload;
+  return { ...payload, created_at: now };
 }
 
-export async function getCloseDaySummary(userId: string, locationId: string): Promise<CloseDaySummary> {
+export async function getCloseDaySummary(userId: string, locationId: string, openedAt?: string | null): Promise<CloseDaySummary> {
   const client = await ensureSupabaseConfigured();
   const today = new Date().toISOString().split('T')[0];
+  const startAt = openedAt ?? `${today}T00:00:00Z`;
 
-  // Get all sales for today for this user/location
-  const { data: sales, error } = await client
+  const { data: sales, error: salesError } = await client
     .from('sales')
-    .select('id, total_amount, payment_method, payment_status')
+    .select('id, total_amount, payment_method, payment_status, sale_payments(payment_method, amount)')
     .eq('cashier_id', userId)
     .eq('location_id', locationId)
-    .gte('created_at', `${today}T00:00:00Z`);
+    .gte('created_at', startAt);
 
-  if (error) throw error;
+  if (salesError) throw salesError;
 
   const summary = {
     cash_amount: 0,
@@ -379,20 +383,30 @@ export async function getCloseDaySummary(userId: string, locationId: string): Pr
     total_amount: 0
   };
 
-  sales?.forEach(sale => {
+  sales?.forEach((sale: any) => {
     summary.total_amount += Number(sale.total_amount);
     
     if (sale.payment_status === 'unpaid') {
       summary.credit_amount += Number(sale.total_amount);
-    } else if (sale.payment_method === 'cash') {
-      summary.cash_amount += Number(sale.total_amount);
-    } else if (sale.payment_method === 'momo') {
-      summary.momo_amount += Number(sale.total_amount);
-    } else if (sale.payment_method === 'bank') {
-      summary.bank_amount += Number(sale.total_amount);
-    } else if (sale.payment_method === 'card') {
-      summary.card_amount += Number(sale.total_amount);
+      return;
     }
+
+    const payments = Array.isArray(sale.sale_payments) ? sale.sale_payments : [];
+    if (payments.length > 0) {
+      payments.forEach((payment: any) => {
+        const amount = Number(payment.amount || 0);
+        if (payment.payment_method === 'cash') summary.cash_amount += amount;
+        if (payment.payment_method === 'momo') summary.momo_amount += amount;
+        if (payment.payment_method === 'bank') summary.bank_amount += amount;
+        if (payment.payment_method === 'card') summary.card_amount += amount;
+      });
+      return;
+    }
+
+    if (sale.payment_method === 'cash') summary.cash_amount += Number(sale.total_amount);
+    if (sale.payment_method === 'momo') summary.momo_amount += Number(sale.total_amount);
+    if (sale.payment_method === 'bank') summary.bank_amount += Number(sale.total_amount);
+    if (sale.payment_method === 'card') summary.card_amount += Number(sale.total_amount);
   });
 
   return summary;
@@ -402,7 +416,7 @@ export async function pushDayClosureToSupabase(payload: any) {
   const client = await ensureSupabaseConfigured();
   let request = client.from('day_closures').update(payload);
   request = request.eq('user_id', payload.user_id);
-  request = request.eq('closing_date', payload.closing_date);
+  request = request.eq('status', 'open');
 
   if (payload.location_id) {
     request = request.eq('location_id', payload.location_id);

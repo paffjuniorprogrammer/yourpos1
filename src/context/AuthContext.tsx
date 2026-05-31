@@ -24,6 +24,16 @@ type AuthContextValue = {
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+const AUTH_BOOT_TIMEOUT_MS = 12000;
+
+function withAuthTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timed out. Please try again.`)), AUTH_BOOT_TIMEOUT_MS),
+    ),
+  ]);
+}
 
 async function loadProfile(session: Session | null) {
   if (!session?.user) {
@@ -126,8 +136,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       try {
-        const currentSession = await getSession();
-        const currentProfile = await loadProfile(currentSession);
+        const currentSession = await withAuthTimeout(getSession(), "Session loading");
+        const currentProfile = await withAuthTimeout(loadProfile(currentSession), "Profile loading");
 
         if (isMounted) {
           setSession(currentSession);
@@ -162,7 +172,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(nextSession);
       }
 
-      void loadProfile(nextSession)
+      void withAuthTimeout(loadProfile(nextSession), "Profile loading")
         .then((nextProfile) => {
           if (isMounted) {
             setProfile(nextProfile);

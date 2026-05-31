@@ -371,6 +371,7 @@ create table if not exists public.day_closures (
   user_id uuid references public.users(id) on delete set null,
   location_id uuid references public.locations(id) on delete restrict,
   closing_date date not null,
+  opened_at timestamptz,
   opening_cash decimal(12,2) not null default 0,
   cash_amount decimal(12,2) not null default 0,
   momo_amount decimal(12,2) not null default 0,
@@ -380,14 +381,14 @@ create table if not exists public.day_closures (
   total_amount decimal(12,2) not null default 0,
   status text not null default 'open',
   closed_at timestamptz,
-  created_at timestamptz not null default now(),
-  unique (user_id, closing_date, location_id)
+  created_at timestamptz not null default now()
 );
 
 ALTER TABLE public.day_closures ADD COLUMN IF NOT EXISTS business_id uuid REFERENCES public.businesses(id) on delete restrict;
 
 -- Add location_id safeguard
 ALTER TABLE public.day_closures ADD COLUMN IF NOT EXISTS location_id uuid REFERENCES public.locations(id) ON DELETE SET NULL;
+ALTER TABLE public.day_closures ADD COLUMN IF NOT EXISTS opened_at timestamptz;
 ALTER TABLE public.day_closures ADD COLUMN IF NOT EXISTS opening_cash decimal(12,2) not null default 0;
 ALTER TABLE public.day_closures ADD COLUMN IF NOT EXISTS status text not null default 'open';
 ALTER TABLE public.day_closures ADD COLUMN IF NOT EXISTS closed_at timestamptz;
@@ -427,6 +428,8 @@ create index if not exists idx_customer_payments_customer_id on public.customer_
 create index if not exists idx_stock_counts_created_by on public.stock_counts(created_by);
 create index if not exists idx_stock_transfers_created_by on public.stock_transfers(created_by);
 create index if not exists idx_day_closures_user_id on public.day_closures(user_id);
+create index if not exists idx_day_closures_open_shift on public.day_closures(user_id, location_id, closing_date, status);
+create unique index if not exists uq_day_closures_one_open_shift on public.day_closures(user_id, location_id) where status = 'open';
 
 -- Drop legacy global-unique constraints so uniqueness can be scoped per business
 DO $$

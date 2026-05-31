@@ -51,7 +51,7 @@ const emptyCountingForm: CountingForm = {
 
 export function AddStockCountPage() {
   const { t } = useTranslation();
-  const { profile, activeLocationId, business } = useAuth();
+  const { profile, activeLocationId, business, assignedLocations } = useAuth();
   const navigate = useNavigate();
   const { showToast } = useNotification();
   const { run } = useAsyncAction();
@@ -83,10 +83,11 @@ export function AddStockCountPage() {
   useEffect(() => {
     async function loadInitialData() {
       try {
-        const locs = await listLocations();
-        setLocations(locs);
+        const locs = await listLocations(business?.id);
+        const locationList = locs.length ? locs : assignedLocations;
+        setLocations(locationList);
         
-        const initialLoc = form.locationId || activeLocationId || (locs.length > 0 ? locs[0].id : "");
+        const initialLoc = form.locationId || activeLocationId || (locationList.length > 0 ? locationList[0].id : "");
         if (initialLoc) {
           setForm(prev => ({ ...prev, locationId: initialLoc }));
           const p = await listPosProducts(initialLoc, 1000);
@@ -99,7 +100,7 @@ export function AddStockCountPage() {
       }
     }
     loadInitialData();
-  }, []);
+  }, [activeLocationId, business?.id, assignedLocations]);
 
   useEffect(() => {
     if (!form.locationId) return;

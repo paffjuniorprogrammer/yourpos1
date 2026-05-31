@@ -75,7 +75,7 @@ const emptyTransferForm: TransferForm = {
 
 export function StockPage() {
   const { t } = useTranslation();
-  const { profile, can, activeLocationId, business } = useAuth();
+  const { profile, can, activeLocationId, business, assignedLocations } = useAuth();
   const navigate = useNavigate();
 
   const { showToast } = useNotification();
@@ -108,8 +108,9 @@ export function StockPage() {
     try {
       const [productList, locs] = await Promise.all([
         listPosProducts(activeLocationId, 1000),
-        listLocations()
+        listLocations(business?.id)
       ]);
+      const locationList = (locs.length ? locs : assignedLocations) as LocationRecord[];
 
       setProducts(
         productList.map((product) => ({
@@ -122,9 +123,9 @@ export function StockPage() {
           countedQty: 1,
         })),
       );
-      setLocations(locs);
+      setLocations(locationList);
       
-      if (locs.length === 0) {
+      if (locationList.length === 0) {
         console.warn("StockPage: No locations found. Check RLS policies or database entries.");
       }
     } catch (error) {
