@@ -47,6 +47,7 @@ import type { PaymentMethod, PosCustomerRecord, PosProductRecord, ShopSettingsRe
 import { createPortal } from "react-dom";
 import { Receipt80mm } from "../components/print/Receipt80mm";
 import { formatCurrency } from "../lib/format";
+import { calculateVatLine, getVatSettings, isVatEnabled } from "../services/vatService";
 
 type BulkBreakdown = {
   bulkPackages: number;
@@ -289,11 +290,20 @@ export function PosPage() {
 
   const discountedTotal = Math.max(0, totalAmount - orderDiscountAmount);
   const checkoutTotalAmount = discountedTotal;
-  const taxPercentage = shopSettings?.tax_percentage ?? 0;
-  const subtotalAmount = Number((checkoutTotalAmount / (1 + taxPercentage / 100)).toFixed(2));
-  const checkoutTaxAmount = Number((checkoutTotalAmount - subtotalAmount).toFixed(2));
-  const change = Math.max(Number(amountPaid || 0) - checkoutTotalAmount, 0);
-  const remaining = checkoutTotalAmount - (Number(momoAmount || 0) + Number(cashAmount || 0));
+  const vatSettings = getVatSettings(shopSettings);
+  const vatEnabled = isVatEnabled(shopSettings);
+  const taxPercentage = vatEnabled ? vatSettings.vatRate : 0;
+  const saleVat = calculateVatLine({
+    amount: checkoutTotalAmount,
+    vatRate: taxPercentage,
+    priceType: vatSettings.priceType,
+    vatEnabled,
+  });
+  const subtotalAmount = saleVat.amountBeforeVat;
+  const checkoutTaxAmount = saleVat.vatAmount;
+  const checkoutTotalWithVat = saleVat.totalAmount;
+  const change = Math.max(Number(amountPaid || 0) - checkoutTotalWithVat, 0);
+  const remaining = checkoutTotalWithVat - (Number(momoAmount || 0) + Number(cashAmount || 0));
   const liveTime = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
   const liveDate = new Date().toLocaleDateString([], { weekday: "long", day: "numeric", month: "long", year: "numeric" });
   const todayIso = new Date().toISOString().slice(0, 10);
@@ -500,14 +510,14 @@ export function PosPage() {
       paymentMode &&
       paymentMode !== "multiple" &&
       paymentMode !== "credit" &&
-      Number(amountPaid || 0) < checkoutTotalAmount
+      Number(amountPaid || 0) < checkoutTotalWithVat
     ) {
       setPaymentError("Amount paid must cover the full total.");
       return;
     }
 
     const selectedCustomerRecord = customers.find((customer) => customer.full_name === selectedCustomer) ?? null;
-    const finalTotal = checkoutTotalAmount;
+    const finalTotal = checkoutTotalWithVat;
     const subtotal = subtotalAmount;
     const taxAmount = checkoutTaxAmount;
 
@@ -529,6 +539,10 @@ export function PosPage() {
         cashier_id: profile.id,
         subtotal,
         tax_amount: taxAmount,
+        vat_rate: taxPercentage,
+        price_type: vatSettings.priceType,
+        amount_before_vat: subtotal,
+        output_vat: taxAmount,
         total_amount: finalTotal,
         discount_amount: orderDiscountAmount,
         discount_type: orderDiscount.value > 0 ? orderDiscount.type : null,
@@ -541,11 +555,20 @@ export function PosPage() {
             ? base * (item.discount_value / 100)
             : (item.discount_type === 'fixed' ? item.discount_value : 0);
           
+          const lineVat = calculateVatLine({
+            amount: Math.max(0, base - itemDiscount),
+            vatRate: taxPercentage,
+            priceType: vatSettings.priceType,
+            vatEnabled,
+          });
           return {
             product_id: item.id,
             quantity: item.qty,
             unit_price: item.price,
-            line_total: Math.max(0, base - itemDiscount),
+            line_total: lineVat.totalAmount,
+            vat_rate: taxPercentage,
+            amount_before_vat: lineVat.amountBeforeVat,
+            output_vat: lineVat.vatAmount,
             discount_amount: itemDiscount,
             discount_type: item.discount_value > 0 ? item.discount_type : null,
           };
@@ -1245,7 +1268,7 @@ export function PosPage() {
                   <div className="my-3 border-t border-slate-800 border-dashed" />
                   <div className="flex justify-between text-lg font-black text-white">
                     <span className="uppercase tracking-tighter">{t('pos.total')} RWF</span>
-                    <span className="text-brand-400">{rwf(checkoutTotalAmount)}</span>
+                    <span className="text-brand-400">{rwf(checkoutTotalWithVat)}</span>
                   </div>
                 </div>
 
@@ -1375,7 +1398,7 @@ export function PosPage() {
                   <div className="my-4 border-t border-slate-100" />
                   <div className="flex justify-between text-xl font-black text-ink">
                     <span>TOTAL</span>
-                    <span className="text-brand-600">{rwf(checkoutTotalAmount)}</span>
+                    <span className="text-brand-600">{rwf(checkoutTotalWithVat)}</span>
                   </div>
                 </div>
               </div>
@@ -1398,9 +1421,9 @@ export function PosPage() {
                         setPaymentMode(mode.id as any);
                         if (mode.id === "multiple") {
                            setMomoAmount("");
-                           setCashAmount(String(checkoutTotalAmount));
+                           setCashAmount(String(checkoutTotalWithVat));
                         } else if (mode.id !== "credit") {
-                           setAmountPaid(String(checkoutTotalAmount));
+                           setAmountPaid(String(checkoutTotalWithVat));
                         }
                         setPaymentError(null);
                       }}
@@ -1429,12 +1452,12 @@ export function PosPage() {
                           value={amountPaid}
                           onChange={(e) => setAmountPaid(e.target.value)}
                           className="w-full rounded-2xl bg-slate-50 py-4 pl-11 pr-4 text-xl font-bold outline-none focus:ring-2 focus:ring-brand-200"
-                          placeholder={`${checkoutTotalAmount}`}
+                          placeholder={`${checkoutTotalWithVat}`}
                           autoFocus
                         />
                       </div>
                     </div>
-                    {Number(amountPaid) > checkoutTotalAmount && (
+                    {Number(amountPaid) > checkoutTotalWithVat && (
                       <div className="flex items-center justify-between rounded-2xl bg-emerald-50 p-4 text-emerald-700">
                         <span className="text-sm font-bold uppercase tracking-widest">{t('pos.ui.change_due')}</span>
                         <span className="text-xl font-black">{rwf(change)}</span>
@@ -1455,7 +1478,7 @@ export function PosPage() {
                             const val = e.target.value;
                             setMomoAmount(val);
                             const numVal = Number(val) || 0;
-                            const remainingVal = Math.max(0, checkoutTotalAmount - numVal);
+                            const remainingVal = Math.max(0, checkoutTotalWithVat - numVal);
                             setCashAmount(String(remainingVal));
                           }}
                           className="mt-2 w-full rounded-2xl bg-slate-50 p-4 font-bold outline-none ring-offset-2 focus:ring-2 focus:ring-amber-500"
@@ -1470,7 +1493,7 @@ export function PosPage() {
                             const val = e.target.value;
                             setCashAmount(val);
                             const numVal = Number(val) || 0;
-                            const remainingVal = Math.max(0, checkoutTotalAmount - numVal);
+                            const remainingVal = Math.max(0, checkoutTotalWithVat - numVal);
                             setMomoAmount(String(remainingVal));
                           }}
                           className="mt-2 w-full rounded-2xl bg-slate-50 p-4 font-bold outline-none ring-offset-2 focus:ring-2 focus:ring-emerald-500"
@@ -2040,7 +2063,7 @@ export function PosPage() {
           <div className="flex items-center justify-between gap-4">
             <div>
               <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">{t('pos.total')}</p>
-              <p className="text-xl font-black text-brand-400 leading-none mt-1">{rwf(checkoutTotalAmount)}</p>
+              <p className="text-xl font-black text-brand-400 leading-none mt-1">{rwf(checkoutTotalWithVat)}</p>
             </div>
             <button
               onClick={() => setCheckoutOpen(true)}

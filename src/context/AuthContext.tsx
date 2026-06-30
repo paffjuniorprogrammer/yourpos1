@@ -25,6 +25,7 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 const AUTH_BOOT_TIMEOUT_MS = 12000;
+const MAX_SUBSCRIPTION_TIMER_MS = 2_147_483_647;
 
 function withAuthTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
   return Promise.race([
@@ -43,6 +44,17 @@ async function loadProfile(session: Session | null) {
   return getCurrentProfile(session.user.id);
 }
 
+async function loadBusiness(businessId: string) {
+  const { data, error } = await supabase
+    .from("businesses")
+    .select("*")
+    .eq("id", businessId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data as BusinessRecord | null;
+}
+
 function applyProfileLanguage(profile: UserProfile | null) {
   if (profile?.language && profile.language !== i18n.language) {
     i18n.changeLanguage(profile.language);
@@ -53,22 +65,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [business, setBusiness] = useState<BusinessRecord | null>(null);
+  const [subscriptionCheckTime, setSubscriptionCheckTime] = useState(() => Date.now());
   const [activeLocationId, setActiveLocationId] = useState<string | null>(localStorage.getItem("active_location_id"));
   const [assignedLocations, setAssignedLocations] = useState<LocationRecord[]>([]);
   const [impersonatedBusinessId, setImpersonatedBusinessId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
+  function applyBusiness(nextBusiness: BusinessRecord | null) {
+    setBusiness(nextBusiness);
+    setSubscriptionCheckTime(Date.now());
+
+    setProfile((currentProfile) => {
+      if (!currentProfile || !nextBusiness || currentProfile.business_id !== nextBusiness.id) {
+        return currentProfile;
+      }
+
+      const nextProfile = { ...currentProfile, business: nextBusiness };
+      localStorage.setItem("cached_user_profile", JSON.stringify(nextProfile));
+      return nextProfile;
+    });
+  }
+
   const { isSubscriptionActive, subscriptionDaysLeft } = useMemo(() => {
     // 1. Super admins always bypass status/expiry checks
     if (profile?.role === 'super_admin') return { isSubscriptionActive: true, subscriptionDaysLeft: null };
     
-    const biz = profile?.business;
+    const biz = business ?? profile?.business;
     if (!biz) return { isSubscriptionActive: false, subscriptionDaysLeft: null };
     
     // 🚫 Suspended -> manually blocked
     if (biz.status === 'suspended') return { isSubscriptionActive: false, subscriptionDaysLeft: 0 };
     
-    const now = new Date();
+    const now = new Date(subscriptionCheckTime);
     let daysLeft = null;
 
     if (biz.subscription_end_date) {
@@ -84,7 +112,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isSubscriptionActive: biz.status === 'active', 
       subscriptionDaysLeft: daysLeft 
     };
-  }, [profile]);
+  }, [business, profile, subscriptionCheckTime]);
 
   // Derive assigned locations whenever profile changes
   useEffect(() => {
@@ -111,6 +139,75 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.setItem("active_location_id", id);
     }
   };
+
+  useEffect(() => {
+    if (!business?.subscription_end_date || profile?.role === 'super_admin') {
+      return;
+    }
+
+    const expiryMs = new Date(business.subscription_end_date).getTime();
+    const msUntilExpiry = expiryMs - Date.now();
+
+    if (msUntilExpiry <= 0) {
+      setSubscriptionCheckTime(Date.now());
+      return;
+    }
+
+    const timer = window.setTimeout(
+      () => setSubscriptionCheckTime(Date.now()),
+      Math.min(msUntilExpiry + 1000, MAX_SUBSCRIPTION_TIMER_MS),
+    );
+
+    return () => window.clearTimeout(timer);
+  }, [business?.subscription_end_date, profile?.role]);
+
+  useEffect(() => {
+    if (!supabaseConfigured || !profile?.business_id || profile.role === 'super_admin') {
+      return;
+    }
+
+    let isActive = true;
+    const businessId = profile.business_id;
+
+    async function refreshBusiness() {
+      try {
+        const freshBusiness = await loadBusiness(businessId);
+        if (isActive && freshBusiness) {
+          applyBusiness(freshBusiness);
+        }
+      } catch (err) {
+        console.error("Failed to refresh business subscription:", err);
+      }
+    }
+
+    void refreshBusiness();
+
+    const channel = supabase
+      .channel(`business-subscription-${businessId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "businesses",
+          filter: `id=eq.${businessId}`,
+        },
+        (payload) => {
+          if (isActive) {
+            applyBusiness(payload.new as BusinessRecord);
+          }
+        },
+      )
+      .subscribe();
+
+    const refreshInterval = window.setInterval(refreshBusiness, 60_000);
+
+    return () => {
+      isActive = false;
+      window.clearInterval(refreshInterval);
+      void supabase.removeChannel(channel);
+    };
+  }, [profile?.business_id, profile?.role]);
 
   useEffect(() => {
     if (!supabaseConfigured) {

@@ -98,6 +98,8 @@ export type SupplierRecord = {
   email: string | null;
   address: string | null;
   tin_number?: string | null;
+  is_vat_registered?: boolean;
+  vat_registration_number?: string | null;
   payment_term?: string | null;
   bank_account?: string | null;
   created_at: string;
@@ -112,6 +114,10 @@ export type SaleRecord = {
   location_id: string | null;
   subtotal: number;
   tax_amount: number;
+  vat_rate?: number;
+  price_type?: "inclusive" | "exclusive";
+  amount_before_vat?: number;
+  output_vat?: number;
   total_amount: number;
   payment_method: PaymentMethod | null;
   payment_status: PaymentStatus;
@@ -127,6 +133,9 @@ export type SaleItemRecord = {
   quantity: number;
   unit_price: number;
   line_total: number;
+  vat_rate?: number;
+  amount_before_vat?: number;
+  output_vat?: number;
 };
 
 export type SalePaymentRecord = {
@@ -151,6 +160,12 @@ export type ShopSettingsRecord = {
   currency_code: string;
   default_profit_percentage: number;
   tax_percentage: number;
+  tin_number?: string | null;
+  vat_registration_number?: string | null;
+  ebm_serial_number?: string | null;
+  vat_registration_status?: "not_registered" | "registered";
+  vat_price_type?: "inclusive" | "exclusive";
+  tax_period?: "monthly" | "quarterly";
   updated_by: string | null;
   created_at: string;
   updated_at: string;

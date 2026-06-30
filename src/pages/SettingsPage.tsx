@@ -66,9 +66,15 @@ type BusinessSettings = {
   logoUrl: string;
   defaultProfitPercentage: string;
   taxPercentage: string;
+  tinNumber: string;
+  vatRegistrationNumber: string;
+  ebmSerialNumber: string;
+  vatRegistrationStatus: "not_registered" | "registered";
+  vatPriceType: "inclusive" | "exclusive";
+  taxPeriod: "monthly" | "quarterly";
 };
 
-type SettingsSection = "staff" | "business" | "finance" | "locations" | "api" | "preferences";
+type SettingsSection = "staff" | "business" | "tax" | "finance" | "locations" | "api" | "preferences";
 
 const moduleTemplates = [
   { module: "Dashboard", view: true, add: false, edit: false, remove: false },
@@ -102,7 +108,13 @@ const initialBusinessSettings: BusinessSettings = {
   contact: "",
   logoUrl: "",
   defaultProfitPercentage: "",
-  taxPercentage: "",
+  taxPercentage: "18",
+  tinNumber: "",
+  vatRegistrationNumber: "",
+  ebmSerialNumber: "",
+  vatRegistrationStatus: "not_registered",
+  vatPriceType: "inclusive",
+  taxPeriod: "monthly",
 };
 
 const initialStaffForm: StaffForm = {
@@ -202,6 +214,12 @@ export function SettingsPage() {
           logoUrl: settings.logo_url || "",
           defaultProfitPercentage: String(settings.default_profit_percentage || ""),
           taxPercentage: String(settings.tax_percentage || ""),
+          tinNumber: (settings as any).tin_number || "",
+          vatRegistrationNumber: (settings as any).vat_registration_number || "",
+          ebmSerialNumber: (settings as any).ebm_serial_number || "",
+          vatRegistrationStatus: (settings as any).vat_registration_status === "registered" ? "registered" : "not_registered",
+          vatPriceType: (settings as any).vat_price_type === "exclusive" ? "exclusive" : "inclusive",
+          taxPeriod: (settings as any).tax_period === "quarterly" ? "quarterly" : "monthly",
         });
       }
 
@@ -253,6 +271,12 @@ export function SettingsPage() {
             logoUrl: settings.logo_url ?? "",
             defaultProfitPercentage: String(settings.default_profit_percentage ?? ""),
             taxPercentage: String(settings.tax_percentage ?? ""),
+            tinNumber: (settings as any).tin_number ?? "",
+            vatRegistrationNumber: (settings as any).vat_registration_number ?? "",
+            ebmSerialNumber: (settings as any).ebm_serial_number ?? "",
+            vatRegistrationStatus: (settings as any).vat_registration_status === "registered" ? "registered" : "not_registered",
+            vatPriceType: (settings as any).vat_price_type === "exclusive" ? "exclusive" : "inclusive",
+            taxPeriod: (settings as any).tax_period === "quarterly" ? "quarterly" : "monthly",
           });
         }
 
@@ -330,6 +354,12 @@ export function SettingsPage() {
         currency_code: "RWF",
         default_profit_percentage: Number(businessSettings.defaultProfitPercentage) || 0,
         tax_percentage: Number(businessSettings.taxPercentage) || 0,
+        tin_number: businessSettings.tinNumber || null,
+        vat_registration_number: businessSettings.vatRegistrationNumber || null,
+        ebm_serial_number: businessSettings.ebmSerialNumber || null,
+        vat_registration_status: businessSettings.vatRegistrationStatus,
+        vat_price_type: businessSettings.vatPriceType,
+        tax_period: businessSettings.taxPeriod,
         updated_by: profile?.id ?? null,
       });
 
@@ -341,6 +371,12 @@ export function SettingsPage() {
         logoUrl: saved.logo_url || "",
         defaultProfitPercentage: String(saved.default_profit_percentage || ""),
         taxPercentage: String(saved.tax_percentage || ""),
+        tinNumber: (saved as any).tin_number || "",
+        vatRegistrationNumber: (saved as any).vat_registration_number || "",
+        ebmSerialNumber: (saved as any).ebm_serial_number || "",
+        vatRegistrationStatus: (saved as any).vat_registration_status === "registered" ? "registered" : "not_registered",
+        vatPriceType: (saved as any).vat_price_type === "exclusive" ? "exclusive" : "inclusive",
+        taxPeriod: (saved as any).tax_period === "quarterly" ? "quarterly" : "monthly",
       });
       showToast("success", "Business settings updated!");
     } catch (error: any) {
@@ -623,6 +659,7 @@ export function SettingsPage() {
             { id: "preferences", label: t('settings.personal.title'), icon: Globe },
             { id: "staff", label: t('settings.nav.staff'), icon: ShieldCheck },
             { id: "business", label: t('settings.nav.business'), icon: Building2 },
+            { id: "tax", label: "Tax Settings", icon: WalletCards },
             { id: "finance", label: t('settings.nav.finance'), icon: WalletCards },
             { id: "locations", label: t('settings.nav.locations'), icon: MapPin },
             { id: "api", label: t('settings.nav.api'), icon: Code2 },
@@ -912,6 +949,153 @@ export function SettingsPage() {
             </div>
           </SectionCard>
         </div>
+      ) : null}
+
+      {activeSection === "tax" ? (
+        <SectionCard title="Tax Settings" subtitle="Configure Rwanda VAT registration and reporting rules.">
+          <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+            <div className="space-y-4">
+              <div className="grid gap-3 md:grid-cols-2">
+                <label className="rounded-2xl bg-slate-50 p-3">
+                  <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Business Name</span>
+                  <input
+                    value={businessSettings.name}
+                    onChange={(event) => setBusinessSettings((current) => ({ ...current, name: event.target.value }))}
+                    title="The legal or trading name used on tax reports."
+                    className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none"
+                  />
+                </label>
+                <label className="rounded-2xl bg-sky-50 p-3">
+                  <span className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-700">TIN Number</span>
+                  <input
+                    value={businessSettings.tinNumber}
+                    onChange={(event) => setBusinessSettings((current) => ({ ...current, tinNumber: event.target.value }))}
+                    title="Taxpayer Identification Number issued to the business."
+                    className="mt-2 w-full rounded-xl border border-sky-200 bg-white px-3 py-2.5 text-sm outline-none"
+                  />
+                </label>
+                <label className="rounded-2xl bg-emerald-50 p-3">
+                  <span className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">VAT Registration Number</span>
+                  <input
+                    value={businessSettings.vatRegistrationNumber}
+                    onChange={(event) => setBusinessSettings((current) => ({ ...current, vatRegistrationNumber: event.target.value }))}
+                    disabled={businessSettings.vatRegistrationStatus !== "registered"}
+                    title="Used only when the business is VAT registered."
+                    className="mt-2 w-full rounded-xl border border-emerald-200 bg-white px-3 py-2.5 text-sm outline-none disabled:cursor-not-allowed disabled:bg-slate-100"
+                  />
+                </label>
+                <label className="rounded-2xl bg-amber-50 p-3">
+                  <span className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">EBM Serial Number</span>
+                  <input
+                    value={businessSettings.ebmSerialNumber}
+                    onChange={(event) => setBusinessSettings((current) => ({ ...current, ebmSerialNumber: event.target.value }))}
+                    title="Optional Electronic Billing Machine serial number for future RRA EBM integration."
+                    className="mt-2 w-full rounded-xl border border-amber-200 bg-white px-3 py-2.5 text-sm outline-none"
+                  />
+                </label>
+              </div>
+
+              <div className="rounded-3xl border border-slate-100 bg-white p-4">
+                <p className="mb-3 text-xs font-black uppercase tracking-widest text-slate-400">Tax Registration</p>
+                <div className="grid gap-3 md:grid-cols-2">
+                  {[
+                    { id: "not_registered", label: "Not VAT Registered", desc: "VAT calculations, reports, and Tax to Pay are hidden." },
+                    { id: "registered", label: "VAT Registered", desc: "Output VAT minus Input VAT is calculated automatically." },
+                  ].map((option) => (
+                    <button
+                      key={option.id}
+                      type="button"
+                      onClick={() => setBusinessSettings((current) => ({ ...current, vatRegistrationStatus: option.id as any }))}
+                      className={`rounded-2xl border p-4 text-left transition ${
+                        businessSettings.vatRegistrationStatus === option.id
+                          ? "border-brand-500 bg-brand-50 text-brand-800"
+                          : "border-slate-200 bg-slate-50 text-slate-600 hover:border-slate-300"
+                      }`}
+                    >
+                      <span className="block text-sm font-black">{option.label}</span>
+                      <span className="mt-1 block text-xs leading-relaxed">{option.desc}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className={`grid gap-3 md:grid-cols-3 ${businessSettings.vatRegistrationStatus !== "registered" ? "opacity-45" : ""}`}>
+                <label className="rounded-2xl bg-rose-50 p-3">
+                  <span className="text-xs font-semibold uppercase tracking-[0.18em] text-rose-700">VAT Rate</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={businessSettings.taxPercentage}
+                    disabled={businessSettings.vatRegistrationStatus !== "registered"}
+                    onChange={(event) => setBusinessSettings((current) => ({ ...current, taxPercentage: event.target.value }))}
+                    title="Default Rwanda VAT rate is 18%. Change this only if tax law changes."
+                    className="mt-2 w-full rounded-xl border border-rose-200 bg-white px-3 py-2.5 text-sm outline-none disabled:cursor-not-allowed disabled:bg-slate-100"
+                  />
+                </label>
+                <label className="rounded-2xl bg-indigo-50 p-3">
+                  <span className="text-xs font-semibold uppercase tracking-[0.18em] text-indigo-700">Price Type</span>
+                  <select
+                    value={businessSettings.vatPriceType}
+                    disabled={businessSettings.vatRegistrationStatus !== "registered"}
+                    onChange={(event) => setBusinessSettings((current) => ({ ...current, vatPriceType: event.target.value as any }))}
+                    title="Choose whether entered prices already include VAT or VAT should be added on top."
+                    className="mt-2 w-full rounded-xl border border-indigo-200 bg-white px-3 py-2.5 text-sm outline-none disabled:cursor-not-allowed disabled:bg-slate-100"
+                  >
+                    <option value="inclusive">Prices Include VAT</option>
+                    <option value="exclusive">Prices Exclude VAT</option>
+                  </select>
+                </label>
+                <label className="rounded-2xl bg-cyan-50 p-3">
+                  <span className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-700">Tax Period</span>
+                  <select
+                    value={businessSettings.taxPeriod}
+                    disabled={businessSettings.vatRegistrationStatus !== "registered"}
+                    onChange={(event) => setBusinessSettings((current) => ({ ...current, taxPeriod: event.target.value as any }))}
+                    title="Monthly is common for VAT reporting; quarterly can be used if the business reports quarterly."
+                    className="mt-2 w-full rounded-xl border border-cyan-200 bg-white px-3 py-2.5 text-sm outline-none disabled:cursor-not-allowed disabled:bg-slate-100"
+                  >
+                    <option value="monthly">Monthly</option>
+                    <option value="quarterly">Quarterly</option>
+                  </select>
+                </label>
+              </div>
+
+              <button
+                type="button"
+                onClick={saveBusinessSettings}
+                disabled={savingSettings}
+                className="rounded-2xl bg-brand-500 px-5 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {savingSettings ? t('common.saving') : "Save Tax Settings"}
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className={`rounded-3xl p-5 ${
+                businessSettings.vatRegistrationStatus === "registered"
+                  ? "border border-emerald-100 bg-emerald-50 text-emerald-900"
+                  : "border border-slate-200 bg-slate-50 text-slate-700"
+              }`}>
+                <p className="text-xs font-black uppercase tracking-widest opacity-70">Current VAT Status</p>
+                <p className="mt-2 text-2xl font-black">
+                  {businessSettings.vatRegistrationStatus === "registered" ? "VAT Enabled" : "VAT Disabled"}
+                </p>
+                <p className="mt-2 text-sm leading-relaxed">
+                  {businessSettings.vatRegistrationStatus === "registered"
+                    ? "The system will calculate Output VAT on sales and Input VAT on eligible supplier purchases."
+                    : "VAT reports and Tax to Pay widgets stay hidden until the business is marked as VAT registered."}
+                </p>
+              </div>
+              <div className="rounded-3xl border border-sky-100 bg-sky-50 p-5 text-sky-900">
+                <p className="text-xs font-black uppercase tracking-widest text-sky-500">Simple Rule</p>
+                <p className="mt-2 text-sm leading-relaxed">
+                  VAT Payable is Output VAT minus Input VAT. If Input VAT is higher, payable VAT is shown as 0 and the balance becomes VAT Credit to carry forward.
+                </p>
+              </div>
+            </div>
+          </div>
+        </SectionCard>
       ) : null}
 
       {activeSection === "finance" ? (

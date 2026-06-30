@@ -1,19 +1,25 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { LogOut, CreditCard, ShieldAlert } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export function SubscriptionExpiredPage() {
-  const { business, logout } = useAuth();
+  const { business, isSubscriptionActive, logout } = useAuth();
   const navigate = useNavigate();
   
   const isSuspended = business?.status === 'suspended';
+
+  useEffect(() => {
+    if (isSubscriptionActive) {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [isSubscriptionActive, navigate]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-canvas px-6">
       <div className="w-full max-w-md overflow-hidden rounded-[2rem] bg-white p-8 shadow-soft">
         <div className="mb-6 flex justify-center">
-          <div className={`rounded-2xl ${isSuspended ? 'bg-error/10 text-error' : 'bg-warning/10 text-warning'} p-4`}>
+          <div className={`rounded-2xl ${isSuspended ? 'bg-rose-50 text-rose-600' : 'bg-amber-50 text-amber-600'} p-4`}>
             <ShieldAlert size={48} />
           </div>
         </div>
@@ -33,7 +39,7 @@ export function SubscriptionExpiredPage() {
           {!isSuspended && (
             <button
               onClick={() => navigate('/subscription')}
-              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-primary py-4 font-semibold text-white shadow-soft transition-all hover:scale-[1.02] active:scale-[0.98]"
+              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-brand-500 py-4 font-semibold text-white shadow-soft transition-all hover:bg-brand-600 hover:scale-[1.02] active:scale-[0.98]"
             >
               <CreditCard size={20} />
               Renew Subscription
@@ -51,7 +57,7 @@ export function SubscriptionExpiredPage() {
 
         <div className="mt-8 border-t border-canvas pt-6 text-center">
           <p className="text-sm text-ink/40">
-            Need help? <a href="mailto:support@pos-saas.com" className="font-semibold text-primary underline">Contact Support</a>
+            Need help? <a href="mailto:support@pos-saas.com" className="font-semibold text-brand-600 underline">Contact Support</a>
           </p>
         </div>
       </div>

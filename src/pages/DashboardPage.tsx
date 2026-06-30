@@ -7,6 +7,7 @@ import { useAuth } from "../context/AuthContext";
 import { useAsyncAction } from "../hooks/useAsyncAction";
 import { RefreshCcw, ShoppingBag, TrendingUp, Wallet, Users, Package, AlertTriangle } from "lucide-react";
 import { getDashboardStats, getRecentTransactions, getSalesTrend, getUnpaidCustomers, getUnpaidSuppliers, type DashboardStat, type RecentTransaction, type SalesTrendItem, type UnpaidItem } from "../services/dashboardService";
+import { getVatSummary, type VatSummary } from "../services/vatService";
 import { useRealtimeSync } from "../hooks/useRealtimeSync";
 import { useTranslation } from "react-i18next";
 import { SubscriptionStatusBanner } from "../components/ui/SubscriptionStatusBanner";
@@ -19,6 +20,7 @@ export function DashboardPage() {
   const [recentTransactions, setRecentTransactions] = useState<RecentTransaction[]>([]);
   const [unpaidCustomers, setUnpaidCustomers] = useState<UnpaidItem[]>([]);
   const [unpaidSuppliers, setUnpaidSuppliers] = useState<UnpaidItem[]>([]);
+  const [vatSummary, setVatSummary] = useState<VatSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [lastRefreshed, setLastRefreshed] = useState<string>(new Date().toLocaleTimeString());
 
@@ -27,12 +29,13 @@ export function DashboardPage() {
   const loadDashboardData = async (force = false) => {
     try {
       if (force) setLoading(true);
-      const [statsData, trendData, transactionsData, customersData, suppliersData] = await Promise.all([
+      const [statsData, trendData, transactionsData, customersData, suppliersData, vatData] = await Promise.all([
         getDashboardStats(force),
         getSalesTrend(),
         getRecentTransactions(),
         getUnpaidCustomers(),
-        getUnpaidSuppliers()
+        getUnpaidSuppliers(),
+        getVatSummary()
       ]);
 
       setStats(statsData);
@@ -40,6 +43,7 @@ export function DashboardPage() {
       setRecentTransactions(transactionsData);
       setUnpaidCustomers(customersData);
       setUnpaidSuppliers(suppliersData);
+      setVatSummary(vatData);
       setLastRefreshed(new Date().toLocaleTimeString());
     } catch (error) {
       console.error('Failed to load dashboard data:', error);
@@ -179,6 +183,37 @@ export function DashboardPage() {
         })}
 
       </div>
+
+      {vatSummary && !vatSummary.disabled ? (
+        <SectionCard
+          title="VAT Summary"
+          subtitle={`Current reporting period: ${vatSummary.periodLabel}`}
+        >
+          <div className="grid gap-4 md:grid-cols-4">
+            {[
+              { label: "Output VAT", value: vatSummary.outputVat, tone: "bg-sky-50 text-sky-700", title: "VAT collected from customers on sales." },
+              { label: "Input VAT", value: vatSummary.inputVat, tone: "bg-emerald-50 text-emerald-700", title: "VAT paid on eligible purchases from VAT-registered suppliers." },
+              {
+                label: vatSummary.vatCredit > 0 ? "VAT Credit" : "VAT Payable",
+                value: vatSummary.vatCredit > 0 ? vatSummary.vatCredit : vatSummary.vatPayable,
+                tone: vatSummary.vatCredit > 0 ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700",
+                title: "Output VAT minus Input VAT. Payable never goes below zero.",
+              },
+              { label: "Status", value: 0, text: vatSummary.status, tone: vatSummary.vatCredit > 0 ? "bg-emerald-50 text-emerald-700" : "bg-orange-50 text-orange-700", title: "Shows whether this period has VAT payable or credit to carry forward." },
+            ].map((item) => (
+              <div key={item.label} className={`rounded-3xl p-5 ${item.tone}`} title={item.title}>
+                <p className="text-xs font-black uppercase tracking-widest opacity-70">{item.label}</p>
+                <p className="mt-3 text-2xl font-black">{item.text || `${Math.round(item.value).toLocaleString()} RWF`}</p>
+              </div>
+            ))}
+          </div>
+        </SectionCard>
+      ) : vatSummary?.disabled ? (
+        <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5 text-slate-600">
+          <p className="text-xs font-black uppercase tracking-widest">VAT Disabled</p>
+          <p className="mt-2 text-sm">VAT calculations and tax-to-pay widgets are hidden because this business is not marked as VAT registered.</p>
+        </div>
+      ) : null}
 
       <div className="grid gap-6 xl:grid-cols-[1.5fr_1fr]">
         <SectionCard

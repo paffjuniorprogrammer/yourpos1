@@ -5,6 +5,9 @@ import type { DayClosureRecord } from "../types/database";
 // Simple in-memory cache for report data
 let cardsCache: { data: ReportCard[], timestamp: number } | null = null;
 let dailyReportCache: { data: any, timestamp: number } | null = null;
+let financialReportCache: { key: string, data: FinancialSummary, timestamp: number } | null = null;
+let productsSoldCache: { key: string, data: any[], timestamp: number } | null = null;
+let debtPaymentsCache: { key: string, data: any[], timestamp: number } | null = null;
 const CACHE_DURATION_MS = 30000; // 30 seconds
 
 export type ReportCard = {
@@ -33,15 +36,34 @@ export async function getReportCards(forceRefresh = false): Promise<ReportCard[]
 
   // Get today's date in YYYY-MM-DD format
   const today = new Date().toISOString().split('T')[0];
+  const startOfDay = `${today}T00:00:00.000Z`;
+  const endOfDay = `${today}T23:59:59.999Z`;
 
-  // Get daily sales total
-  const { data: todaySales, error: salesError } = await client
-    .from('sales')
-    .select('total_amount, payment_status')
-    .gte('created_at', `${today}T00:00:00.000Z`)
-    .lt('created_at', `${today}T23:59:59.999Z`);
+  const [
+    { data: todaySales, error: salesError },
+    { data: todayReturns, error: returnsError },
+    { data: todayLoss, error: lossError },
+  ] = await Promise.all([
+    client
+      .from('sales')
+      .select('cashier_id, total_amount, payment_status, users:users(full_name)')
+      .gte('created_at', startOfDay)
+      .lt('created_at', endOfDay),
+    client
+      .from('sale_returns')
+      .select('refund_amount')
+      .gte('created_at', startOfDay)
+      .lt('created_at', endOfDay),
+    client
+      .from('stock_counts')
+      .select('total_loss_value')
+      .gte('created_at', startOfDay)
+      .lt('created_at', endOfDay),
+  ]);
 
   if (salesError) throw salesError;
+  if (returnsError) throw returnsError;
+  if (lossError && lossError.code !== '42703') throw lossError; // Ignore if column doesn't exist yet
 
   const dailySales = todaySales?.reduce((sum, sale) => sum + Number(sale.total_amount), 0) || 0;
   const paidSales = todaySales?.filter(sale => sale.payment_status === 'paid')
@@ -51,17 +73,8 @@ export async function getReportCards(forceRefresh = false): Promise<ReportCard[]
   // Get unpaid invoices count
   const unpaidCount = todaySales?.filter(sale => sale.payment_status !== 'paid').length || 0;
 
-  // Get best cashier (most sales today)
-  const { data: cashierSales, error: cashierError } = await client
-    .from('sales')
-    .select('cashier_id, total_amount, users:users(full_name)')
-    .gte('created_at', `${today}T00:00:00.000Z`)
-    .lt('created_at', `${today}T23:59:59.999Z`);
-
-  if (cashierError) throw cashierError;
-
   const cashierTotals = new Map<string, { name: string; total: number; count: number }>();
-  cashierSales?.forEach(sale => {
+  todaySales?.forEach(sale => {
     const cashierId = sale.cashier_id;
     const name = (sale.users as any)?.full_name || 'Unknown';
     const current = cashierTotals.get(cashierId) || { name, total: 0, count: 0 };
@@ -75,24 +88,7 @@ export async function getReportCards(forceRefresh = false): Promise<ReportCard[]
   const bestCashier = Array.from(cashierTotals.values())
     .sort((a, b) => b.count - a.count)[0];
 
-  // Get today's returns
-  const { data: todayReturns, error: returnsError } = await client
-    .from('sale_returns')
-    .select('refund_amount')
-    .gte('created_at', `${today}T00:00:00.000Z`)
-    .lt('created_at', `${today}T23:59:59.999Z`);
-
-  if (returnsError) throw returnsError;
   const dailyReturns = todayReturns?.reduce((sum, r) => sum + Number(r.refund_amount), 0) || 0;
-
-  // Get today's wastage/loss
-  const { data: todayLoss, error: lossError } = await client
-    .from('stock_counts')
-    .select('total_loss_value')
-    .gte('created_at', `${today}T00:00:00.000Z`)
-    .lt('created_at', `${today}T23:59:59.999Z`);
-
-  if (lossError && lossError.code !== '42703') throw lossError; // Ignore if column doesn't exist yet
   const dailyLoss = todayLoss?.reduce((sum, l) => sum + Number(l.total_loss_value || 0), 0) || 0;
 
   const result = [
@@ -114,7 +110,7 @@ export async function getReportCards(forceRefresh = false): Promise<ReportCard[]
     {
       title: "Net Paid Sales",
       value: formatCurrency(paidSales - dailyReturns),
-      meta: unpaidCount > 0 ? `${((paidSales / dailySales) * 100).toFixed(0)}% paid (less returns)` : "After returns deducted"
+      meta: unpaidCount > 0 && dailySales > 0 ? `${((paidSales / dailySales) * 100).toFixed(0)}% paid (less returns)` : "After returns deducted"
     }
   ];
 
@@ -263,6 +259,12 @@ export async function getRecentReturns(limit = 10) {
 }
 
 export async function getFinancialReport(startDate: string, endDate: string): Promise<FinancialSummary> {
+  const key = `${startDate}:${endDate}`;
+  const now = Date.now();
+  if (financialReportCache?.key === key && now - financialReportCache.timestamp < CACHE_DURATION_MS) {
+    return financialReportCache.data;
+  }
+
   const client = await ensureSupabaseConfigured();
   
   // 1. Get all paid sales in range
@@ -281,7 +283,9 @@ export async function getFinancialReport(startDate: string, endDate: string): Pr
   // 2. Get all sale items for these sales to calculate cost
   const saleIds = sales?.map(s => s.id) || [];
   if (saleIds.length === 0) {
-    return { totalSales: 0, totalCost: 0, grossProfit: 0, taxCollected: 0, netSales: 0, netIncome: 0 };
+    const empty = { totalSales: 0, totalCost: 0, grossProfit: 0, taxCollected: 0, netSales: 0, netIncome: 0 };
+    financialReportCache = { key, data: empty, timestamp: Date.now() };
+    return empty;
   }
   
   // We fetch in chunks if there are too many sales (supabase 'in' limit is usually ~1000)
@@ -303,7 +307,7 @@ export async function getFinancialReport(startDate: string, endDate: string): Pr
   const grossProfit = totalSales - totalCost;
   const netIncome = netSales - totalCost;
   
-  return {
+  const result = {
     totalSales,
     totalCost,
     grossProfit,
@@ -311,9 +315,18 @@ export async function getFinancialReport(startDate: string, endDate: string): Pr
     netSales,
     netIncome
   };
+
+  financialReportCache = { key, data: result, timestamp: Date.now() };
+  return result;
 }
 
 export async function getAggregatedProductsSold(startDate: string, endDate: string) {
+  const key = `${startDate}:${endDate}`;
+  const now = Date.now();
+  if (productsSoldCache?.key === key && now - productsSoldCache.timestamp < CACHE_DURATION_MS) {
+    return productsSoldCache.data;
+  }
+
   const client = await ensureSupabaseConfigured();
 
   const { data: sales, error: salesError } = await client
@@ -325,7 +338,10 @@ export async function getAggregatedProductsSold(startDate: string, endDate: stri
   if (salesError) throw salesError;
 
   const saleIds = sales?.map(s => s.id) || [];
-  if (saleIds.length === 0) return [];
+  if (saleIds.length === 0) {
+    productsSoldCache = { key, data: [], timestamp: Date.now() };
+    return [];
+  }
 
   const { data: items, error: itemsError } = await client
     .from('sale_items')
@@ -346,10 +362,18 @@ export async function getAggregatedProductsSold(startDate: string, endDate: stri
     });
   });
 
-  return Array.from(aggregated.values()).sort((a, b) => b.revenue - a.revenue);
+  const result = Array.from(aggregated.values()).sort((a, b) => b.revenue - a.revenue);
+  productsSoldCache = { key, data: result, timestamp: Date.now() };
+  return result;
 }
 
 export async function getDebtPaymentsReport(startDate: string, endDate: string) {
+  const key = `${startDate}:${endDate}`;
+  const now = Date.now();
+  if (debtPaymentsCache?.key === key && now - debtPaymentsCache.timestamp < CACHE_DURATION_MS) {
+    return debtPaymentsCache.data;
+  }
+
   const client = await ensureSupabaseConfigured();
 
   // Debt payments are those where a payment is made, and the sale has a customer.
@@ -397,5 +421,7 @@ export async function getDebtPaymentsReport(startDate: string, endDate: string) 
     };
   }) || [];
 
-  return debtPayments.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const result = debtPayments.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  debtPaymentsCache = { key, data: result, timestamp: Date.now() };
+  return result;
 }

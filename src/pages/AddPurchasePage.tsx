@@ -32,6 +32,7 @@ import { listSuppliers } from "../services/supplierService";
 import { listLocations } from "../services/settingsService";
 import { useSettings } from "../hooks/useSettings";
 import type { PaymentMethod } from "../types/database";
+import { calculateVatLine, getVatSettings, isVatEnabled } from "../services/vatService";
 
 type PaymentStatus = "Paid" | "Due" | "Partially Paid";
 type DeliveryStatus = "Pending" | "Received";
@@ -218,8 +219,38 @@ export function AddPurchasePage() {
   };
 
   const purchaseTotal = useMemo(() => {
-    return form.items.reduce((sum, item) => sum + (item.quantity * item.purchasePrice), 0);
-  }, [form.items]);
+    const vatSettings = getVatSettings(settings);
+    return form.items.reduce((sum, item) => {
+      const line = calculateVatLine({
+        amount: item.quantity * item.purchasePrice,
+        vatRate: vatSettings.vatRate,
+        priceType: "exclusive",
+        vatEnabled: isVatEnabled(settings),
+        supplierVatRegistered: true,
+      });
+      return sum + line.totalAmount;
+    }, 0);
+  }, [form.items, settings]);
+
+  const purchaseVatSummary = useMemo(() => {
+    const vatSettings = getVatSettings(settings);
+    const supplierVatRegistered = true;
+    const lines = form.items.map((item) => calculateVatLine({
+      amount: item.quantity * item.purchasePrice,
+      vatRate: vatSettings.vatRate,
+      priceType: "exclusive",
+      vatEnabled: isVatEnabled(settings),
+      supplierVatRegistered,
+    }));
+    return {
+      settings: vatSettings,
+      supplierVatRegistered,
+      beforeVat: lines.reduce((sum, line) => sum + line.amountBeforeVat, 0),
+      inputVat: lines.reduce((sum, line) => sum + line.vatAmount, 0),
+      total: lines.reduce((sum, line) => sum + line.totalAmount, 0),
+      lines,
+    };
+  }, [form.items, settings]);
 
   const addProduct = (product: any) => {
     if (form.items.some(item => item.productId === product.id)) {
@@ -338,11 +369,32 @@ export function AddPurchasePage() {
         purchase_date: form.date,
         notes: form.notes,
         requisition_id: form.requisitionId,
+        vat_rate: purchaseVatSummary.settings.vatRate,
+        supplier_vat_registered: purchaseVatSummary.supplierVatRegistered,
+        price_type: "exclusive",
+        amount_before_vat: purchaseVatSummary.beforeVat,
+        input_vat: purchaseVatSummary.inputVat,
         items: form.items.map(item => ({
           product_id: item.productId,
           quantity: item.quantity,
           cost_price: item.purchasePrice,
-          selling_price: item.sellingPrice
+          selling_price: item.sellingPrice,
+          vat_rate: purchaseVatSummary.settings.vatRate,
+          supplier_vat_registered: purchaseVatSummary.supplierVatRegistered,
+          amount_before_vat: calculateVatLine({
+            amount: item.quantity * item.purchasePrice,
+            vatRate: purchaseVatSummary.settings.vatRate,
+            priceType: "exclusive",
+            vatEnabled: isVatEnabled(settings),
+            supplierVatRegistered: purchaseVatSummary.supplierVatRegistered,
+          }).amountBeforeVat,
+          input_vat: calculateVatLine({
+            amount: item.quantity * item.purchasePrice,
+            vatRate: purchaseVatSummary.settings.vatRate,
+            priceType: "exclusive",
+            vatEnabled: isVatEnabled(settings),
+            supplierVatRegistered: purchaseVatSummary.supplierVatRegistered,
+          }).vatAmount,
         })),
       });
 
@@ -541,10 +593,10 @@ export function AddPurchasePage() {
                   <tr className="border-b border-slate-100 text-left text-xs font-bold uppercase tracking-wider text-slate-400">
                     <th className="pb-4 pl-2">Product</th>
                     <th className="pb-4">Qty</th>
-                    <th className="pb-4 text-right">Cost (RWF)</th>
+                    <th className="pb-4 text-right" title="Enter the purchase cost before VAT. Input VAT is calculated separately.">Cost Before VAT</th>
                     <th className="pb-4 text-right">Selling (RWF)</th>
                     <th className="pb-4 text-right">Profit %</th>
-                    <th className="pb-4 text-right">Total</th>
+                    <th className="pb-4 text-right">Total Incl. VAT</th>
                     <th className="pb-4 text-right"></th>
                   </tr>
                 </thead>
@@ -600,7 +652,13 @@ export function AddPurchasePage() {
                           </div>
                         </td>
                         <td className="py-4 text-right font-bold text-ink">
-                          {formatCurrency(item.quantity * item.purchasePrice)}
+                          {formatCurrency(calculateVatLine({
+                            amount: item.quantity * item.purchasePrice,
+                            vatRate: purchaseVatSummary.settings.vatRate,
+                            priceType: "exclusive",
+                            vatEnabled: isVatEnabled(settings),
+                            supplierVatRegistered: true,
+                          }).totalAmount)}
                         </td>
                         <td className="py-4 text-right pr-2">
                           <button
@@ -698,7 +756,15 @@ export function AddPurchasePage() {
           <SectionCard title="Summary">
             <div className="space-y-3">
               <div className="flex justify-between text-sm">
-                <span className="text-slate-500">Items Total</span>
+                <span className="text-slate-500" title="Purchase value before eligible VAT is added or extracted.">Purchases Before VAT</span>
+                <span className="font-bold text-ink">{formatCurrency(purchaseVatSummary.beforeVat)}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-500" title="VAT paid on purchases from VAT-registered suppliers. This becomes Input VAT.">Input VAT</span>
+                <span className="font-bold text-emerald-700">{formatCurrency(purchaseVatSummary.inputVat)}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-500">Items</span>
                 <span className="font-bold text-ink">{form.items.length} items</span>
               </div>
               <div className="flex justify-between border-t border-slate-100 pt-3 text-lg">

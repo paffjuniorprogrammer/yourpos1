@@ -63,6 +63,7 @@ export const navItems: NavItem[] = [
   },
   { label: "Stock", path: "/stock", icon: PackageSearch, roles: ["admin", "manager"] },
   { label: "Reports", path: "/reports", icon: BarChart3, roles: ["admin", "manager"] },
+  { label: "VAT Report", path: "/vat-report", icon: ReceiptText, roles: ["admin", "manager"] },
   { label: "Settings", path: "/settings", icon: Settings, roles: ["admin"] },
   { label: "Subscription", path: "/subscription", icon: CreditCard, roles: ["admin"] },
 ];

@@ -20,6 +20,10 @@ export type CreatePosSaleInput = {
   business_id: string;
   subtotal: number;
   tax_amount: number;
+  vat_rate?: number;
+  price_type?: "inclusive" | "exclusive";
+  amount_before_vat?: number;
+  output_vat?: number;
   total_amount: number;
   payment_method: PaymentMethod | null;
   payment_status: PaymentStatus;
@@ -41,6 +45,14 @@ type CloseDaySummary = {
 };
 
 const FAST_CACHE_TIMEOUT_MS = 5000;
+
+function isDuplicateRegisterOpenError(error: any) {
+  return (
+    error?.code === '23505' ||
+    error?.status === 409 ||
+    String(error?.message || '').toLowerCase().includes('duplicate key')
+  );
+}
 
 function withFastCacheTimeout<T>(promise: PromiseLike<T>) {
   return Promise.race([
@@ -199,6 +211,41 @@ export async function pushPosSaleToSupabase(input: CreatePosSaleInput) {
 
   const sale_id = String(saleId);
 
+  const vatSaleUpdates = {
+    vat_rate: input.vat_rate ?? 0,
+    price_type: input.price_type ?? "inclusive",
+    amount_before_vat: input.amount_before_vat ?? input.subtotal,
+    output_vat: input.output_vat ?? input.tax_amount,
+  };
+
+  await client.from("sales").update(vatSaleUpdates).eq("id", sale_id);
+
+  await Promise.all(
+    input.items.map(async (item: any) => {
+      await client
+        .from("sale_items")
+        .update({
+          vat_rate: item.vat_rate ?? input.vat_rate ?? 0,
+          amount_before_vat: item.amount_before_vat ?? item.line_total,
+          output_vat: item.output_vat ?? 0,
+        })
+        .eq("sale_id", sale_id)
+        .eq("product_id", item.product_id);
+    }),
+  );
+
+  await client.from("vat_audit_transactions").insert({
+    business_id: input.business_id,
+    source_type: "sale",
+    source_id: sale_id,
+    transaction_date: new Date().toISOString(),
+    vat_rate: input.vat_rate ?? 0,
+    amount_before_vat: input.amount_before_vat ?? input.subtotal,
+    input_vat: 0,
+    output_vat: input.output_vat ?? input.tax_amount,
+    total_amount: input.total_amount,
+  });
+
   // Fetch the full record back for consistency
   const { data: sale, error: saleFetchError } = await client
     .from("sales")
@@ -275,6 +322,10 @@ export async function createPosSale(input: CreatePosSaleInput) {
       location_id: input.location_id ?? null,
       subtotal: input.subtotal,
       tax_amount: input.tax_amount,
+      vat_rate: input.vat_rate ?? 0,
+      price_type: input.price_type ?? "inclusive",
+      amount_before_vat: input.amount_before_vat ?? input.subtotal,
+      output_vat: input.output_vat ?? input.tax_amount,
       total_amount: input.total_amount,
       payment_method: input.payment_method,
       payment_status: input.payment_status,
@@ -297,15 +348,15 @@ export async function createPosSale(input: CreatePosSaleInput) {
 
 export async function checkOpenRegister(userId: string, locationId: string) {
   const client = await ensureSupabaseConfigured();
-  const today = new Date().toISOString().split('T')[0];
 
   const { data, error } = await client
     .from('day_closures')
     .select('*')
     .eq('user_id', userId)
     .eq('location_id', locationId)
-    .eq('closing_date', today)
     .eq('status', 'open')
+    .order('opened_at', { ascending: false })
+    .limit(1)
     .maybeSingle();
 
   if (error) throw error;
@@ -314,10 +365,22 @@ export async function checkOpenRegister(userId: string, locationId: string) {
 
 export async function pushRegisterOpenToSupabase(payload: any) {
   const client = await ensureSupabaseConfigured();
-  const { error } = await client
+  const { data, error } = await client
     .from('day_closures')
-    .insert(payload);
-  if (error) throw error;
+    .insert(payload)
+    .select('*')
+    .single();
+
+  if (!error) return data;
+
+  if (isDuplicateRegisterOpenError(error)) {
+    const existingOpenRegister = await checkOpenRegister(payload.user_id, payload.location_id);
+    if (existingOpenRegister) {
+      return existingOpenRegister;
+    }
+  }
+
+  throw error;
 }
 
 export async function openRegister(userId: string, businessId: string, locationId: string, startingAmount: number) {
@@ -342,13 +405,21 @@ export async function openRegister(userId: string, businessId: string, locationI
   const isOnline = navigator.onLine;
   if (isOnline) {
     try {
-      await pushRegisterOpenToSupabase(payload);
+      const openedRegister = await pushRegisterOpenToSupabase(payload);
+      return openedRegister ?? { ...payload, created_at: now };
     } catch (e) {
-      console.warn("Offline register open fallback");
+      if (isDuplicateRegisterOpenError(e)) {
+        const existingOpenRegister = await checkOpenRegister(userId, locationId);
+        if (existingOpenRegister) {
+          return existingOpenRegister;
+        }
+      }
+
+      console.warn("Offline register open fallback", e);
     }
   }
 
-  // Always track locally for sync if needed
+  // Track locally only when the server could not confirm the register open.
   await db.pending_actions.add({
     id: crypto.randomUUID(),
     type: 'register_open',

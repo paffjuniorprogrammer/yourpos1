@@ -10,6 +10,10 @@ type CreateSaleInput = {
   location_id: string | null;
   subtotal: number;
   tax_amount: number;
+  vat_rate?: number;
+  price_type?: "inclusive" | "exclusive";
+  amount_before_vat?: number;
+  output_vat?: number;
   total_amount: number;
   payment_method: PaymentMethod | null;
   payment_status: PaymentStatus;
@@ -19,6 +23,9 @@ type CreateSaleInput = {
     quantity: number;
     unit_price: number;
     line_total: number;
+    vat_rate?: number;
+    amount_before_vat?: number;
+    output_vat?: number;
   }>;
 };
 
@@ -34,6 +41,10 @@ export async function pushSaleToSupabase(input: CreateSaleInput) {
       cashier_id: input.cashier_id,
       subtotal: input.subtotal,
       tax_amount: input.tax_amount,
+      vat_rate: input.vat_rate ?? 0,
+      price_type: input.price_type ?? "inclusive",
+      amount_before_vat: input.amount_before_vat ?? input.subtotal,
+      output_vat: input.output_vat ?? input.tax_amount,
       total_amount: input.total_amount,
       payment_method: input.payment_method,
       payment_status: input.payment_status,
@@ -55,6 +66,9 @@ export async function pushSaleToSupabase(input: CreateSaleInput) {
         quantity: item.quantity,
         unit_price: item.unit_price,
         line_total: item.line_total,
+        vat_rate: item.vat_rate ?? input.vat_rate ?? 0,
+        amount_before_vat: item.amount_before_vat ?? item.line_total,
+        output_vat: item.output_vat ?? 0,
       })),
     )
     .select("*");
@@ -102,6 +116,10 @@ export async function createSale(input: CreateSaleInput) {
       cashier_id: input.cashier_id,
       subtotal: input.subtotal,
       tax_amount: input.tax_amount,
+      vat_rate: input.vat_rate ?? 0,
+      price_type: input.price_type ?? "inclusive",
+      amount_before_vat: input.amount_before_vat ?? input.subtotal,
+      output_vat: input.output_vat ?? input.tax_amount,
       total_amount: input.total_amount,
       payment_method: input.payment_method,
       payment_status: input.payment_status,

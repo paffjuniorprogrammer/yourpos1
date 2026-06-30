@@ -10,6 +10,7 @@ import { ProductsPage } from "./pages/ProductsPage";
 import { PurchasesPage } from "./pages/PurchasesPage";
 import { PurchaseRequisitionPage } from "./pages/PurchaseRequisitionPage";
 import { ReportsPage } from "./pages/ReportsPage";
+import { VatReportPage } from "./pages/VatReportPage";
 import { SalesPage } from "./pages/SalesPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { StockPage } from "./pages/StockPage";
@@ -178,6 +179,14 @@ export default function App() {
               element={
                 <ProtectedRoute requiredPermission={["Reports", "view"]}>
                   <ReportsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/vat-report"
+              element={
+                <ProtectedRoute requiredPermission={["Reports", "view"]}>
+                  <VatReportPage />
                 </ProtectedRoute>
               }
             />

@@ -464,34 +464,47 @@ export async function getProductHistory(productId: string) {
   const [salesResponse, purchasesResponse] = await Promise.all([
     client
       .from("sale_items")
-      .select("quantity, unit_price, line_total, created_at, sales(sale_number, customers(full_name))")
+      .select("quantity, unit_price, line_total, sales!inner(sale_number, created_at, customers(full_name))")
       .eq("product_id", productId)
-      .order("created_at", { ascending: false })
-      .limit(10),
+      .limit(50),
     client
       .from("purchase_items")
-      .select("quantity, cost_price, line_total, created_at, purchases(purchase_number, suppliers(name))")
+      .select("quantity, cost_price, line_total, purchases!inner(purchase_number, purchase_date, suppliers(name))")
       .eq("product_id", productId)
-      .order("created_at", { ascending: false })
-      .limit(10)
+      .limit(50)
   ]);
 
-  return {
-    sales: (salesResponse.data || []).map((s: any) => ({
-      date: s.created_at,
-      quantity: s.quantity,
-      price: s.unit_price,
-      total: s.line_total,
-      reference: s.sales?.sale_number,
+  if (salesResponse.error) throw salesResponse.error;
+  if (purchasesResponse.error) throw purchasesResponse.error;
+
+  const sales = (salesResponse.data || [])
+    .map((s: any) => ({
+      date: s.sales?.created_at,
+      quantity: Number(s.quantity || 0),
+      price: Number(s.unit_price || 0),
+      total: Number(s.line_total || 0),
+      reference: s.sales?.sale_number || "Sale",
       partner: s.sales?.customers?.full_name || "Walk-in Customer"
-    })),
-    purchases: (purchasesResponse.data || []).map((p: any) => ({
-      date: p.created_at,
-      quantity: p.quantity,
-      price: p.cost_price,
-      total: p.line_total,
-      reference: p.purchases?.purchase_number,
+    }))
+    .filter((s) => Boolean(s.date))
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    .slice(0, 10);
+
+  const purchases = (purchasesResponse.data || [])
+    .map((p: any) => ({
+      date: p.purchases?.purchase_date,
+      quantity: Number(p.quantity || 0),
+      price: Number(p.cost_price || 0),
+      total: Number(p.line_total || 0),
+      reference: p.purchases?.purchase_number || "Purchase",
       partner: p.purchases?.suppliers?.name || "Unknown Supplier"
     }))
+    .filter((p) => Boolean(p.date))
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    .slice(0, 10);
+
+  return {
+    sales,
+    purchases
   };
 }

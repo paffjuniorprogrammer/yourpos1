@@ -23,6 +23,8 @@ type SupplierRow = {
   tinNumber: string;
   paymentTerm: string;
   bankAccount: string;
+  isVatRegistered: boolean;
+  vatRegistrationNumber: string;
 };
 
 const initialForm: Omit<SupplierRow, "id"> = {
@@ -35,6 +37,8 @@ const initialForm: Omit<SupplierRow, "id"> = {
   tinNumber: "",
   paymentTerm: "",
   bankAccount: "",
+  isVatRegistered: true,
+  vatRegistrationNumber: "",
 };
 
 function makeSupplierRow(supplier: SupplierMetrics): SupplierRow {
@@ -49,6 +53,8 @@ function makeSupplierRow(supplier: SupplierMetrics): SupplierRow {
     tinNumber: supplier.tin_number || `TIN-${supplier.id.slice(0, 4).toUpperCase()}`,
     paymentTerm: supplier.payment_term || "Net 30",
     bankAccount: supplier.bank_account || "TBD",
+    isVatRegistered: (supplier as any).is_vat_registered !== false,
+    vatRegistrationNumber: (supplier as any).vat_registration_number || "",
   };
 }
 
@@ -147,6 +153,8 @@ export function SuppliersPage() {
       tinNumber: formValues.tinNumber.trim() || `TIN-${String(rows.length + 1).padStart(4, "0")}`,
       paymentTerm: formValues.paymentTerm.trim() || "Net 30",
       bankAccount: formValues.bankAccount.trim() || "TBD",
+      isVatRegistered: formValues.isVatRegistered,
+      vatRegistrationNumber: formValues.vatRegistrationNumber.trim(),
     };
 
     if (!formValues.id) {
@@ -161,6 +169,9 @@ export function SuppliersPage() {
           phone: nextRow.phone,
           email: "",
           address: nextRow.location,
+          tin_number: nextRow.tinNumber,
+          is_vat_registered: nextRow.isVatRegistered,
+          vat_registration_number: nextRow.vatRegistrationNumber,
         }, business.id);
         nextRow.id = supplier.id;
       } catch (error: any) {
@@ -176,6 +187,9 @@ export function SuppliersPage() {
           phone: nextRow.phone,
           email: "",
           address: nextRow.location,
+          tin_number: nextRow.tinNumber,
+          is_vat_registered: nextRow.isVatRegistered,
+          vat_registration_number: nextRow.vatRegistrationNumber,
         });
         // ID remains the same
       } catch (error: any) {
@@ -442,6 +456,7 @@ export function SuppliersPage() {
                 { label: t('suppliers.modal.tin'), value: formValues.tinNumber, key: "tinNumber" },
                 { label: t('suppliers.modal.payment_term'), value: formValues.paymentTerm, key: "paymentTerm" },
                 { label: t('suppliers.modal.bank_account'), value: formValues.bankAccount, key: "bankAccount" },
+                { label: "VAT Registration Number", value: formValues.vatRegistrationNumber, key: "vatRegistrationNumber" },
               ].map(({ label, value, key }) => (
                 <label key={key} className="rounded-2xl bg-slate-50 p-3">
                   <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{label}</span>
@@ -456,6 +471,19 @@ export function SuppliersPage() {
                   ) : null}
                 </label>
               ))}
+              <label className="rounded-2xl bg-emerald-50 p-3 md:col-span-2">
+                <span className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Supplier VAT Registered</span>
+                <div className="mt-3 flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={formValues.isVatRegistered}
+                    onChange={(event) => setFormValues((current) => ({ ...current, isVatRegistered: event.target.checked }))}
+                    className="h-5 w-5 rounded border-emerald-300"
+                    title="Input VAT can only be claimed on purchases from VAT-registered suppliers."
+                  />
+                  <span className="text-sm font-semibold text-emerald-800">Allow Input VAT on eligible purchases from this supplier</span>
+                </div>
+              </label>
             </div>
 
 

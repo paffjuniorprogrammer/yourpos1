@@ -23,6 +23,8 @@ export interface SupplierRecord {
   email: string | null;
   address: string | null;
   tin_number: string | null;
+  is_vat_registered?: boolean;
+  vat_registration_number?: string | null;
   payment_term: string | null;
   bank_account: string | null;
   created_at: string;
@@ -39,6 +41,9 @@ export interface SupplierFormValues {
   phone: string;
   email: string;
   address: string;
+  tin_number?: string;
+  is_vat_registered?: boolean;
+  vat_registration_number?: string;
 }
 
 function mapSupplierPayload(values: SupplierFormValues, businessId?: string) {
@@ -49,6 +54,9 @@ function mapSupplierPayload(values: SupplierFormValues, businessId?: string) {
     phone: values.phone.trim() || null,
     email: values.email.trim() || null,
     address: values.address.trim() || null,
+    tin_number: values.tin_number?.trim() || null,
+    is_vat_registered: values.is_vat_registered !== false,
+    vat_registration_number: values.vat_registration_number?.trim() || null,
   };
 }
 

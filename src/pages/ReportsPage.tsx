@@ -216,20 +216,20 @@ export function ReportsPage() {
 
         <div className="grid gap-4 md:grid-cols-4">
            {[
-             { label: t('reports.finance.sales'), value: financialSummary?.totalSales, icon: DollarSign, color: "brand" },
-             { label: t('reports.finance.cost'), value: financialSummary?.totalCost, icon: TrendingDown, color: "slate" },
-             { label: t('reports.finance.gross'), value: (financialSummary?.totalSales || 0) - (financialSummary?.totalCost || 0), icon: TrendingUp, color: "emerald" },
-             { label: t('reports.finance.tax_collected'), value: financialSummary?.taxCollected, icon: Clock, color: "amber" },
+             { label: t('reports.finance.sales'), value: financialSummary?.totalSales, icon: DollarSign, iconClass: "bg-brand-50 text-brand-600", accentClass: "bg-brand-50" },
+             { label: t('reports.finance.cost'), value: financialSummary?.totalCost, icon: TrendingDown, iconClass: "bg-slate-100 text-slate-600", accentClass: "bg-slate-100" },
+             { label: t('reports.finance.gross'), value: (financialSummary?.totalSales || 0) - (financialSummary?.totalCost || 0), icon: TrendingUp, iconClass: "bg-emerald-50 text-emerald-600", accentClass: "bg-emerald-50" },
+             { label: t('reports.finance.tax_collected'), value: financialSummary?.taxCollected, icon: Clock, iconClass: "bg-amber-50 text-amber-600", accentClass: "bg-amber-50" },
            ].map((stat) => (
              <div key={stat.label} className="group relative overflow-hidden rounded-[2rem] border border-slate-100 bg-white p-6 shadow-sm transition hover:shadow-soft">
-               <div className={`mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-${stat.color}-50 text-${stat.color}-600`}>
+               <div className={`mb-4 flex h-12 w-12 items-center justify-center rounded-2xl ${stat.iconClass}`}>
                  <stat.icon size={22} />
                </div>
                <p className="text-xs font-bold uppercase tracking-wider text-slate-400">{stat.label}</p>
                <p className={`mt-2 text-xl font-black text-ink`}>
                  {Number(stat.value || 0).toLocaleString()} RWF
                </p>
-               <div className={`absolute bottom-0 right-0 h-24 w-24 translate-x-12 translate-y-12 rounded-full bg-${stat.color}-50 opacity-20 transition group-hover:scale-150`} />
+               <div className={`absolute bottom-0 right-0 h-24 w-24 translate-x-12 translate-y-12 rounded-full ${stat.accentClass} opacity-20 transition group-hover:scale-150`} />
              </div>
            ))}
         </div>
@@ -385,7 +385,7 @@ export function ReportsPage() {
                 </tr>
               )) : (
                 <tr>
-                  <td colSpan={6} className="px-6 py-10 text-center text-slate-400 font-medium italic">
+                  <td colSpan={profile?.role === 'admin' ? 8 : 7} className="px-6 py-10 text-center text-slate-400 font-medium italic">
                     {t('reports.returns.no_records')}
                   </td>
                 </tr>
@@ -671,4 +671,3 @@ export function ReportsPage() {
     </div>
   );
 }
-

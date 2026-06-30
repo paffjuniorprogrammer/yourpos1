@@ -3,15 +3,20 @@ import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { navItems } from "../../data/mockData";
 import { useAuth } from "../../context/AuthContext";
+import { useNotification } from "../../context/NotificationContext";
 import { useSettings } from "../../hooks/useSettings";
 import { useTranslation } from "react-i18next";
+import { getBusinessReminders, type BusinessReminder } from "../../services/reminderService";
 
 
 export function AppShell() {
   const { i18n, t } = useTranslation();
   const location = useLocation();
   const { authConfigured, hasRole, logout, profile, can, session } = useAuth();
+  const { showToast } = useNotification();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [reminders, setReminders] = useState<BusinessReminder[]>([]);
+  const [remindersOpen, setRemindersOpen] = useState(false);
   const isPosRoute = location.pathname === "/pos";
   const currentPage =
     navItems.find((item) => item.path === location.pathname)?.label ?? t('menu.dashboard');
@@ -40,7 +45,13 @@ export function AppShell() {
     }
   };
 
+  const { settings } = useSettings();
+
   const visibleNavItems = navItems.filter((item) => {
+    if (item.label === "VAT Report" && (settings as any)?.vat_registration_status !== "registered") {
+      return false;
+    }
+
     if (!authConfigured) return true;
     
     // 1. Admins have omnipotent access
@@ -51,7 +62,43 @@ export function AppShell() {
     return can(item.label, "view");
   });
 
-  const { settings } = useSettings();
+  const navLabel = (label: string) => label === "VAT Report" ? "VAT Report" : t(`menu.${label.toLowerCase()}`);
+
+  useEffect(() => {
+    if (!authConfigured || !profile || isPosRoute || profile.role === "super_admin") {
+      setReminders([]);
+      return;
+    }
+
+    let active = true;
+
+    async function loadReminders() {
+      try {
+        const nextReminders = await getBusinessReminders();
+        if (!active) return;
+
+        setReminders(nextReminders);
+
+        nextReminders.slice(0, 3).forEach((reminder) => {
+          const storageKey = `reminder_seen_${reminder.id}`;
+          if (!sessionStorage.getItem(storageKey)) {
+            showToast(reminder.severity, reminder.message);
+            sessionStorage.setItem(storageKey, "1");
+          }
+        });
+      } catch (err) {
+        console.error("Failed to load business reminders:", err);
+      }
+    }
+
+    void loadReminders();
+    const interval = window.setInterval(loadReminders, 5 * 60 * 1000);
+
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [authConfigured, isPosRoute, profile?.id, profile?.role, showToast]);
 
   if (isPosRoute) {
     return <Outlet />;
@@ -120,7 +167,7 @@ export function AppShell() {
                   }
                 >
                   <Icon size={20} />
-                  {t(`menu.${label.toLowerCase()}`)}
+                  {navLabel(label)}
                 </NavLink>
 
               ))}
@@ -204,7 +251,7 @@ export function AppShell() {
                 }
               >
                 <Icon size={18} />
-                {t(`menu.${label.toLowerCase()}`)}
+                {navLabel(label)}
               </NavLink>
 
             ))}
@@ -271,6 +318,51 @@ export function AppShell() {
         </aside>
 
         <main className="flex-1 px-4 py-4 sm:px-6 lg:px-8 lg:py-8">
+          <div className="mb-5 flex items-center justify-between gap-4">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">{currentPage}</p>
+            </div>
+
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setRemindersOpen((open) => !open)}
+                className="relative rounded-2xl border border-slate-200 bg-white p-3 text-slate-600 shadow-soft transition hover:bg-slate-50"
+                title="Business reminders"
+              >
+                <Bell size={18} />
+                {reminders.length > 0 && (
+                  <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-black text-white">
+                    {reminders.length}
+                  </span>
+                )}
+              </button>
+
+              {remindersOpen && (
+                <div className="absolute right-0 top-14 z-50 w-[min(360px,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+                  <div className="border-b border-slate-100 px-4 py-3">
+                    <p className="text-xs font-black uppercase tracking-widest text-slate-500">Reminders</p>
+                  </div>
+                  <div className="max-h-80 overflow-y-auto">
+                    {reminders.length > 0 ? reminders.map((reminder) => (
+                      <div key={reminder.id} className="border-b border-slate-100 px-4 py-3 last:border-b-0">
+                        <p className={`text-sm font-black ${
+                          reminder.severity === "error" ? "text-rose-700" :
+                          reminder.severity === "warning" ? "text-amber-700" :
+                          "text-sky-700"
+                        }`}>
+                          {reminder.title}
+                        </p>
+                        <p className="mt-1 text-xs leading-relaxed text-slate-600">{reminder.message}</p>
+                      </div>
+                    )) : (
+                      <p className="px-4 py-8 text-center text-sm font-medium text-slate-400">No reminders right now.</p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
 
           <Outlet />
         </main>

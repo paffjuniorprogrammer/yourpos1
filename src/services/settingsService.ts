@@ -233,6 +233,12 @@ export async function upsertShopSettings(
     currency_code: values.currency_code ?? "RWF",
     default_profit_percentage: values.default_profit_percentage ?? 30,
     tax_percentage: values.tax_percentage ?? 18,
+    tin_number: values.tin_number ?? null,
+    vat_registration_number: values.vat_registration_number ?? null,
+    ebm_serial_number: values.ebm_serial_number ?? null,
+    vat_registration_status: values.vat_registration_status ?? "not_registered",
+    vat_price_type: values.vat_price_type ?? "inclusive",
+    tax_period: values.tax_period ?? "monthly",
     updated_by: values.updated_by ?? null,
   };
 

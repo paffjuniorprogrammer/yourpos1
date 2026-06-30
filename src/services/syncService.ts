@@ -9,7 +9,7 @@ export async function syncPendingSales() {
   }
 
   // 1. Process new universal pending_actions table
-  const pendingActions = await db.pending_actions.where('status').equals('pending').toArray();
+  const pendingActions = await db.pending_actions.where('status').equals('pending').sortBy('created_at');
   
   if (pendingActions.length > 0) {
     console.log(`[Offline Sync] Found ${pendingActions.length} pending actions to sync.`);

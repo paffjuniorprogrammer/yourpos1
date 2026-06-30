@@ -540,7 +540,7 @@ export function ProductsPage() {
                                 <p className="text-[10px] font-bold text-slate-400 uppercase">{s.reference} • {new Date(s.date).toLocaleDateString()}</p>
                               </div>
                               <div className="text-right">
-                                <p className="text-sm font-black text-emerald-600">+{s.quantity} pcs</p>
+                                <p className="text-sm font-black text-rose-600">-{s.quantity} pcs</p>
                                 <p className="text-xs text-slate-500">{formatCurrency(s.total)}</p>
                               </div>
                             </div>
@@ -558,7 +558,7 @@ export function ProductsPage() {
                                 <p className="text-[10px] font-bold text-slate-400 uppercase">{p.reference || 'Stock Count'} • {new Date(p.date).toLocaleDateString()}</p>
                               </div>
                               <div className="text-right">
-                                <p className="text-sm font-black text-brand-600">-{p.quantity} pcs</p>
+                                <p className="text-sm font-black text-emerald-600">+{p.quantity} pcs</p>
                                 <p className="text-xs text-slate-500">{formatCurrency(p.total)}</p>
                               </div>
                             </div>

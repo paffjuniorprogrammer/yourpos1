@@ -332,8 +332,17 @@ export async function createPurchase(input: {
     product_id: string;
     quantity: number;
     cost_price: number;
-    selling_price?: number;
+      selling_price?: number;
+      vat_rate?: number;
+      amount_before_vat?: number;
+      input_vat?: number;
+      supplier_vat_registered?: boolean;
   }>;
+  vat_rate?: number;
+  supplier_vat_registered?: boolean;
+  price_type?: "inclusive" | "exclusive";
+  amount_before_vat?: number;
+  input_vat?: number;
 }) {
   const client = await ensureSupabaseConfigured();
   const { data: { user } } = await client.auth.getUser();
@@ -377,6 +386,39 @@ export async function createPurchase(input: {
 
   if (error) throw error;
   const purchaseId = String(data);
+
+  await client.from("purchases").update({
+    vat_rate: input.vat_rate ?? 0,
+    supplier_vat_registered: input.supplier_vat_registered !== false,
+    price_type: input.price_type ?? "inclusive",
+    amount_before_vat: input.amount_before_vat ?? input.total_cost,
+    input_vat: input.input_vat ?? 0,
+  }).eq("id", purchaseId);
+
+  await Promise.all(input.items.map(async (item) => {
+    await client
+      .from("purchase_items")
+      .update({
+        vat_rate: item.vat_rate ?? input.vat_rate ?? 0,
+        supplier_vat_registered: item.supplier_vat_registered ?? input.supplier_vat_registered ?? true,
+        amount_before_vat: item.amount_before_vat ?? item.cost_price * item.quantity,
+        input_vat: item.input_vat ?? 0,
+      })
+      .eq("purchase_id", purchaseId)
+      .eq("product_id", item.product_id);
+  }));
+
+  await client.from("vat_audit_transactions").insert({
+    business_id: businessId,
+    source_type: "purchase",
+    source_id: purchaseId,
+    transaction_date: input.purchase_date ? new Date(input.purchase_date).toISOString() : new Date().toISOString(),
+    vat_rate: input.vat_rate ?? 0,
+    amount_before_vat: input.amount_before_vat ?? input.total_cost,
+    input_vat: input.input_vat ?? 0,
+    output_vat: 0,
+    total_amount: input.total_cost,
+  });
 
   await ensurePurchaseRowsVisible(purchaseId, businessId);
   await ensurePurchaseStockApplied({

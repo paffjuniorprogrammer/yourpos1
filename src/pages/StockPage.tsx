@@ -18,6 +18,7 @@ import {
   type StockTransferSummary, 
   recordStockCount, 
   recordStockTransfer,
+  updateStockTransfer,
   updateStockTransferStatus 
 } from "../services/stockService";
 import { listLocations } from "../services/settingsService";
@@ -141,7 +142,8 @@ export function StockPage() {
     }
 
     try {
-      const stockTransfers = await listStockTransfers();
+      const visibleLocationIds = assignedLocations.map((location) => location.id);
+      const stockTransfers = await listStockTransfers(visibleLocationIds);
       setTransfers(stockTransfers);
     } catch (error) {
       console.warn("StockPage: Could not load stock transfers history.", error);
@@ -150,7 +152,7 @@ export function StockPage() {
 
   useEffect(() => {
     run(loadStockData);
-  }, [run, activeLocationId]);
+  }, [run, activeLocationId, assignedLocations]);
 
   // Real-time synchronization for Stock Page
   useRealtimeSync({
@@ -206,7 +208,58 @@ export function StockPage() {
     return () => { active = false; };
   }, [countingModalOpen, countingForm.locationId]);
 
+  useEffect(() => {
+    if (!transferModalOpen || !transferForm.fromLocationId) return;
+
+    let active = true;
+    async function updateTransferOriginStock() {
+      try {
+        const productList = await listPosProducts(transferForm.fromLocationId, 1000);
+        if (!active) return;
+
+        const updatedProducts = productList.map((p) => ({
+          id: p.id,
+          productId: p.id,
+          name: p.name,
+          stockQty: p.stock_quantity,
+          mode: "Add" as const,
+          reason: "correction",
+          countedQty: 1,
+        }));
+
+        setProducts(updatedProducts);
+        setTransferForm((prev) => ({
+          ...prev,
+          lines: prev.lines.map((line) => {
+            const match = productList.find((p) => p.id === line.productId);
+            return match ? { ...line, availableQty: match.stock_quantity, sendQty: Math.min(line.sendQty, match.stock_quantity) } : line;
+          }),
+        }));
+      } catch (err) {
+        console.error("Failed to update transfer origin stock:", err);
+      }
+    }
+
+    void updateTransferOriginStock();
+    return () => { active = false; };
+  }, [transferModalOpen, transferForm.fromLocationId]);
+
   const createdByName = profile?.full_name || "Active Cashier";
+  function canEditTransfer(transfer: TransferRecord) {
+    return (
+      can("Stock", "edit") &&
+      transfer.createdById === profile?.id &&
+      transfer.status !== "Completed"
+    );
+  }
+
+  function canCompleteTransfer(transfer: TransferRecord) {
+    return (
+      can("Stock", "edit") &&
+      transfer.createdById !== profile?.id &&
+      transfer.status !== "Completed"
+    );
+  }
 
   const countingMatches = useMemo(() => {
     const query = countingProductSearch.trim().toLowerCase();
@@ -274,7 +327,20 @@ export function StockPage() {
 
   function openTransferModal(record?: TransferRecord) {
     if (record) {
-      showToast("info", t('stock.transfers.read_only_info'));
+      if (!canEditTransfer(record)) {
+        showToast("info", record.status === "Completed" ? t('stock.transfers.read_only_info') : "Only the creator can edit this transfer while it is still open.");
+        return;
+      }
+
+      setTransferForm({
+        id: record.id,
+        fromLocationId: record.fromLocationId,
+        toLocationId: record.toLocationId,
+        status: record.status,
+        lines: record.lines.map((line) => ({ ...line })),
+      });
+      setTransferProductSearch("");
+      setTransferModalOpen(true);
       return;
     }
     const defaultFrom = profile?.location_id || (locations.length > 0 ? locations[0].id : "");
@@ -372,18 +438,42 @@ export function StockPage() {
     }
     
     try {
-      await recordStockTransfer(
-        transferForm.fromLocationId,
-        transferForm.toLocationId,
-        business?.id || "",
-        transferForm.status.toLowerCase().replace(" ", "_") as "pending" | "in_transit" | "completed",
-        userId,
-        transferForm.lines.map(line => ({
-          productId: line.productId,
-          availableQuantity: line.availableQty,
-          transferQuantity: line.sendQty
-        }))
-      );
+      const normalizedStatus = transferForm.status.toLowerCase().replace(" ", "_") as "pending" | "in_transit" | "completed";
+      const payloadLines = transferForm.lines.map(line => ({
+        productId: line.productId,
+        availableQuantity: line.availableQty,
+        transferQuantity: line.sendQty
+      }));
+
+      if (transferForm.id) {
+        if (normalizedStatus === "completed") {
+          showToast("warning", "The creator cannot complete a transfer from the edit form. The receiving branch must confirm it.");
+          return;
+        }
+
+        await updateStockTransfer(
+          transferForm.id,
+          transferForm.fromLocationId,
+          transferForm.toLocationId,
+          normalizedStatus,
+          userId,
+          payloadLines,
+        );
+      } else {
+        if (normalizedStatus === "completed") {
+          showToast("warning", "Create the transfer as Pending or In Transit. The receiving branch must complete it.");
+          return;
+        }
+
+        await recordStockTransfer(
+          transferForm.fromLocationId,
+          transferForm.toLocationId,
+          business?.id || "",
+          normalizedStatus,
+          userId,
+          payloadLines
+        );
+      }
       setTransferModalOpen(false);
       setTransferForm(emptyTransferForm);
       await loadStockData();
@@ -402,6 +492,11 @@ export function StockPage() {
 
   async function updateTransferStatus(newStatus: "in_transit" | "completed") {
     if (!statusUpdateTransfer || !profile?.id) return;
+
+    if (newStatus === "completed" && statusUpdateTransfer.createdById === profile.id) {
+      showToast("warning", "The user who created this transfer cannot complete it. Ask the receiving branch user to confirm.");
+      return;
+    }
 
     try {
       await updateStockTransferStatus(statusUpdateTransfer.id, newStatus, profile.id);
@@ -603,18 +698,18 @@ export function StockPage() {
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              if (transfer.status !== 'Completed' && can("Stock", "edit")) {
+                              if (canCompleteTransfer(transfer) || (transfer.status === "Pending" && canEditTransfer(transfer))) {
                                 setStatusUpdateTransfer(transfer);
                               }
                             }}
-                            disabled={transfer.status === "Completed"}
+                            disabled={!canCompleteTransfer(transfer) && !(transfer.status === "Pending" && canEditTransfer(transfer))}
                             className={`rounded-full border px-3 py-1 text-[11px] font-bold uppercase tracking-wider transition hover:brightness-95 disabled:hover:brightness-100 ${statusColors[transfer.status]}`}
                           >
                             <div className="flex items-center gap-1.5">
                               {transfer.status === "Pending" ? t('stock.transfers.status.pending') :
                                transfer.status === "In Transit" ? t('stock.transfers.status.in_transit') :
                                t('stock.transfers.status.completed')}
-                              {transfer.status !== 'Completed' && <ArrowRightLeft size={10} />}
+                              {(canCompleteTransfer(transfer) || (transfer.status === "Pending" && canEditTransfer(transfer))) && <ArrowRightLeft size={10} />}
                             </div>
 
                           </button>
@@ -627,7 +722,7 @@ export function StockPage() {
                         </td>
                         <td className="border-b border-slate-100 px-5 py-4">
                           <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                            {transfer.status === "Pending" && can("Stock", "edit") ? (
+                            {canEditTransfer(transfer) ? (
                               <button
                                 onClick={() => openTransferModal(transfer)}
                                 className="rounded-xl bg-sky-50 p-2 text-sky-600 transition hover:bg-sky-100"
@@ -635,7 +730,7 @@ export function StockPage() {
                                 <Pencil size={16} />
                               </button>
                             ) : (
-                              <div className="p-2 text-slate-300 cursor-not-allowed" title="Completed transfers cannot be edited">
+                              <div className="p-2 text-slate-300 cursor-not-allowed" title="Only the creator can edit open transfers. Completed transfers are locked.">
                                 <Pencil size={16} />
                               </div>
                             )}
@@ -914,8 +1009,10 @@ export function StockPage() {
                 >
                   <option value="Pending">{t('stock.transfers.status.pending')}</option>
                   <option value="In Transit">{t('stock.transfers.status.in_transit')}</option>
-                  <option value="Completed">{t('stock.transfers.status.completed')}</option>
                 </select>
+                <p className="mt-2 text-[11px] font-medium text-slate-500">
+                  The receiving branch confirms completion after checking the stock.
+                </p>
               </div>
 
               
@@ -1209,20 +1306,24 @@ export function StockPage() {
              </div>
 
              <div className="grid gap-3">
-                <button
-                  onClick={() => updateTransferStatus("in_transit")}
-                  className={`flex items-center justify-between rounded-2xl border border-blue-100 bg-blue-50 px-5 py-4 text-sm font-bold text-blue-700 transition hover:bg-blue-100 ${statusUpdateTransfer.status === 'In Transit' ? 'ring-2 ring-blue-500' : ''}`}
-                >
-                  Mark as IN TRANSIT
-                  <div className="rounded-full bg-white p-1 shadow-sm"><ChevronRight size={16} /></div>
-                </button>
+                {statusUpdateTransfer.status === "Pending" && canEditTransfer(statusUpdateTransfer) && (
+                  <button
+                    onClick={() => updateTransferStatus("in_transit")}
+                    className="flex items-center justify-between rounded-2xl border border-blue-100 bg-blue-50 px-5 py-4 text-sm font-bold text-blue-700 transition hover:bg-blue-100"
+                  >
+                    Mark as IN TRANSIT
+                    <div className="rounded-full bg-white p-1 shadow-sm"><ChevronRight size={16} /></div>
+                  </button>
+                )}
 
-                <button
-                  onClick={() => updateTransferStatus("completed")}
-                  className="flex items-center justify-center gap-2 rounded-2xl bg-emerald-500 px-5 py-4 text-sm font-bold text-white transition hover:bg-emerald-600"
-                >
-                  Mark as COMPLETED
-                </button>
+                {canCompleteTransfer(statusUpdateTransfer) && (
+                  <button
+                    onClick={() => updateTransferStatus("completed")}
+                    className="flex items-center justify-center gap-2 rounded-2xl bg-emerald-500 px-5 py-4 text-sm font-bold text-white transition hover:bg-emerald-600"
+                  >
+                    Mark as COMPLETED
+                  </button>
+                )}
 
                 <button
                   onClick={() => setStatusUpdateTransfer(null)}

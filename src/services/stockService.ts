@@ -30,11 +30,14 @@ export type StockTransferLine = {
 export type StockTransferSummary = {
   id: string;
   transferNumber: number;
+  fromLocationId: string;
+  toLocationId: string;
   fromStock: string;
   toStock: string;
   status: "Pending" | "In Transit" | "Completed";
   createdAt: string;
   createdBy: string;
+  createdById: string;
   lines: StockTransferLine[];
 };
 
@@ -85,17 +88,18 @@ export async function listStockCounts(): Promise<StockCountSummary[]> {
   }));
 }
 
-export async function listStockTransfers(): Promise<StockTransferSummary[]> {
+export async function listStockTransfers(locationIds: string[] = []): Promise<StockTransferSummary[]> {
   const client = await ensureSupabaseConfigured();
 
   // 1. Fetch the transfers (Try with transfer_number first)
-  let { data: transfers, error: transferError } = await client
+  let transferQuery = client
     .from("stock_transfers")
     .select(`
       id,
       transfer_number,
       status,
       created_at,
+      created_by,
       from_location_id,
       to_location_id,
       users(full_name),
@@ -108,16 +112,23 @@ export async function listStockTransfers(): Promise<StockTransferSummary[]> {
       )
     `)
     .order("created_at", { ascending: false })
-    .limit(20);
+    .limit(50);
+
+  if (locationIds.length > 0) {
+    transferQuery = transferQuery.or(`from_location_id.in.(${locationIds.join(",")}),to_location_id.in.(${locationIds.join(",")})`);
+  }
+
+  let { data: transfers, error: transferError } = await transferQuery;
 
   // Fallback if column doesn't exist yet
   if (transferError && (transferError.code === "42703" || (transferError as any).status === 400)) {
-    const fallback = await client
+    let fallbackQuery = client
       .from("stock_transfers")
       .select(`
         id,
         status,
         created_at,
+        created_by,
         from_location_id,
         to_location_id,
         users(full_name),
@@ -130,7 +141,13 @@ export async function listStockTransfers(): Promise<StockTransferSummary[]> {
         )
       `)
       .order("created_at", { ascending: false })
-      .limit(20);
+      .limit(50);
+
+    if (locationIds.length > 0) {
+      fallbackQuery = fallbackQuery.or(`from_location_id.in.(${locationIds.join(",")}),to_location_id.in.(${locationIds.join(",")})`);
+    }
+
+    const fallback = await fallbackQuery;
     transfers = fallback.data as any;
     transferError = fallback.error;
   }
@@ -150,11 +167,14 @@ export async function listStockTransfers(): Promise<StockTransferSummary[]> {
   return (transfers || []).map((transfer: any) => ({
     id: transfer.id,
     transferNumber: transfer.transfer_number,
+    fromLocationId: transfer.from_location_id,
+    toLocationId: transfer.to_location_id,
     fromStock: locationMap.get(transfer.from_location_id) || "Unknown Location",
     toStock: locationMap.get(transfer.to_location_id) || "Unknown Location",
     status: mapStockStatus(transfer.status),
     createdAt: transfer.created_at ? new Date(transfer.created_at).toLocaleDateString() : "N/A",
     createdBy: transfer.users?.full_name || "Unknown",
+    createdById: transfer.created_by,
     lines: (transfer.stock_transfer_items || []).map((item: any) => ({
       id: item.id,
       productId: item.product_id,
@@ -220,12 +240,79 @@ export async function recordStockTransfer(
   return data;
 }
 
+export async function updateStockTransfer(
+  transferId: string,
+  fromLocationId: string,
+  toLocationId: string,
+  status: "pending" | "in_transit",
+  userId: string,
+  items: Array<{ productId: string; availableQuantity: number; transferQuantity: number }>
+) {
+  const client = await ensureSupabaseConfigured();
+
+  const { data: existing, error: existingError } = await client
+    .from("stock_transfers")
+    .select("id, status, created_by, business_id")
+    .eq("id", transferId)
+    .maybeSingle();
+
+  if (existingError) throw existingError;
+  if (!existing) throw new Error("Transfer not found.");
+  if (existing.status === "completed") throw new Error("Completed transfers cannot be edited.");
+  if (existing.created_by !== userId) throw new Error("Only the user who created this transfer can edit it.");
+
+  const transformedItems = items.map(item => ({
+    stock_transfer_id: transferId,
+    business_id: existing.business_id,
+    product_id: item.productId,
+    available_quantity: item.availableQuantity,
+    transfer_quantity: item.transferQuantity
+  }));
+
+  const { error: transferError } = await client
+    .from("stock_transfers")
+    .update({
+      from_location_id: fromLocationId,
+      to_location_id: toLocationId,
+      status,
+    })
+    .eq("id", transferId);
+
+  if (transferError) throw transferError;
+
+  const { error: deleteError } = await client
+    .from("stock_transfer_items")
+    .delete()
+    .eq("stock_transfer_id", transferId);
+
+  if (deleteError) throw deleteError;
+
+  const { error: insertError } = await client
+    .from("stock_transfer_items")
+    .insert(transformedItems);
+
+  if (insertError) throw insertError;
+}
+
 export async function updateStockTransferStatus(
   transferId: string,
   newStatus: "pending" | "in_transit" | "completed",
   userId: string
 ) {
   const client = await ensureSupabaseConfigured();
+  const { data: transfer, error: transferError } = await client
+    .from("stock_transfers")
+    .select("status, created_by")
+    .eq("id", transferId)
+    .maybeSingle();
+
+  if (transferError) throw transferError;
+  if (!transfer) throw new Error("Transfer not found.");
+  if (transfer.status === "completed") throw new Error("Completed transfers cannot be changed.");
+  if (newStatus === "completed" && transfer.created_by === userId) {
+    throw new Error("The user who created the transfer cannot complete it. Ask a receiving branch user to confirm it.");
+  }
+
   const { error } = await client.rpc("update_stock_transfer_status", {
     p_transfer_id: transferId,
     p_new_status: newStatus,
