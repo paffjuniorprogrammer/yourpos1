@@ -14,6 +14,7 @@ import { VatReportPage } from "./pages/VatReportPage";
 import { SalesPage } from "./pages/SalesPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { StockPage } from "./pages/StockPage";
+import { TransfersPage } from "./pages/TransfersPage";
 import { AddPurchasePage } from "./pages/AddPurchasePage";
 import { AddStockCountPage } from "./pages/AddStockCountPage";
 import { AddRequisitionPage } from "./pages/AddRequisitionPage";
@@ -163,6 +164,14 @@ export default function App() {
               element={
                 <ProtectedRoute requiredPermission={["Stock", "view"]}>
                   <StockPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/transfers"
+              element={
+                <ProtectedRoute requiredPermission={["Transfers", "view"]}>
+                  <TransfersPage />
                 </ProtectedRoute>
               }
             />

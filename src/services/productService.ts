@@ -16,10 +16,10 @@ function withFastCacheTimeout<T>(promise: PromiseLike<T>) {
 export type ProductFormValues = {
   name: string;
   category_id?: string;
-  barcode: string;
+  barcode?: string;
   cost_price: string | number;
   selling_price: string | number;
-  image_url: string;
+  image_url?: string;
   bulk_quantity?: string | number | null;
   bulk_price?: string | number | null;
   bulk_pricing_mode?: 'fixed' | 'discount_amount' | 'discount_percentage' | null;
@@ -27,6 +27,8 @@ export type ProductFormValues = {
   parent_id?: string | null;
   is_parent?: boolean;
   variant_combination?: any;
+  location_ids?: string[];
+  all_locations?: boolean;
 };
 
 export type ProductAttribute = {
@@ -50,6 +52,9 @@ function mapProductPayload(values: ProductFormValues, businessId?: string) {
   const bulkPrice = values.bulk_price !== undefined && values.bulk_price !== null && values.bulk_price !== ''
     ? Number(values.bulk_price)
     : null;
+  const bulkDiscountValue = values.bulk_discount_value !== undefined && values.bulk_discount_value !== null && values.bulk_discount_value !== ''
+    ? Number(values.bulk_discount_value)
+    : null;
   return {
     name: (values.name || '').trim(),
     business_id: businessId,
@@ -60,13 +65,10 @@ function mapProductPayload(values: ProductFormValues, businessId?: string) {
     stock_quantity: 0,
     reorder_level: 5,
     image_url: (values.image_url || '').trim() || null,
-    // bulk_quantity: bulkQty,
-    // bulk_price: bulkPrice,
-    // bulk_pricing_mode: values.bulk_pricing_mode || 'fixed',
-    // bulk_discount_value: values.bulk_discount_value !== undefined && values.bulk_discount_value !== null && values.bulk_discount_value !== '' ? Number(values.bulk_discount_value) : 0,
-    // parent_id: values.parent_id || null,
-    // is_parent: values.is_parent || false,
-    // variant_combination: values.variant_combination || null,
+    bulk_quantity: bulkQty,
+    bulk_price: bulkPrice,
+    bulk_pricing_mode: values.bulk_pricing_mode || null,
+    bulk_discount_value: bulkDiscountValue,
   };
 }
 
@@ -77,7 +79,7 @@ export async function listProducts(locationId?: string | null, businessId?: stri
     try {
       const client = await ensureSupabaseConfigured();
       
-      const baseColumns = "id, name, barcode, cost_price, selling_price, stock_quantity, reorder_level, image_url, is_active, created_at, business_id, category_id";
+      const baseColumns = "id, name, barcode, cost_price, selling_price, stock_quantity, reorder_level, image_url, is_active, created_at, business_id, category_id, bulk_quantity, bulk_price, bulk_pricing_mode, bulk_discount_value";
       const selectQuery = `${baseColumns}, categories(name), product_stocks(quantity, location_id)`;
 
       let query = client
@@ -239,6 +241,84 @@ export async function checkProductExists(name: string, businessId: string, exclu
   return !!data;
 }
 
+export async function getProductLocations(productId: string): Promise<string[]> {
+  try {
+    const client = await ensureSupabaseConfigured();
+    const { data, error } = await client
+      .from("product_stocks")
+      .select("location_id")
+      .eq("product_id", productId);
+    if (error || !data) return [];
+    return data.map((row: any) => row.location_id);
+  } catch (err) {
+    console.warn("Failed to get product locations:", err);
+    return [];
+  }
+}
+
+export async function syncProductLocations(
+  productId: string, 
+  businessId: string, 
+  values: ProductFormValues
+) {
+  try {
+    const client = await ensureSupabaseConfigured();
+
+    let targetLocationIds: string[] = [];
+
+    if (values.all_locations || !values.location_ids || values.location_ids.length === 0) {
+      // Get all active locations for this business
+      const { data: locs } = await client
+        .from("locations")
+        .select("id")
+        .eq("business_id", businessId)
+        .eq("is_active", true);
+
+      targetLocationIds = (locs || []).map((l: any) => l.id);
+    } else {
+      targetLocationIds = values.location_ids;
+    }
+
+    if (targetLocationIds.length === 0) return;
+
+    // Get current stock entries for this product
+    const { data: existingStocks } = await client
+      .from("product_stocks")
+      .select("id, location_id")
+      .eq("product_id", productId);
+
+    const existingLocMap = new Map((existingStocks || []).map((s: any) => [s.location_id, s.id]));
+
+    // 1. Remove stocks for locations no longer selected
+    const toDeleteIds: string[] = [];
+    for (const [locId, stockId] of existingLocMap.entries()) {
+      if (!targetLocationIds.includes(locId)) {
+        toDeleteIds.push(stockId);
+      }
+    }
+
+    if (toDeleteIds.length > 0) {
+      await client.from("product_stocks").delete().in("id", toDeleteIds);
+    }
+
+    // 2. Insert missing stock entries for newly selected locations
+    const newStocksToInsert = targetLocationIds
+      .filter((locId) => !existingLocMap.has(locId))
+      .map((locId) => ({
+        product_id: productId,
+        location_id: locId,
+        business_id: businessId,
+        quantity: 0,
+      }));
+
+    if (newStocksToInsert.length > 0) {
+      await client.from("product_stocks").insert(newStocksToInsert);
+    }
+  } catch (err) {
+    console.warn("Failed to sync product locations:", err);
+  }
+}
+
 export async function createProduct(values: ProductFormValues, businessId: string) {
   // Validate required fields
   const name = (values.name || '').trim();
@@ -271,6 +351,10 @@ export async function createProduct(values: ProductFormValues, businessId: strin
       throw new Error("Product with this name or barcode already exists.");
     }
     throw error;
+  }
+
+  if (data?.id) {
+    await syncProductLocations(data.id, businessId, values);
   }
 
   return data as ProductRecord;
@@ -317,6 +401,8 @@ export async function updateProduct(productId: string, values: ProductFormValues
   if (error) {
     throw error;
   }
+
+  await syncProductLocations(productId, existingProduct.business_id, values);
 
   // Update local cache to ensure real-time consistency across POS
   try {
@@ -384,18 +470,95 @@ export async function deleteProduct(productId: string) {
 
 export async function bulkImportProducts(businessId: string, locationId: string | null, products: any[]) {
   const client = await ensureSupabaseConfigured();
-  
-  const { data, error } = await client.rpc('bulk_import_products', {
-    p_business_id: businessId,
-    p_location_id: locationId,
-    p_products_json: products
-  });
 
-  if (error) {
-    throw error;
+  let imported = 0;
+  const errors: string[] = [];
+
+  for (const row of products) {
+    try {
+      // Resolve category name to id if provided
+      let category_id: string | null = null;
+      const catName = (row.category_name || row.Category || row.category || "").trim();
+      if (catName) {
+        // Try to find existing category
+        const { data: catData } = await client
+          .from("categories")
+          .select("id")
+          .ilike("name", catName)
+          .limit(1)
+          .maybeSingle();
+
+        if (catData) {
+          category_id = catData.id;
+        } else {
+          // Create new category
+          const { data: newCat } = await client
+            .from("categories")
+            .insert({ name: catName })
+            .select("id")
+            .single();
+          if (newCat) category_id = newCat.id;
+        }
+      }
+
+      const productPayload: any = {
+        name: (row.name || row.Name || row.NAME || "").trim(),
+        barcode: (row.barcode || row.Barcode || row.BARCODE || "").trim() || null,
+        cost_price: parseFloat(row.cost_price || row.Cost || row.COST || "0") || 0,
+        selling_price: parseFloat(row.selling_price || row.Price || row.PRICE || "0") || 0,
+        reorder_level: parseInt(row.reorder_level || "5") || 5,
+        category_id,
+      };
+
+      if (!productPayload.name) continue;
+
+      // Check if product with same name already exists
+      const { data: existing } = await client
+        .from("products")
+        .select("id")
+        .ilike("name", productPayload.name)
+        .limit(1)
+        .maybeSingle();
+
+      let productId: string;
+
+      if (existing) {
+        productId = existing.id;
+        // Update existing product
+        await client.from("products").update(productPayload).eq("id", productId);
+      } else {
+        // Insert new product
+        const { data: newProduct, error: insertErr } = await client
+          .from("products")
+          .insert(productPayload)
+          .select("id")
+          .single();
+        if (insertErr) throw insertErr;
+        productId = newProduct.id;
+      }
+
+      // Upsert stock at location
+      if (locationId) {
+        const stockQty = parseInt(row.stock_quantity || row.Stock || row.STOCK || "0") || 0;
+        await client
+          .from("product_locations")
+          .upsert(
+            { product_id: productId, location_id: locationId, stock_quantity: stockQty },
+            { onConflict: "product_id,location_id" }
+          );
+      }
+
+      imported++;
+    } catch (err: any) {
+      errors.push(`Row "${row.name || row.Name || "?"}": ${err.message}`);
+    }
   }
-  
-  return data;
+
+  if (errors.length > 0 && imported === 0) {
+    throw new Error(errors.join("; "));
+  }
+
+  return { imported, errors };
 }
 
 // Attribute Management Functions

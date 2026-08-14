@@ -174,6 +174,25 @@ export function ProductsPage() {
     document.body.removeChild(link);
   };
 
+  const handleDownloadTemplate = () => {
+    // Simple 6-column template - system generates everything else
+    const csv = [
+      "Name,Category,Barcode,Cost,Price,Stock",
+      "Coca Cola 500ml,Beverages,5449000000996,700,1000,50",
+      "Sugar 1kg,Groceries,,1100,1500,20",
+      "Rice 25kg,Groceries,,28000,35000,10",
+    ].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", "product_import_template.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -183,21 +202,32 @@ export function ProductsPage() {
       skipEmptyLines: true,
       complete: async (results) => {
         const rows = results.data as any[];
-        if (rows.length === 0) return;
+        if (rows.length === 0) {
+          showToast("error", "CSV file is empty");
+          return;
+        }
 
         const confirmed = await confirm("Import Products", `Are you sure you want to import ${rows.length} products?`);
         if (!confirmed) return;
 
         try {
           const { bulkImportProducts } = await import("../services/productService");
-          await bulkImportProducts(profile?.business_id || "", activeLocationId || null, rows.map(r => ({
-            name: r.Name || r.name,
-            barcode: r.Barcode || r.barcode,
-            cost_price: parseFloat(r.Cost || r.cost_price || 0),
-            selling_price: parseFloat(r.Price || r.selling_price || 0),
-            initial_stock: parseInt(r.Stock || r.stock_quantity || 0)
-          })));
-          showToast("success", "Import successful");
+          const result = await bulkImportProducts(
+            profile?.business_id || "",
+            activeLocationId || null,
+            rows.map(r => ({
+              name: r.Name || r.name || "",
+              category_name: r.Category || r.category || "",
+              barcode: r.Barcode || r.barcode || "",
+              cost_price: r.Cost || r.cost_price || "0",
+              selling_price: r.Price || r.selling_price || "0",
+              stock_quantity: r.Stock || r.stock_quantity || "0",
+            }))
+          );
+          const msg = result?.errors?.length
+            ? `Imported ${result.imported} products. ${result.errors.length} skipped.`
+            : `Successfully imported ${result?.imported ?? rows.length} products!`;
+          showToast("success", msg);
           loadData();
         } catch (err: any) {
           showToast("error", "Import failed: " + err.message);
@@ -228,7 +258,15 @@ export function ProductsPage() {
             <Download size={18} />
             Export
           </button>
-          
+          <button
+            onClick={handleDownloadTemplate}
+            title="Download CSV template"
+            className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-bold text-emerald-700 transition hover:bg-emerald-100"
+          >
+            <Download size={18} />
+            Template
+          </button>
+
           <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-600 transition hover:bg-slate-50">
             <Upload size={18} />
             Import

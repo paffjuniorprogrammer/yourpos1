@@ -137,18 +137,22 @@ BEGIN
     RETURN NEW;
   END;
 
-  NEW.business_id := public.get_user_business_id();
-  
+  -- Try lookup from related records first to ensure absolute tenant accuracy
+  IF TG_TABLE_NAME = 'user_permissions' OR TG_TABLE_NAME = 'user_locations' THEN
+     SELECT u.business_id INTO NEW.business_id FROM public.users u WHERE u.id = NEW.user_id;
+  ELSIF TG_TABLE_NAME = 'products' THEN
+     IF NEW.category_id IS NOT NULL THEN
+        SELECT c.business_id INTO NEW.business_id FROM public.categories c WHERE c.id = NEW.category_id;
+     END IF;
+  ELSIF TG_TABLE_NAME = 'sale_items' THEN
+     SELECT s.business_id INTO NEW.business_id FROM public.sales s WHERE s.id = NEW.sale_id;
+  ELSIF TG_TABLE_NAME = 'purchase_items' THEN
+     SELECT p.business_id INTO NEW.business_id FROM public.purchases p WHERE p.id = NEW.purchase_id;
+  END IF;
+
+  -- Fallback to session context if still null
   IF NEW.business_id IS NULL THEN
-    IF TG_TABLE_NAME = 'user_permissions' OR TG_TABLE_NAME = 'user_locations' THEN
-       SELECT u.business_id INTO NEW.business_id FROM public.users u WHERE u.id = NEW.user_id;
-    ELSIF TG_TABLE_NAME = 'products' AND NEW.category_id IS NOT NULL THEN
-       SELECT c.business_id INTO NEW.business_id FROM public.categories c WHERE c.id = NEW.category_id;
-    ELSIF TG_TABLE_NAME = 'sale_items' THEN
-       SELECT s.business_id INTO NEW.business_id FROM public.sales s WHERE s.id = NEW.sale_id;
-    ELSIF TG_TABLE_NAME = 'purchase_items' THEN
-       SELECT p.business_id INTO NEW.business_id FROM public.purchases p WHERE p.id = NEW.purchase_id;
-    END IF;
+     NEW.business_id := public.get_user_business_id();
   END IF;
 
   RETURN NEW;

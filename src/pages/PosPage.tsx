@@ -517,6 +517,20 @@ export function PosPage() {
     }
 
     const selectedCustomerRecord = customers.find((customer) => customer.full_name === selectedCustomer) ?? null;
+
+    if (paymentMode === "credit" && selectedCustomerRecord) {
+      const creditLimit = (selectedCustomerRecord as any).credit_limit;
+      if (creditLimit != null && creditLimit > 0) {
+        const currentUnpaid = (selectedCustomerRecord as any).unpaid_balance || 0;
+        if (currentUnpaid + checkoutTotalWithVat > creditLimit) {
+          setPaymentError(
+            `⚠️ Credit limit of ${formatCurrency(creditLimit)} exceeded for ${selectedCustomerRecord.full_name}. (Current Debt: ${formatCurrency(currentUnpaid)}, Sale: ${formatCurrency(checkoutTotalWithVat)})`
+          );
+          return;
+        }
+      }
+    }
+
     const finalTotal = checkoutTotalWithVat;
     const subtotal = subtotalAmount;
     const taxAmount = checkoutTaxAmount;
@@ -1153,6 +1167,11 @@ export function PosPage() {
                           onClick={() => {
                             setSelectedCustomer(customer);
                             setCustomerQuery("");
+                            const customerRec = customers.find((c) => c.full_name === customer);
+                            if (customerRec && (customerRec as any).discount_percentage > 0) {
+                              setOrderDiscount({ type: 'percentage', value: (customerRec as any).discount_percentage });
+                              showToast("info", `✓ Applied ${customer}'s ${(customerRec as any).discount_percentage}% customer discount`);
+                            }
                           }}
                           className="flex w-full items-center px-4 py-3 text-sm font-semibold text-white hover:bg-slate-800"
                         >

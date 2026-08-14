@@ -26,34 +26,47 @@ BEGIN
     v_initial_stock := COALESCE((nullif(trim(v_prod->>'initial_stock'), ''))::numeric, 0);
     v_cost_price := COALESCE((nullif(trim(v_prod->>'cost_price'), ''))::numeric, 0);
 
-    -- 1. Insert product (with optional bulk pricing columns)
-    INSERT INTO public.products (
-      business_id,
-      name,
-      barcode,
-      category_id,
-      measurement,
-      cost_price,
-      selling_price,
-      reorder_level,
-      image_url,
-      bulk_quantity,
-      bulk_price,
-      is_active
-    ) VALUES (
-      p_business_id,
-      v_prod->>'name',
-      nullif(trim(v_prod->>'barcode'), ''),
-      nullif(trim(v_prod->>'category_id'), '')::uuid,
-      COALESCE(nullif(trim(v_prod->>'measurement'), ''), 'piece'),
-      v_cost_price,
-      (nullif(trim(v_prod->>'selling_price'), ''))::numeric,
-      COALESCE((nullif(trim(v_prod->>'reorder_level'), ''))::numeric, 5),
-      nullif(trim(v_prod->>'image_url'), ''),
-      (nullif(trim(v_prod->>'bulk_quantity'), ''))::integer,
-      (nullif(trim(v_prod->>'bulk_price'), ''))::numeric,
-      true
-    ) RETURNING id INTO v_product_id;
+    -- Resolve or create category if category_name is supplied
+    DECLARE
+      v_category_id uuid := null;
+      v_cat_name text := trim(v_prod->>'category_name');
+    BEGIN
+      IF v_cat_name IS NOT NULL AND v_cat_name <> '' THEN
+        SELECT id INTO v_category_id FROM public.categories WHERE business_id = p_business_id AND lower(name) = lower(v_cat_name) LIMIT 1;
+        IF v_category_id IS NULL THEN
+          INSERT INTO public.categories (business_id, name) VALUES (p_business_id, v_cat_name) RETURNING id INTO v_category_id;
+        END IF;
+      ELSIF (v_prod->>'category_id') IS NOT NULL AND (v_prod->>'category_id') <> '' THEN
+        v_category_id := (v_prod->>'category_id')::uuid;
+      END IF;
+
+      -- 1. Insert product (with optional bulk pricing columns)
+      INSERT INTO public.products (
+        business_id,
+        name,
+        barcode,
+        category_id,
+        cost_price,
+        selling_price,
+        reorder_level,
+        image_url,
+        bulk_quantity,
+        bulk_price,
+        is_active
+      ) VALUES (
+        p_business_id,
+        v_prod->>'name',
+        nullif(trim(v_prod->>'barcode'), ''),
+        v_category_id,
+        v_cost_price,
+        (nullif(trim(v_prod->>'selling_price'), ''))::numeric,
+        COALESCE((nullif(trim(v_prod->>'reorder_level'), ''))::numeric, 5),
+        nullif(trim(v_prod->>'image_url'), ''),
+        (nullif(trim(v_prod->>'bulk_quantity'), ''))::integer,
+        (nullif(trim(v_prod->>'bulk_price'), ''))::numeric,
+        true
+      ) RETURNING id INTO v_product_id;
+    END;
 
     -- 2. If initial stock > 0, bind it to a warehouse and record standard movement tracks
     IF v_initial_stock > 0 AND p_location_id IS NOT NULL THEN

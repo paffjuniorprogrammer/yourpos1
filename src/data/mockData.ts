@@ -11,6 +11,7 @@ import {
   ShoppingCart,
   Truck,
   Users,
+  ArrowLeftRight,
 } from "lucide-react";
 
 export type NavItem = {
@@ -62,6 +63,7 @@ export const navItems: NavItem[] = [
     roles: ["admin", "manager"],
   },
   { label: "Stock", path: "/stock", icon: PackageSearch, roles: ["admin", "manager"] },
+  { label: "Transfers", path: "/transfers", icon: ArrowLeftRight, roles: ["admin", "manager"] },
   { label: "Reports", path: "/reports", icon: BarChart3, roles: ["admin", "manager"] },
   { label: "VAT Report", path: "/vat-report", icon: ReceiptText, roles: ["admin", "manager"] },
   { label: "Settings", path: "/settings", icon: Settings, roles: ["admin"] },

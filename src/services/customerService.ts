@@ -11,6 +11,8 @@ export interface CustomerRecord {
   phone: string | null;
   email: string | null;
   address: string | null;
+  credit_limit?: number | null;
+  discount_percentage?: number | null;
   created_at: string;
 }
 
@@ -25,15 +27,26 @@ export interface CustomerFormValues {
   phone: string;
   email: string;
   address: string;
+  credit_limit?: string | number | null;
+  discount_percentage?: string | number | null;
 }
 
 function mapCustomerPayload(values: CustomerFormValues, businessId?: string) {
+  const creditLimit = values.credit_limit !== undefined && values.credit_limit !== null && values.credit_limit !== ''
+    ? Number(values.credit_limit)
+    : null;
+  const discountPct = values.discount_percentage !== undefined && values.discount_percentage !== null && values.discount_percentage !== ''
+    ? Number(values.discount_percentage)
+    : 0;
+
   return {
     full_name: values.full_name.trim(),
     business_id: businessId,
     phone: values.phone.trim() || null,
     email: values.email.trim() || null,
     address: values.address.trim() || null,
+    credit_limit: creditLimit,
+    discount_percentage: discountPct,
   };
 }
 

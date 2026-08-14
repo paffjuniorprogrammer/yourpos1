@@ -85,20 +85,27 @@ export async function listPosProducts(locationId?: string | null, limit = 500) {
       }
 
       const result = locationId
-        ? (data || []).map((product: any) => {
-          let branchStock = 0;
-          if (product.product_stocks && Array.isArray(product.product_stocks)) {
-            const stockEntry = product.product_stocks.find((s: any) => s.location_id === locationId);
-            if (stockEntry !== undefined) {
-              branchStock = stockEntry.quantity;
+        ? (data || [])
+          .filter((product: any) => {
+            if (product.product_stocks && Array.isArray(product.product_stocks)) {
+              return product.product_stocks.some((s: any) => s.location_id === locationId);
             }
-          }
-          return {
-            ...product,
-            stock_quantity: branchStock,
-            product_stocks: undefined
-          };
-        }) as any[] as PosProductRecord[]
+            return true;
+          })
+          .map((product: any) => {
+            let branchStock = 0;
+            if (product.product_stocks && Array.isArray(product.product_stocks)) {
+              const stockEntry = product.product_stocks.find((s: any) => s.location_id === locationId);
+              if (stockEntry !== undefined) {
+                branchStock = stockEntry.quantity;
+              }
+            }
+            return {
+              ...product,
+              stock_quantity: branchStock,
+              product_stocks: undefined
+            };
+          }) as any[] as PosProductRecord[]
         : (data || []) as any[] as PosProductRecord[];
 
       await db.cached_products.bulkPut(result.map((product: any) => ({

@@ -10,13 +10,12 @@ import { useNotification } from "../context/NotificationContext";
 import { useRealtimeSync } from "../hooks/useRealtimeSync";
 import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
-import { Eye, X, Printer, Check, Clock, Calendar, TrendingUp, TrendingDown, DollarSign } from "lucide-react";
+import { Eye, X, Printer, Check, Clock, Calendar, TrendingUp, TrendingDown, DollarSign, MapPin, ShoppingBag, Warehouse } from "lucide-react";
 import { getDailyReport, getRecentReturns, getRecentShifts, getReportCards, getFinancialReport, getAggregatedProductsSold, getDebtPaymentsReport, getShiftClosure } from "../services/reportsService";
+import { listLocations } from "../services/settingsService";
 import type { ReportCard, FinancialSummary } from "../services/reportsService";
 import type { DayClosureRecord } from "../types/database";
 import { formatCurrency } from "../lib/format";
-
-
 
 export function ReportsPage() {
   const { t } = useTranslation();
@@ -32,6 +31,8 @@ export function ReportsPage() {
   // Financial Filter States
   const [startDate, setStartDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [endDate, setEndDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [selectedLocation, setSelectedLocation] = useState<string>("");
+  const [locations, setLocations] = useState<any[]>([]);
   const [financialSummary, setFinancialSummary] = useState<FinancialSummary | null>(null);
   const [aggregatedProducts, setAggregatedProducts] = useState<any[]>([]);
   const [debtPayments, setDebtPayments] = useState<any[]>([]);
@@ -44,8 +45,19 @@ export function ReportsPage() {
   const [showShiftModal, setShowShiftModal] = useState(false);
   const [printShift, setPrintShift] = useState(false);
 
-
   const { run } = useAsyncAction();
+
+  useEffect(() => {
+    async function loadLocs() {
+      try {
+        const locs = await listLocations(profile?.business_id);
+        setLocations(locs);
+      } catch (err) {
+        console.error("Failed to load locations:", err);
+      }
+    }
+    loadLocs();
+  }, [profile?.business_id]);
 
   const loadReports = async (force = false) => {
     try {
@@ -76,9 +88,9 @@ export function ReportsPage() {
     try {
       setFinancialLoading(true);
       const [summary, products, debts] = await Promise.all([
-        getFinancialReport(startDate, endDate),
-        getAggregatedProductsSold(startDate, endDate),
-        getDebtPaymentsReport(startDate, endDate)
+        getFinancialReport(startDate, endDate, selectedLocation || null),
+        getAggregatedProductsSold(startDate, endDate, selectedLocation || null),
+        getDebtPaymentsReport(startDate, endDate, selectedLocation || null)
       ]);
       setFinancialSummary(summary);
       setAggregatedProducts(products);
@@ -182,6 +194,22 @@ export function ReportsPage() {
       >
         <div className="mb-8 flex flex-wrap items-end gap-6 bg-slate-50/50 p-6 rounded-3xl border border-slate-100">
           <div className="space-y-2">
+            <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Location</label>
+            <div className="relative">
+              <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+              <select
+                value={selectedLocation}
+                onChange={(e) => setSelectedLocation(e.target.value)}
+                className="rounded-2xl border border-slate-200 bg-white py-3 pl-11 pr-8 text-sm font-semibold outline-none focus:border-brand-500 transition"
+              >
+                <option value="">All Locations</option>
+                {locations.map((loc) => (
+                  <option key={loc.id} value={loc.id}>{loc.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="space-y-2">
             <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">{t('reports.finance.start_date')}</label>
             <div className="relative">
               <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
@@ -214,22 +242,24 @@ export function ReportsPage() {
           </button>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-5">
            {[
-             { label: t('reports.finance.sales'), value: financialSummary?.totalSales, icon: DollarSign, iconClass: "bg-brand-50 text-brand-600", accentClass: "bg-brand-50" },
-             { label: t('reports.finance.cost'), value: financialSummary?.totalCost, icon: TrendingDown, iconClass: "bg-slate-100 text-slate-600", accentClass: "bg-slate-100" },
-             { label: t('reports.finance.gross'), value: (financialSummary?.totalSales || 0) - (financialSummary?.totalCost || 0), icon: TrendingUp, iconClass: "bg-emerald-50 text-emerald-600", accentClass: "bg-emerald-50" },
-             { label: t('reports.finance.tax_collected'), value: financialSummary?.taxCollected, icon: Clock, iconClass: "bg-amber-50 text-amber-600", accentClass: "bg-amber-50" },
+             { label: "Total Purchases", value: financialSummary?.totalPurchases, icon: ShoppingBag, iconClass: "bg-blue-50 text-blue-600", accentClass: "bg-blue-50", desc: "Total spent on stock" },
+             { label: "Stock Value in Money", value: financialSummary?.totalStockValue, icon: Warehouse, iconClass: "bg-purple-50 text-purple-600", accentClass: "bg-purple-50", desc: "Current stock left (Cost)" },
+             { label: t('reports.finance.sales'), value: financialSummary?.totalSales, icon: DollarSign, iconClass: "bg-brand-50 text-brand-600", accentClass: "bg-brand-50", desc: "Total revenue" },
+             { label: "Gross Profit", value: financialSummary?.grossProfit, icon: TrendingUp, iconClass: "bg-emerald-50 text-emerald-600", accentClass: "bg-emerald-50", desc: "Sales minus COGS" },
+             { label: t('reports.finance.tax_collected'), value: financialSummary?.taxCollected, icon: Clock, iconClass: "bg-amber-50 text-amber-600", accentClass: "bg-amber-50", desc: "Output VAT" },
            ].map((stat) => (
-             <div key={stat.label} className="group relative overflow-hidden rounded-[2rem] border border-slate-100 bg-white p-6 shadow-sm transition hover:shadow-soft">
-               <div className={`mb-4 flex h-12 w-12 items-center justify-center rounded-2xl ${stat.iconClass}`}>
-                 <stat.icon size={22} />
+             <div key={stat.label} className="group relative overflow-hidden rounded-[2rem] border border-slate-100 bg-white p-5 shadow-sm transition hover:shadow-soft">
+               <div className={`mb-3 flex h-11 w-11 items-center justify-center rounded-2xl ${stat.iconClass}`}>
+                 <stat.icon size={20} />
                </div>
                <p className="text-xs font-bold uppercase tracking-wider text-slate-400">{stat.label}</p>
-               <p className={`mt-2 text-xl font-black text-ink`}>
-                 {Number(stat.value || 0).toLocaleString()} RWF
+               <p className="mt-1.5 text-lg font-black text-ink">
+                 {formatCurrency(stat.value || 0)}
                </p>
-               <div className={`absolute bottom-0 right-0 h-24 w-24 translate-x-12 translate-y-12 rounded-full ${stat.accentClass} opacity-20 transition group-hover:scale-150`} />
+               <p className="mt-1 text-[10px] font-semibold text-slate-400">{stat.desc}</p>
+               <div className={`absolute bottom-0 right-0 h-20 w-20 translate-x-10 translate-y-10 rounded-full ${stat.accentClass} opacity-20 transition group-hover:scale-150`} />
              </div>
            ))}
         </div>

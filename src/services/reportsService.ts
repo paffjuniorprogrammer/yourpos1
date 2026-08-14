@@ -24,8 +24,9 @@ export type FinancialSummary = {
   taxCollected: number;
   netSales: number;
   netIncome: number;
+  totalPurchases: number;
+  totalStockValue: number;
 };
-
 
 export async function getReportCards(forceRefresh = false): Promise<ReportCard[]> {
   const now = Date.now();
@@ -98,19 +99,30 @@ export async function getReportCards(forceRefresh = false): Promise<ReportCard[]
       meta: "Shift Summary"
     },
     {
-      title: "Wastage Loss",
-      value: formatCurrency(dailyLoss),
-      meta: "Damages & Expired"
+      title: "Paid Sales",
+      value: formatCurrency(paidSales),
+      meta: "Collected Today"
     },
     {
-      title: "Daily Returns",
+      title: "Unpaid Sales",
+      value: formatCurrency(unpaidSales),
+      meta: `${unpaidCount} unpaid invoices`,
+      color: unpaidSales > 0 ? "text-amber-600" : undefined
+    },
+    {
+      title: "Active Cashier",
+      value: bestCashier ? bestCashier.name : "None",
+      meta: bestCashier ? `${bestCashier.count} completed sales` : "No activity today"
+    },
+    {
+      title: "Refunds",
       value: formatCurrency(dailyReturns),
-      meta: `${todayReturns?.length || 0} items returned`
+      meta: "Approved today"
     },
     {
-      title: "Net Paid Sales",
-      value: formatCurrency(paidSales - dailyReturns),
-      meta: unpaidCount > 0 && dailySales > 0 ? `${((paidSales / dailySales) * 100).toFixed(0)}% paid (less returns)` : "After returns deducted"
+      title: "Stock Loss",
+      value: formatCurrency(dailyLoss),
+      meta: "Damaged / expired"
     }
   ];
 
@@ -258,8 +270,12 @@ export async function getRecentReturns(limit = 10) {
   return data;
 }
 
-export async function getFinancialReport(startDate: string, endDate: string): Promise<FinancialSummary> {
-  const key = `${startDate}:${endDate}`;
+export async function getFinancialReport(
+  startDate: string, 
+  endDate: string, 
+  locationId?: string | null
+): Promise<FinancialSummary> {
+  const key = `${startDate}:${endDate}:${locationId || 'all'}`;
   const now = Date.now();
   if (financialReportCache?.key === key && now - financialReportCache.timestamp < CACHE_DURATION_MS) {
     return financialReportCache.data;
@@ -268,60 +284,93 @@ export async function getFinancialReport(startDate: string, endDate: string): Pr
   const client = await ensureSupabaseConfigured();
   
   // 1. Get all paid sales in range
-  const { data: sales, error: salesError } = await client
+  let salesQuery = client
     .from('sales')
     .select('id, total_amount, tax_amount')
     .gte('created_at', `${startDate}T00:00:00.000Z`)
     .lte('created_at', `${endDate}T23:59:59.999Z`)
     .eq('payment_status', 'paid');
+
+  if (locationId) {
+    salesQuery = salesQuery.eq('location_id', locationId);
+  }
     
+  const { data: sales, error: salesError } = await salesQuery;
   if (salesError) throw salesError;
   
   const totalSales = sales?.reduce((sum, s) => sum + Number(s.total_amount), 0) || 0;
   const taxCollected = sales?.reduce((sum, s) => sum + Number(s.tax_amount), 0) || 0;
-  
-  // 2. Get all sale items for these sales to calculate cost
-  const saleIds = sales?.map(s => s.id) || [];
-  if (saleIds.length === 0) {
-    const empty = { totalSales: 0, totalCost: 0, grossProfit: 0, taxCollected: 0, netSales: 0, netIncome: 0 };
-    financialReportCache = { key, data: empty, timestamp: Date.now() };
-    return empty;
+
+  // 2. Get total purchases in range
+  let purchasesQuery = client
+    .from('purchases')
+    .select('total_amount')
+    .gte('created_at', `${startDate}T00:00:00.000Z`)
+    .lte('created_at', `${endDate}T23:59:59.999Z`);
+
+  if (locationId) {
+    purchasesQuery = purchasesQuery.eq('location_id', locationId);
   }
+
+  const { data: purchases } = await purchasesQuery;
+  const totalPurchases = purchases?.reduce((sum, p) => sum + Number(p.total_amount || 0), 0) || 0;
+
+  // 3. Get total stock value in money (current inventory value)
+  let stockQuery = client
+    .from('product_stocks')
+    .select('quantity, products(cost_price, is_active)')
+    .gt('quantity', 0);
+
+  if (locationId) {
+    stockQuery = stockQuery.eq('location_id', locationId);
+  }
+
+  const { data: stocks } = await stockQuery;
+  const totalStockValue = (stocks || []).reduce((sum, s) => {
+    if ((s.products as any)?.is_active === false) return sum;
+    const cost = Number((s.products as any)?.cost_price || 0);
+    return sum + (Number(s.quantity || 0) * cost);
+  }, 0);
   
-  // We fetch in chunks if there are too many sales (supabase 'in' limit is usually ~1000)
-  // For now, simpler:
-  const { data: items, error: itemsError } = await client
-    .from('sale_items')
-    .select('quantity, products(cost_price)')
-    .in('sale_id', saleIds);
-    
-  if (itemsError) throw itemsError;
-  
+  // 4. Get all sale items for these sales to calculate cost of goods sold
+  const saleIds = sales?.map(s => s.id) || [];
   let totalCost = 0;
-  items?.forEach(item => {
-    const cost = (item.products as any)?.cost_price || 0;
-    totalCost += cost * Number(item.quantity);
-  });
+
+  if (saleIds.length > 0) {
+    const { data: items, error: itemsError } = await client
+      .from('sale_items')
+      .select('quantity, products(cost_price)')
+      .in('sale_id', saleIds);
+      
+    if (!itemsError && items) {
+      items.forEach(item => {
+        const cost = (item.products as any)?.cost_price || 0;
+        totalCost += cost * Number(item.quantity);
+      });
+    }
+  }
   
   const netSales = totalSales - taxCollected;
   const grossProfit = totalSales - totalCost;
   const netIncome = netSales - totalCost;
   
-  const result = {
+  const result: FinancialSummary = {
     totalSales,
     totalCost,
     grossProfit,
     taxCollected,
     netSales,
-    netIncome
+    netIncome,
+    totalPurchases,
+    totalStockValue,
   };
 
   financialReportCache = { key, data: result, timestamp: Date.now() };
   return result;
 }
 
-export async function getAggregatedProductsSold(startDate: string, endDate: string) {
-  const key = `${startDate}:${endDate}`;
+export async function getAggregatedProductsSold(startDate: string, endDate: string, locationId?: string | null) {
+  const key = `${startDate}:${endDate}:${locationId || 'all'}`;
   const now = Date.now();
   if (productsSoldCache?.key === key && now - productsSoldCache.timestamp < CACHE_DURATION_MS) {
     return productsSoldCache.data;
@@ -329,11 +378,17 @@ export async function getAggregatedProductsSold(startDate: string, endDate: stri
 
   const client = await ensureSupabaseConfigured();
 
-  const { data: sales, error: salesError } = await client
+  let salesQuery = client
     .from('sales')
     .select('id')
     .gte('created_at', `${startDate}T00:00:00.000Z`)
     .lte('created_at', `${endDate}T23:59:59.999Z`);
+
+  if (locationId) {
+    salesQuery = salesQuery.eq('location_id', locationId);
+  }
+
+  const { data: sales, error: salesError } = await salesQuery;
 
   if (salesError) throw salesError;
 
@@ -367,8 +422,8 @@ export async function getAggregatedProductsSold(startDate: string, endDate: stri
   return result;
 }
 
-export async function getDebtPaymentsReport(startDate: string, endDate: string) {
-  const key = `${startDate}:${endDate}`;
+export async function getDebtPaymentsReport(startDate: string, endDate: string, locationId?: string | null) {
+  const key = `${startDate}:${endDate}:${locationId || 'all'}`;
   const now = Date.now();
   if (debtPaymentsCache?.key === key && now - debtPaymentsCache.timestamp < CACHE_DURATION_MS) {
     return debtPaymentsCache.data;
@@ -376,9 +431,7 @@ export async function getDebtPaymentsReport(startDate: string, endDate: string) 
 
   const client = await ensureSupabaseConfigured();
 
-  // Debt payments are those where a payment is made, and the sale has a customer.
-  // The 'sale_payments' table doesn't have cashier_id or customer_id, so we must join 'sales'.
-  const { data: payments, error: paymentsError } = await client
+  let paymentsQuery = client
     .from('sale_payments')
     .select(`
       id,
@@ -388,6 +441,7 @@ export async function getDebtPaymentsReport(startDate: string, endDate: string) 
         sale_number,
         customer_id,
         cashier_id,
+        location_id,
         created_at,
         customers(full_name),
         users(full_name)
@@ -395,19 +449,19 @@ export async function getDebtPaymentsReport(startDate: string, endDate: string) 
     `)
     .gte('paid_at', `${startDate}T00:00:00.000Z`)
     .lte('paid_at', `${endDate}T23:59:59.999Z`)
-    .gt('amount', 0); // Exclude 0 amount payments if any
+    .gt('amount', 0);
+
+  if (locationId) {
+    paymentsQuery = paymentsQuery.eq('sales.location_id', locationId);
+  }
+
+  const { data: payments, error: paymentsError } = await paymentsQuery;
 
   if (paymentsError) throw paymentsError;
 
-  // Filter for payments where the sale has a customer and the payment is not at the EXACT same time as the sale creation
-  // Or simpler: just list payments for known customers. A "debt payment" usually implies an existing customer balance.
   const debtPayments = payments?.filter((p: any) => {
     const sale = p.sales as any;
-    if (!sale.customer_id) return false;
-    
-    // Simple heuristic: If the payment was made after the sale date (different day or significantly later), it's a debt payment.
-    // However, if a client pays a deposit on the spot, it's also a payment towards their debt. 
-    // To be comprehensive as requested, we return all payments from customers.
+    if (!sale?.customer_id) return false;
     return true;
   }).map((p: any) => {
     const sale = p.sales as any;

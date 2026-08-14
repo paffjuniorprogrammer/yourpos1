@@ -86,6 +86,8 @@ export type CustomerRecord = {
   phone: string | null;
   email: string | null;
   address: string | null;
+  credit_limit?: number | null;
+  discount_percentage?: number | null;
   created_at: string;
 };
 
@@ -242,12 +244,12 @@ export type PosSalePaymentInput = {
 
 export type ProductFormValues = {
   name: string;
-  category_id: string;
-  barcode: string;
-  measurement: "kg" | "piece";
-  cost_price: string;
-  selling_price: string;
-  image_url: string;
+  category_id?: string;
+  barcode?: string;
+  measurement?: "kg" | "piece";
+  cost_price: string | number;
+  selling_price: string | number;
+  image_url?: string;
   bulk_quantity?: string | number | null;
   bulk_price?: string | number | null;
   bulk_pricing_mode?: 'fixed' | 'discount_amount' | 'discount_percentage' | null;
@@ -255,6 +257,8 @@ export type ProductFormValues = {
   parent_id?: string | null;
   is_parent?: boolean;
   variant_combination?: any | null;
+  location_ids?: string[];
+  all_locations?: boolean;
 };
 
 export type CustomerFormValues = {
@@ -262,6 +266,8 @@ export type CustomerFormValues = {
   phone: string;
   email: string;
   address: string;
+  credit_limit?: string | number | null;
+  discount_percentage?: string | number | null;
 };
 
 export type SupplierFormValues = {

@@ -19,6 +19,8 @@ type CustomerRow = {
   totalPurchase: number;
   unpaidAmount: number;
   address: string;
+  creditLimit: number | null;
+  discountPercentage: number;
   sales: any[];
 };
 
@@ -27,12 +29,16 @@ type CustomerForm = {
   name: string;
   contact: string;
   address: string;
+  creditLimit: string;
+  discountPercentage: string;
 };
 
 const initialForm: CustomerForm = {
   name: "",
   contact: "",
   address: "",
+  creditLimit: "",
+  discountPercentage: "",
 };
 
 export function CustomersPage() {
@@ -61,6 +67,8 @@ export function CustomersPage() {
         totalPurchase: customer.total_spent,
         unpaidAmount: customer.unpaid_balance,
         address: customer.address || "Not available",
+        creditLimit: customer.credit_limit || null,
+        discountPercentage: customer.discount_percentage || 0,
         sales: customer.sales || [],
       })),
     );
@@ -118,6 +126,8 @@ export function CustomersPage() {
       name: row.name,
       contact: row.contact,
       address: row.address,
+      creditLimit: row.creditLimit !== null ? String(row.creditLimit) : "",
+      discountPercentage: String(row.discountPercentage || "0"),
     });
     setFormErrors({});
     setFormOpen(true);
@@ -144,6 +154,9 @@ export function CustomersPage() {
 
     setFormErrors({});
 
+    const creditLim = formValues.creditLimit.trim() ? parseFloat(formValues.creditLimit) : null;
+    const discPct = formValues.discountPercentage.trim() ? parseFloat(formValues.discountPercentage) : 0;
+
     const nextRow: CustomerRow = {
       id: formValues.id ?? `CUS-${String(rows.length + 201).padStart(4, "0")}`,
       name: formValues.name.trim(),
@@ -151,6 +164,8 @@ export function CustomersPage() {
       totalPurchase: 0,
       unpaidAmount: 0,
       address: formValues.address.trim() || "",
+      creditLimit: creditLim,
+      discountPercentage: discPct,
       sales: formValues.id
         ? rows.find((row) => row.id === formValues.id)?.sales ?? []
         : [],
@@ -167,6 +182,8 @@ export function CustomersPage() {
           phone: formValues.contact.trim(),
           email: "",
           address: formValues.address.trim(),
+          credit_limit: creditLim,
+          discount_percentage: discPct,
         }, business.id);
         nextRow.id = customer.id;
       } catch (error: any) {
@@ -181,8 +198,9 @@ export function CustomersPage() {
           phone: formValues.contact.trim(),
           email: "",
           address: formValues.address.trim(),
+          credit_limit: creditLim,
+          discount_percentage: discPct,
         });
-        // ID remains the same
       } catch (error: any) {
         console.error("Failed to update customer:", error);
         showToast("error", error?.message || "Failed to update customer.");
@@ -412,6 +430,34 @@ export function CustomersPage() {
                   placeholder={t('customers.modal.address_placeholder')}
                 />
                 {formErrors.address ? <p className="mt-2 text-xs text-rose-600">{formErrors.address}</p> : null}
+              </label>
+
+              <label className="rounded-2xl bg-amber-50 p-3">
+                <span className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">Credit Limit (FRW)</span>
+                <input
+                  type="number"
+                  min="0"
+                  value={formValues.creditLimit}
+                  onChange={(event) => setFormValues((current) => ({ ...current, creditLimit: event.target.value }))}
+                  className="mt-2 w-full rounded-xl border border-amber-200 bg-white px-3 py-2.5 text-sm font-bold text-amber-900 outline-none"
+                  placeholder="e.g. 500000 (leave blank for unlimited)"
+                />
+                <p className="mt-1 text-[10px] text-amber-600">Maximum debt allowed on credit sales</p>
+              </label>
+
+              <label className="rounded-2xl bg-emerald-50 p-3">
+                <span className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Custom Discount (%)</span>
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.1"
+                  value={formValues.discountPercentage}
+                  onChange={(event) => setFormValues((current) => ({ ...current, discountPercentage: event.target.value }))}
+                  className="mt-2 w-full rounded-xl border border-emerald-200 bg-white px-3 py-2.5 text-sm font-bold text-emerald-900 outline-none"
+                  placeholder="e.g. 1  (1% off purchases)"
+                />
+                <p className="mt-1 text-[10px] text-emerald-600">Default discount percentage applied at checkout</p>
               </label>
 
             </div>
