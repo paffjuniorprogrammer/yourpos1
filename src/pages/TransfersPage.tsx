@@ -5,6 +5,7 @@ import {
   Eye, 
   Pencil, 
   Plus, 
+  Printer,
   Search, 
   X,
 } from "lucide-react";
@@ -262,6 +263,18 @@ export function TransfersPage() {
     } catch (error: any) {
       showToast("error", `Failed to update status: ${error.message}`);
     }
+  }
+
+  function printTransfer(transfer: TransferRecord) {
+    const escapeHtml = (value: string | number) => String(value).replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#039;', '"': '&quot;' }[character] || character));
+    const printWindow = window.open("", "_blank", "width=900,height=700");
+    if (!printWindow) {
+      showToast("error", "Please allow pop-ups to print the transfer.");
+      return;
+    }
+    const rows = transfer.lines.map((line, index) => `<tr><td>${index + 1}</td><td>${escapeHtml(line.name)}</td><td class="right">${line.sendQty}</td></tr>`).join("");
+    printWindow.document.write(`<!doctype html><html><head><title>Transfer ${escapeHtml(transfer.transferNumber || transfer.id)}</title><style>body{font-family:Arial,sans-serif;color:#111827;padding:32px}header{display:flex;justify-content:space-between;border-bottom:2px solid #111827;padding-bottom:18px;margin-bottom:24px}h1{margin:0;font-size:26px}table{width:100%;border-collapse:collapse;margin-top:20px}th,td{border:1px solid #cbd5e1;padding:10px;text-align:left}th{background:#f1f5f9}.right{text-align:right}.meta{line-height:1.8}@media print{body{padding:0}}</style></head><body><header><div><h1>Stock Transfer Note</h1><p>Transfer #${escapeHtml(transfer.transferNumber || transfer.id)}</p></div><div><strong>${escapeHtml(business?.name || "Retail POS")}</strong><p>Printed: ${new Date().toLocaleString()}</p></div></header><div class="meta"><p><strong>From:</strong> ${escapeHtml(transfer.fromStock)}</p><p><strong>To:</strong> ${escapeHtml(transfer.toStock)}</p><p><strong>Status:</strong> ${escapeHtml(transfer.status)}</p><p><strong>Prepared by:</strong> ${escapeHtml(transfer.createdBy)}</p><p><strong>Created:</strong> ${escapeHtml(transfer.createdAt)}</p></div><table><thead><tr><th>#</th><th>Product</th><th class="right">Quantity</th></tr></thead><tbody>${rows}</tbody></table><div style="margin-top:70px;display:flex;justify-content:space-between"><div>Prepared by: ____________________</div><div>Received by: ____________________</div></div><script>window.onload=()=>window.print();<\/script></body></html>`);
+    printWindow.document.close();
   }
 
   return (
@@ -622,6 +635,13 @@ export function TransfersPage() {
                 </tbody>
               </table>
             </div>
+            <button
+              type="button"
+              onClick={() => printTransfer(selectedTransfer)}
+              className="mb-3 flex w-full items-center justify-center gap-2 rounded-xl border border-brand-200 bg-brand-50 py-2.5 text-sm font-bold text-brand-700 hover:bg-brand-100"
+            >
+              <Printer size={16} /> Print Transfer Note
+            </button>
             <button
               type="button"
               onClick={() => setSelectedTransfer(null)}

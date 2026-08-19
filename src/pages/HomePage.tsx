@@ -1,15 +1,15 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowRight,
   BarChart3,
   Boxes,
-  Clock3,
   CheckCircle2,
   CreditCard,
   FileText,
   Globe2,
   Headphones,
-  LockKeyhole,
+  Monitor,
   PackagePlus,
   Receipt,
   ScanLine,
@@ -17,348 +17,472 @@ import {
   Sparkles,
   ShoppingCart,
   Store,
+  Truck,
   Users,
+  Zap,
+  TrendingUp,
+  Wallet,
+  Clock3,
+  Star,
+  ChevronRight,
 } from "lucide-react";
 
-const metrics = [
-  { label: "Daily sales", value: "1.24M RWF", color: "text-emerald-600" },
-  { label: "Stock alerts", value: "18", color: "text-amber-600" },
-  { label: "Active users", value: "42", color: "text-brand-600" },
-];
-
-const productRows = [
-  ["BlueBand Milk 1L", "Dairy", "2,500", "3,250"],
-  ["Golden Rice 5kg", "Groceries", "11,000", "14,300"],
-  ["Spark Soap", "Home Care", "800", "1,040"],
-];
-
-const flows = [
+// ─── Feature screens data ─────────────────────────────────────────────────────
+const screens = [
   {
-    icon: Store,
-    title: "Run the counter",
-    text: "Fast POS checkout with product search, barcode scanning, customer selection, payments, receipts, and returns.",
-  },
-  {
-    icon: Boxes,
-    title: "Control inventory",
-    text: "Track product stock, low-stock alerts, stock counts, transfers, purchases, suppliers, and requisitions.",
-  },
-  {
+    id: "dashboard",
+    label: "Dashboard",
+    badge: "Business Overview",
     icon: BarChart3,
-    title: "Know the numbers",
-    text: "See sales, purchases, profit, customer activity, and product movement from one dashboard.",
+    color: "brand",
+    title: "See your whole business at a glance",
+    description:
+      "Every morning, open the dashboard and instantly know: today's sales, total revenue, what customers owe you, what you owe suppliers, and stock alerts. No digging through papers.",
+    highlights: [
+      "Daily & monthly revenue totals",
+      "VAT summary (Output, Input, Payable)",
+      "Weekly sales trend chart",
+      "Recent transactions list",
+      "Stock alert notifications",
+    ],
+    image: "/screenshots/dashboard.png",
   },
   {
-    icon: CreditCard,
-    title: "Protect access",
-    text: "Subscription status keeps each business active only when the plan is paid and approved.",
+    id: "pos",
+    label: "POS Checkout",
+    badge: "Point of Sale",
+    icon: ShoppingCart,
+    color: "slate",
+    title: "Sell faster with a cashier-first checkout",
+    description:
+      "Your staff scan or click products, see the cart update in real time, apply discounts, collect payment by Cash, MoMo, Card, or Credit — then print a receipt in seconds.",
+    highlights: [
+      "Product search + barcode scanning",
+      "Instant cart with quantity controls",
+      "Per-item & order discounts",
+      "Tax (18% VAT) auto-calculated",
+      "One-click Checkout button",
+    ],
+    image: "/screenshots/pos.png",
+  },
+  {
+    id: "products",
+    label: "Products",
+    badge: "Inventory Management",
+    icon: Boxes,
+    color: "emerald",
+    title: "Manage every product, price, and stock level",
+    description:
+      "Add products with cost price, auto-calculated selling price, barcode, category, and stock level. See which items are low or out-of-stock before they become a problem.",
+    highlights: [
+      "Cost & selling price with profit margin",
+      "Category filtering",
+      "Stock level with color alerts (red = out)",
+      "Export, Template & Import tools",
+      "Multi-branch stock view",
+    ],
+    image: "/screenshots/products.png",
+  },
+  {
+    id: "sales",
+    label: "Sales",
+    badge: "Sales Management",
+    icon: Receipt,
+    color: "purple",
+    title: "Track every sale, return, and payment status",
+    description:
+      "Full history of every sale made by every cashier. Filter by customer, cashier, or date. See who paid, who owes, and print or reprint receipts anytime.",
+    highlights: [
+      "Paid, Partial & Unpaid status badges",
+      "Filter by customer, cashier & date",
+      "Receipt reprint from any sale",
+      "Sales returns support",
+      "28+ sales tracked per page",
+    ],
+    image: "/screenshots/sales.png",
+  },
+  {
+    id: "purchases",
+    label: "Purchases",
+    badge: "Supplier Orders",
+    icon: Truck,
+    color: "amber",
+    title: "Track what you buy and what you owe suppliers",
+    description:
+      "Record every purchase order with supplier, amount, payment status, and delivery status. Know exactly how much is Due, Partially Paid, or fully Paid — and when stock arrived.",
+    highlights: [
+      "Purchase orders with PO numbers",
+      "Payment tracking (Due / Partially Paid / Paid)",
+      "Delivery status (Received / Pending)",
+      "Supplier management",
+      "Multi-branch location tracking",
+    ],
+    image: "/screenshots/purchases.png",
   },
 ];
 
-const walkthrough = [
-  {
-    label: "01",
-    title: "Add products with admin profit",
-    text: "The admin sets the default profit percentage in Settings. Product selling prices are suggested from that exact setting.",
-  },
-  {
-    label: "02",
-    title: "Sell and print receipts",
-    text: "Staff scan products, take payment, and print clean receipts without leaving the checkout screen.",
-  },
-  {
-    label: "03",
-    title: "Review reports",
-    text: "Owners watch stock, sales, purchases, profit, suppliers, and customers from the same system.",
-  },
+const stats = [
+  { value: "64,900", unit: "RWF", label: "Sales in one day", icon: TrendingUp, color: "text-emerald-600" },
+  { value: "125,700", unit: "RWF", label: "Revenue this month", icon: Wallet, color: "text-brand-600" },
+  { value: "28+", unit: "", label: "Sales tracked", icon: Receipt, color: "text-purple-600" },
+  { value: "3", unit: "Languages", label: "EN · RW · FR", icon: Globe2, color: "text-amber-600" },
 ];
 
-const trustPills = [
-  { icon: Clock3, label: "Fast checkout" },
-  { icon: Globe2, label: "Works for many shops" },
-  { icon: Headphones, label: "Built for support" },
+const featuresList = [
+  { icon: Store, title: "POS Checkout", text: "Fast cashier screen with product search, barcode scan, discounts, and multi-payment types." },
+  { icon: Boxes, title: "Inventory Control", text: "Products, stock counts, stock alerts, transfers, and multi-branch visibility." },
+  { icon: Truck, title: "Purchases & Suppliers", text: "Purchase orders, supplier payments, delivery tracking, and supplier credit." },
+  { icon: Users, title: "Customer Credit", text: "Customer accounts with credit limits, discount settings, and unpaid balance tracking." },
+  { icon: BarChart3, title: "Reports & VAT", text: "Sales reports, profit reports, VAT summary, and Z-Reports for shift closures." },
+  { icon: ShieldCheck, title: "Subscription Guard", text: "Subscription control ensures only active paying businesses can access the system." },
+  { icon: ScanLine, title: "Barcode Scanning", text: "Built-in barcode scanner support for fast product lookup at the counter." },
+  { icon: PackagePlus, title: "Requisitions", text: "Staff can request stock internally and admins approve or reject each request." },
 ];
 
-const impactStats = [
-  { value: "80mm", label: "Readable receipts", color: "text-emerald-600" },
-  { value: "A4", label: "Signed invoices", color: "text-brand-600" },
-  { value: "24/7", label: "Subscription control", color: "text-amber-600" },
-];
-
-function DashboardSnapshot() {
-  return (
-    <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_28px_80px_rgba(15,23,42,0.12)]">
-      <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
-        <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-600">Dashboard</p>
-          <h3 className="mt-1 text-lg font-black text-ink">Business overview</h3>
-        </div>
-        <div className="rounded-2xl bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-700">Active</div>
-      </div>
-      <div className="grid gap-3 p-5 sm:grid-cols-3">
-        {metrics.map((item) => (
-          <div key={item.label} className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
-            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">{item.label}</p>
-            <p className={`mt-3 text-xl font-black ${item.color}`}>{item.value}</p>
-          </div>
-        ))}
-      </div>
-      <div className="grid gap-4 px-5 pb-5 lg:grid-cols-[1.2fr_0.8fr]">
-        <div className="h-44 rounded-2xl border border-slate-100 bg-gradient-to-b from-slate-50 to-brand-50 p-4">
-          <div className="flex h-full items-end gap-2">
-            {[32, 58, 44, 72, 63, 88, 70, 96].map((height, index) => (
-              <div key={index} className="flex-1 rounded-t-xl bg-gradient-to-t from-brand-700 to-sky-400" style={{ height: `${height}%` }} />
-            ))}
-          </div>
-        </div>
-        <div className="space-y-3">
-          {["POS sales synced", "Supplier invoice added", "Low stock checked"].map((item) => (
-            <div key={item} className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-white p-3">
-              <CheckCircle2 size={18} className="text-emerald-500" />
-              <span className="text-sm font-bold text-slate-700">{item}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ProductSnapshot() {
-  return (
-    <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_24px_70px_rgba(15,23,42,0.10)]">
-      <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
-        <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-600">Products</p>
-          <h3 className="mt-1 text-lg font-black text-ink">Admin profit pricing</h3>
-        </div>
-        <PackagePlus className="text-brand-600" size={22} />
-      </div>
-      <div className="p-5">
-        <div className="grid gap-3 md:grid-cols-3">
-          <div className="rounded-2xl bg-slate-50 p-4">
-            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Cost price</p>
-            <p className="mt-2 text-lg font-black text-ink">10,000 RWF</p>
-          </div>
-          <div className="rounded-2xl bg-brand-50 p-4">
-            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-brand-700">Admin profit</p>
-            <p className="mt-2 text-lg font-black text-brand-700">30%</p>
-          </div>
-          <div className="rounded-2xl bg-emerald-50 p-4">
-            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-700">Suggested selling</p>
-            <p className="mt-2 text-lg font-black text-emerald-700">13,000 RWF</p>
-          </div>
-        </div>
-        <div className="mt-5 overflow-hidden rounded-2xl border border-slate-100">
-          {productRows.map(([name, category, cost, selling]) => (
-            <div key={name} className="grid grid-cols-[1.2fr_0.8fr_0.7fr_0.7fr] gap-3 border-b border-slate-100 px-4 py-3 text-xs last:border-b-0">
-              <span className="font-bold text-ink">{name}</span>
-              <span className="text-slate-500">{category}</span>
-              <span className="text-right text-slate-500">{cost}</span>
-              <span className="text-right font-black text-brand-700">{selling}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function PosSnapshot() {
-  return (
-    <div className="overflow-hidden rounded-3xl border border-slate-800 bg-slate-950 text-white shadow-[0_24px_70px_rgba(15,23,42,0.18)]">
-      <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
-        <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-200">POS checkout</p>
-          <h3 className="mt-1 text-lg font-black">Scan, sell, print</h3>
-        </div>
-        <ScanLine className="text-blue-200" size={22} />
-      </div>
-      <div className="grid gap-4 p-5 md:grid-cols-[1fr_0.75fr]">
-        <div className="grid grid-cols-2 gap-3">
-          {["Milk", "Rice", "Soap", "Juice"].map((name, index) => (
-            <div key={name} className="rounded-2xl bg-white/10 p-4">
-              <div className="mb-4 h-16 rounded-xl bg-white/10" />
-              <p className="font-black">{name}</p>
-              <p className="mt-1 text-xs text-blue-100">{(index + 1) * 1200} RWF</p>
-            </div>
-          ))}
-        </div>
-        <div className="rounded-2xl bg-white p-4 text-ink">
-          <div className="mb-4 flex items-center gap-2">
-            <ShoppingCart size={18} className="text-brand-600" />
-            <p className="font-black">Current cart</p>
-          </div>
-          {["BlueBand Milk x2", "Golden Rice x1", "Spark Soap x3"].map((item) => (
-            <div key={item} className="flex justify-between border-b border-slate-100 py-3 text-sm">
-              <span className="font-semibold text-slate-600">{item}</span>
-              <span className="font-black">RWF</span>
-            </div>
-          ))}
-          <div className="mt-5 rounded-2xl bg-brand-600 px-4 py-3 text-center text-sm font-black text-white">
-            Pay and print receipt
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
+const colorMap: Record<string, { badge: string; ring: string; dot: string }> = {
+  brand:   { badge: "bg-brand-50 text-brand-700 border-brand-100",   ring: "ring-brand-200",   dot: "bg-brand-500" },
+  slate:   { badge: "bg-slate-800 text-blue-200 border-slate-700",   ring: "ring-slate-700",   dot: "bg-blue-400" },
+  emerald: { badge: "bg-emerald-50 text-emerald-700 border-emerald-100", ring: "ring-emerald-200", dot: "bg-emerald-500" },
+  purple:  { badge: "bg-purple-50 text-purple-700 border-purple-100", ring: "ring-purple-200",  dot: "bg-purple-500" },
+  amber:   { badge: "bg-amber-50 text-amber-700 border-amber-100",   ring: "ring-amber-200",   dot: "bg-amber-500" },
+};
 
 export function HomePage() {
   const navigate = useNavigate();
+  const [activeScreen, setActiveScreen] = useState(0);
+  const active = screens[activeScreen];
+  const colors = colorMap[active.color];
 
   return (
-    <div className="min-h-screen bg-transparent text-ink">
-      <header className="mx-auto flex max-w-7xl items-center justify-between px-4 py-5 sm:px-6 lg:px-8">
-        <button onClick={() => navigate("/")} className="flex items-center gap-3 text-left">
-          <img src="/pos-logo.jpg" alt="POS logo" className="h-11 w-11 rounded-2xl object-cover shadow-soft" />
-          <div>
-            <p className="text-sm font-black uppercase tracking-[0.18em] text-ink">POS System</p>
-            <p className="text-xs font-semibold text-slate-500">Sales, stock, reports</p>
+    <div className="min-h-screen bg-[#f8f9fb] text-ink">
+
+      {/* ── NAV ──────────────────────────────────────────────────────────────── */}
+      <header className="sticky top-0 z-50 border-b border-slate-200/80 bg-white/90 backdrop-blur-md">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
+          <button onClick={() => navigate("/")} className="flex items-center gap-3 text-left">
+            <img src="/pos-logo.jpg" alt="POS logo" className="h-10 w-10 rounded-xl object-cover shadow-sm" />
+            <div>
+              <p className="text-sm font-black uppercase tracking-[0.18em] text-ink">YourPOS</p>
+              <p className="text-[11px] font-semibold text-slate-400">Sales · Stock · Reports</p>
+            </div>
+          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => navigate("/subscription")}
+              className="hidden rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-600 transition hover:bg-slate-50 sm:inline-flex"
+            >
+              Pricing
+            </button>
+            <button
+              onClick={() => navigate("/login")}
+              className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-slate-800"
+            >
+              Login <ArrowRight size={15} />
+            </button>
           </div>
-        </button>
-        <button
-          onClick={() => navigate("/login")}
-          className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-5 py-3 text-sm font-bold text-white transition hover:bg-slate-800"
-        >
-          Login <ArrowRight size={16} />
-        </button>
+        </div>
       </header>
 
       <main>
-        <section className="mx-auto grid max-w-7xl items-center gap-10 px-4 pb-12 pt-8 sm:px-6 lg:grid-cols-[0.88fr_1.12fr] lg:px-8 lg:pb-20">
-          <div>
+
+        {/* ── HERO ─────────────────────────────────────────────────────────────── */}
+        <section className="mx-auto max-w-7xl px-4 pb-16 pt-14 sm:px-6 lg:px-8">
+          <div className="text-center">
             <div className="inline-flex items-center gap-2 rounded-full border border-brand-100 bg-white px-4 py-2 text-xs font-black uppercase tracking-[0.18em] text-brand-700 shadow-sm">
-              <Sparkles size={14} /> Point of Sale + Inventory + Subscription
+              <Sparkles size={13} /> Complete POS System for Rwandan Shops
             </div>
-            <h1 className="mt-5 max-w-3xl text-4xl font-black tracking-tight text-ink sm:text-5xl lg:text-6xl">
-              A complete shop system for selling, stock, staff, and renewals.
+            <h1 className="mx-auto mt-6 max-w-4xl text-4xl font-black tracking-tight text-ink sm:text-5xl lg:text-6xl">
+              Sell smarter. Track everything.{" "}
+              <span className="bg-gradient-to-r from-brand-600 to-sky-500 bg-clip-text text-transparent">
+                Grow your shop.
+              </span>
             </h1>
-            <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-600">
-              Manage products, purchases, suppliers, customers, sales, stock counts, reports, and subscription access in one clean business dashboard.
+            <p className="mx-auto mt-6 max-w-2xl text-lg leading-8 text-slate-500">
+              One system for your cashier, your warehouse, your accountant, and your manager.
+              Works in Kinyarwanda, English, and French.
             </p>
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+            <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
               <button
                 onClick={() => navigate("/login")}
-                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-brand-600 px-6 py-4 text-sm font-black text-white shadow-soft transition hover:bg-brand-700"
+                className="inline-flex items-center gap-2 rounded-2xl bg-brand-600 px-7 py-4 text-sm font-black text-white shadow-lg shadow-brand-500/25 transition hover:bg-brand-700"
               >
-                Start using the system <ArrowRight size={18} />
+                Start using the system <ArrowRight size={17} />
               </button>
               <button
                 onClick={() => navigate("/subscription")}
-                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-6 py-4 text-sm font-black text-slate-700 transition hover:bg-slate-50"
+                className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-7 py-4 text-sm font-black text-slate-700 transition hover:bg-slate-50"
               >
-                View subscription <CreditCard size={18} />
+                View subscription plans <CreditCard size={17} />
               </button>
             </div>
-            <div className="mt-7 flex flex-wrap gap-3">
-              {trustPills.map((item) => (
-                <span key={item.label} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-700 shadow-sm">
-                  <item.icon size={14} className="text-brand-600" /> {item.label}
+            {/* trust row */}
+            <div className="mt-8 flex flex-wrap items-center justify-center gap-6 text-xs font-bold text-slate-500">
+              {[
+                { icon: Zap, text: "Fast checkout" },
+                { icon: Globe2, text: "3 Languages" },
+                { icon: Clock3, text: "Shift reports" },
+                { icon: Headphones, text: "Locally supported" },
+                { icon: Monitor, text: "Works on any screen" },
+              ].map((t) => (
+                <span key={t.text} className="flex items-center gap-1.5">
+                  <t.icon size={13} className="text-brand-500" /> {t.text}
                 </span>
               ))}
             </div>
           </div>
 
-          <DashboardSnapshot />
+          {/* hero screenshot — dashboard */}
+          <div className="relative mx-auto mt-14 max-w-5xl">
+            <div className="absolute -inset-4 rounded-[2rem] bg-gradient-to-br from-brand-100 via-sky-100 to-slate-100 blur-2xl opacity-60" />
+            <div className="relative overflow-hidden rounded-[1.5rem] border border-slate-200 shadow-[0_32px_100px_rgba(15,23,42,0.15)]">
+              <img
+                src="/screenshots/dashboard.png"
+                alt="YourPOS Dashboard"
+                className="w-full object-cover"
+              />
+            </div>
+            <div className="absolute -bottom-5 left-8 flex items-center gap-2 rounded-2xl bg-white px-4 py-2.5 shadow-lg border border-slate-100">
+              <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-sm font-bold text-slate-700">Live dashboard — all branches synced</span>
+            </div>
+          </div>
         </section>
 
-        <section className="border-y border-slate-200 bg-white/80">
-          <div className="mx-auto grid max-w-7xl gap-4 px-4 py-8 sm:px-6 md:grid-cols-4 lg:px-8">
-            {flows.map((item) => (
-              <div key={item.title} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-1 hover:shadow-soft">
-                <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-brand-50 text-brand-600">
-                  <item.icon size={23} />
-                </div>
-                <h2 className="mt-4 text-base font-black text-ink">{item.title}</h2>
-                <p className="mt-2 text-sm leading-6 text-slate-600">{item.text}</p>
+        {/* ── STATS BAR ────────────────────────────────────────────────────────── */}
+        <section className="border-y border-slate-200 bg-white">
+          <div className="mx-auto grid max-w-7xl grid-cols-2 divide-x divide-slate-100 px-4 sm:px-6 md:grid-cols-4 lg:px-8">
+            {stats.map((s) => (
+              <div key={s.label} className="flex flex-col items-center gap-1 px-4 py-8 text-center">
+                <s.icon size={18} className={s.color} />
+                <p className={`mt-1 text-2xl font-black ${s.color}`}>
+                  {s.value}<span className="ml-1 text-base">{s.unit}</span>
+                </p>
+                <p className="text-xs font-semibold text-slate-500">{s.label}</p>
               </div>
             ))}
           </div>
         </section>
 
-        <section className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
-          <div className="grid gap-4 rounded-3xl border border-slate-200 bg-white p-5 shadow-soft md:grid-cols-3">
-            {impactStats.map((item) => (
-              <div key={item.label} className="rounded-2xl bg-slate-50 p-5">
-                <p className={`text-3xl font-black ${item.color}`}>{item.value}</p>
-                <p className="mt-1 text-sm font-bold text-slate-600">{item.label}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
-          <div className="max-w-3xl">
-            <p className="text-sm font-black uppercase tracking-[0.22em] text-brand-600">System screenshots</p>
-            <h2 className="mt-3 text-3xl font-black text-ink sm:text-4xl">Show customers how the system works, step by step.</h2>
-            <p className="mt-4 text-base leading-7 text-slate-600">
-              The homepage now previews the same screens users will work with: product pricing, POS checkout, inventory, reports, and subscription protection.
+        {/* ── SCREENSHOT SHOWCASE ──────────────────────────────────────────────── */}
+        <section className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
+          <div className="text-center">
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-brand-600">See it in action</p>
+            <h2 className="mx-auto mt-3 max-w-2xl text-3xl font-black text-ink sm:text-4xl">
+              Real screenshots from the real system
+            </h2>
+            <p className="mx-auto mt-4 max-w-xl text-base text-slate-500">
+              Every screen you see here is what your team will use every day. No mockups — this is the actual software.
             </p>
           </div>
 
-          <div className="mt-10 grid gap-6 lg:grid-cols-2">
-            <ProductSnapshot />
-            <PosSnapshot />
+          {/* tab pills */}
+          <div className="mt-10 flex flex-wrap justify-center gap-2">
+            {screens.map((s, i) => {
+              const c = colorMap[s.color];
+              return (
+                <button
+                  key={s.id}
+                  onClick={() => setActiveScreen(i)}
+                  className={`flex items-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-bold transition ${
+                    activeScreen === i
+                      ? `border ${c.badge} shadow-sm`
+                      : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  <s.icon size={15} />
+                  {s.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* content */}
+          <div className="mt-10 grid gap-10 lg:grid-cols-[1fr_1.7fr] lg:items-center">
+            {/* left: description */}
+            <div>
+              <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-black uppercase tracking-widest ${colors.badge}`}>
+                <span className={`h-1.5 w-1.5 rounded-full ${colors.dot}`} />
+                {active.badge}
+              </span>
+              <h3 className="mt-4 text-2xl font-black text-ink sm:text-3xl">{active.title}</h3>
+              <p className="mt-4 text-base leading-7 text-slate-500">{active.description}</p>
+              <ul className="mt-6 space-y-3">
+                {active.highlights.map((h) => (
+                  <li key={h} className="flex items-center gap-3 text-sm font-semibold text-slate-700">
+                    <CheckCircle2 size={16} className="shrink-0 text-emerald-500" />
+                    {h}
+                  </li>
+                ))}
+              </ul>
+              <button
+                onClick={() => navigate("/login")}
+                className="mt-8 inline-flex items-center gap-2 rounded-xl bg-slate-950 px-5 py-3 text-sm font-bold text-white transition hover:bg-slate-800"
+              >
+                Try it now <ChevronRight size={15} />
+              </button>
+            </div>
+
+            {/* right: screenshot */}
+            <div className={`overflow-hidden rounded-2xl border ring-4 ${colors.ring} shadow-[0_20px_60px_rgba(15,23,42,0.12)]`}>
+              <img
+                key={active.id}
+                src={active.image}
+                alt={active.label}
+                className="w-full object-cover"
+              />
+            </div>
           </div>
         </section>
 
-        <section className="bg-slate-950 text-white">
-          <div className="mx-auto grid max-w-7xl gap-10 px-4 py-16 sm:px-6 lg:grid-cols-[0.85fr_1.15fr] lg:px-8">
-            <div>
-              <p className="text-sm font-black uppercase tracking-[0.22em] text-blue-200">Subscription business model</p>
-              <h2 className="mt-4 text-3xl font-black sm:text-4xl">Built for businesses that pay monthly and need controlled access.</h2>
-              <p className="mt-5 text-base leading-7 text-slate-300">
-                Admins can manage plans and business status. When a subscription expires, access is protected until the account is renewed.
+        {/* ── FEATURES GRID ────────────────────────────────────────────────────── */}
+        <section className="border-y border-slate-200 bg-white">
+          <div className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
+            <div className="max-w-2xl">
+              <p className="text-xs font-black uppercase tracking-[0.22em] text-brand-600">Everything included</p>
+              <h2 className="mt-3 text-3xl font-black text-ink sm:text-4xl">
+                One system. All the tools your shop needs.
+              </h2>
+              <p className="mt-4 text-base text-slate-500">
+                No separate apps. No missing features. Everything your team needs — from the cashier to the manager — is already built in.
               </p>
             </div>
-            <div className="grid gap-4 md:grid-cols-3">
-              {[
-                { icon: ShieldCheck, title: "Active plans", text: "Keep paid businesses running without blocking staff." },
-                { icon: LockKeyhole, title: "Expired guard", text: "Expired subscriptions are sent to the renewal screen." },
-                { icon: Users, title: "Team roles", text: "Give staff access only to the modules they need." },
-              ].map((item) => (
-                <div key={item.title} className="rounded-3xl border border-white/10 bg-white/5 p-5 shadow-2xl shadow-black/10">
-                  <item.icon className="text-blue-200" size={24} />
-                  <h3 className="mt-4 font-black">{item.title}</h3>
-                  <p className="mt-2 text-sm leading-6 text-slate-300">{item.text}</p>
+            <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {featuresList.map((f) => (
+                <div key={f.title} className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-1 hover:border-brand-200 hover:shadow-md">
+                  <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-brand-50 text-brand-600 transition group-hover:bg-brand-600 group-hover:text-white">
+                    <f.icon size={22} />
+                  </div>
+                  <h3 className="mt-4 text-base font-black text-ink">{f.title}</h3>
+                  <p className="mt-2 text-sm leading-6 text-slate-500">{f.text}</p>
                 </div>
               ))}
             </div>
           </div>
         </section>
 
-        <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
-          <div className="grid gap-6 lg:grid-cols-3">
-            {walkthrough.map((item) => (
-              <div key={item.label} className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                <p className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-brand-50 text-sm font-black text-brand-600">{item.label}</p>
-                <h3 className="mt-4 text-xl font-black text-ink">{item.title}</h3>
-                <p className="mt-3 text-sm leading-6 text-slate-600">{item.text}</p>
+        {/* ── HOW IT WORKS ─────────────────────────────────────────────────────── */}
+        <section className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
+          <div className="text-center">
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-brand-600">How it works</p>
+            <h2 className="mt-3 text-3xl font-black text-ink sm:text-4xl">Up and running in minutes</h2>
+          </div>
+          <div className="mt-12 grid gap-6 md:grid-cols-3">
+            {[
+              {
+                step: "01",
+                icon: PackagePlus,
+                title: "Add your products",
+                text: "Enter your products with cost price. The system automatically calculates the selling price based on your target profit margin.",
+                color: "bg-brand-50 text-brand-600",
+              },
+              {
+                step: "02",
+                icon: ShoppingCart,
+                title: "Sell and print receipts",
+                text: "Your cashier clicks or scans products, selects payment method (Cash, MoMo, Card, Credit), and prints a clean 80mm receipt.",
+                color: "bg-emerald-50 text-emerald-600",
+              },
+              {
+                step: "03",
+                icon: BarChart3,
+                title: "Review your reports",
+                text: "The owner or manager monitors daily sales, VAT summary, profit, stock alerts, and customer debts from the dashboard.",
+                color: "bg-purple-50 text-purple-600",
+              },
+            ].map((item) => (
+              <div key={item.step} className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
+                <div className="flex items-center gap-4">
+                  <span className="text-4xl font-black text-slate-100">{item.step}</span>
+                  <div className={`inline-flex h-12 w-12 items-center justify-center rounded-2xl ${item.color}`}>
+                    <item.icon size={24} />
+                  </div>
+                </div>
+                <h3 className="mt-5 text-xl font-black text-ink">{item.title}</h3>
+                <p className="mt-3 text-sm leading-7 text-slate-500">{item.text}</p>
               </div>
             ))}
           </div>
+        </section>
 
-          <div className="mt-12 grid gap-4 rounded-3xl border border-brand-100 bg-brand-50 p-6 md:grid-cols-[1fr_auto] md:items-center">
-            <div>
-              <p className="text-sm font-black uppercase tracking-[0.2em] text-brand-700">Ready for your shops</p>
-              <h2 className="mt-2 text-2xl font-black text-ink">Use one system for checkout, products, stock, reports, and subscription billing.</h2>
+        {/* ── SUBSCRIPTION / DARK SECTION ──────────────────────────────────────── */}
+        <section className="bg-slate-950 text-white">
+          <div className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
+            <div className="grid gap-12 lg:grid-cols-2 lg:items-center">
+              <div>
+                <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-xs font-black uppercase tracking-widest text-blue-200">
+                  <Star size={12} /> Subscription protected
+                </span>
+                <h2 className="mt-6 text-3xl font-black sm:text-4xl">
+                  Your subscription keeps everything running safely.
+                </h2>
+                <p className="mt-5 text-base leading-8 text-slate-300">
+                  Every business on this system works on a subscription model. When the plan is active, your team has full access. If it expires, the system blocks access automatically — protecting your data and keeping accounts clean.
+                </p>
+                <button
+                  onClick={() => navigate("/subscription")}
+                  className="mt-8 inline-flex items-center gap-2 rounded-xl bg-white px-6 py-3.5 text-sm font-black text-slate-900 transition hover:bg-slate-100"
+                >
+                  View plans <ArrowRight size={16} />
+                </button>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                {[
+                  { icon: ShieldCheck, title: "Active access", text: "Paid and approved businesses run without interruption." },
+                  { icon: CreditCard, title: "Easy renewal", text: "Admins renew subscriptions from the billing page in seconds." },
+                  { icon: Users, title: "Role-based access", text: "Admins, managers, and cashiers each see only what they need." },
+                  { icon: Zap, title: "Multi-branch", text: "Run one subscription across multiple shop locations." },
+                ].map((item) => (
+                  <div key={item.title} className="rounded-2xl border border-white/10 bg-white/5 p-5">
+                    <item.icon className="text-blue-300" size={22} />
+                    <h3 className="mt-4 font-black">{item.title}</h3>
+                    <p className="mt-1.5 text-sm leading-6 text-slate-400">{item.text}</p>
+                  </div>
+                ))}
+              </div>
             </div>
-            <button
-              onClick={() => navigate("/login")}
-              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-brand-600 px-6 py-4 text-sm font-black text-white transition hover:bg-brand-700"
-            >
-              Login now <Receipt size={18} />
-            </button>
+          </div>
+        </section>
+
+        {/* ── CTA ──────────────────────────────────────────────────────────────── */}
+        <section className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
+          <div className="overflow-hidden rounded-3xl bg-gradient-to-br from-brand-600 to-sky-500 p-10 text-white shadow-xl shadow-brand-500/20 md:p-16">
+            <div className="grid gap-8 md:grid-cols-[1fr_auto] md:items-center">
+              <div>
+                <p className="text-sm font-black uppercase tracking-[0.2em] text-white/70">Ready for your shop?</p>
+                <h2 className="mt-3 text-3xl font-black sm:text-4xl">
+                  Start managing your business the right way.
+                </h2>
+                <p className="mt-4 max-w-xl text-base leading-7 text-white/80">
+                  Join shops already using YourPOS to track sales, manage stock, handle supplier payments, and generate reports — all in one place.
+                </p>
+              </div>
+              <div className="flex flex-col gap-3">
+                <button
+                  onClick={() => navigate("/login")}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-7 py-4 text-sm font-black text-brand-700 shadow-lg transition hover:bg-slate-50"
+                >
+                  Login now <Receipt size={18} />
+                </button>
+                <button
+                  onClick={() => navigate("/subscription")}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/30 bg-white/10 px-7 py-4 text-sm font-black text-white transition hover:bg-white/20"
+                >
+                  See subscription plans <CreditCard size={18} />
+                </button>
+              </div>
+            </div>
           </div>
         </section>
       </main>
 
-      <footer className="border-t border-slate-200 bg-white/70 px-4 py-8 text-center text-sm font-semibold text-slate-500">
+      {/* ── FOOTER ───────────────────────────────────────────────────────────── */}
+      <footer className="border-t border-slate-200 bg-white px-4 py-8 text-center text-sm font-semibold text-slate-400">
         <span className="inline-flex items-center gap-2">
-          <FileText size={16} /> POS System for sales, inventory, reports, and subscriptions.
+          <FileText size={15} /> YourPOS — Sales · Inventory · Reports · Subscriptions
         </span>
       </footer>
     </div>
   );
 }
+
+

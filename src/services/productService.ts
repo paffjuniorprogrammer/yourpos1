@@ -97,7 +97,11 @@ export async function listProducts(locationId?: string | null, businessId?: stri
         throw error;
       }
 
-      const parsedData = (data || []).map((product: any) => {
+      const parsedData = (data || [])
+        // A stock row is also the product's availability assignment. Do not
+        // merely show zero stock at an unassigned branch: hide the product.
+        .filter((product: any) => !locationId || (product.product_stocks || []).some((stock: any) => stock.location_id === locationId))
+        .map((product: any) => {
         let displayStock = 0;
         
         if (product.product_stocks && Array.isArray(product.product_stocks)) {
@@ -261,8 +265,7 @@ export async function syncProductLocations(
   businessId: string, 
   values: ProductFormValues
 ) {
-  try {
-    const client = await ensureSupabaseConfigured();
+  const client = await ensureSupabaseConfigured();
 
     let targetLocationIds: string[] = [];
 
@@ -279,44 +282,13 @@ export async function syncProductLocations(
       targetLocationIds = values.location_ids;
     }
 
-    if (targetLocationIds.length === 0) return;
+  if (targetLocationIds.length === 0) throw new Error("Select at least one active location for this product.");
 
-    // Get current stock entries for this product
-    const { data: existingStocks } = await client
-      .from("product_stocks")
-      .select("id, location_id")
-      .eq("product_id", productId);
-
-    const existingLocMap = new Map((existingStocks || []).map((s: any) => [s.location_id, s.id]));
-
-    // 1. Remove stocks for locations no longer selected
-    const toDeleteIds: string[] = [];
-    for (const [locId, stockId] of existingLocMap.entries()) {
-      if (!targetLocationIds.includes(locId)) {
-        toDeleteIds.push(stockId);
-      }
-    }
-
-    if (toDeleteIds.length > 0) {
-      await client.from("product_stocks").delete().in("id", toDeleteIds);
-    }
-
-    // 2. Insert missing stock entries for newly selected locations
-    const newStocksToInsert = targetLocationIds
-      .filter((locId) => !existingLocMap.has(locId))
-      .map((locId) => ({
-        product_id: productId,
-        location_id: locId,
-        business_id: businessId,
-        quantity: 0,
-      }));
-
-    if (newStocksToInsert.length > 0) {
-      await client.from("product_stocks").insert(newStocksToInsert);
-    }
-  } catch (err) {
-    console.warn("Failed to sync product locations:", err);
-  }
+  const { error } = await client.rpc("set_product_locations", {
+    p_product_id: productId,
+    p_location_ids: targetLocationIds,
+  });
+  if (error) throw error;
 }
 
 export async function createProduct(values: ProductFormValues, businessId: string) {
@@ -469,96 +441,18 @@ export async function deleteProduct(productId: string) {
 }
 
 export async function bulkImportProducts(businessId: string, locationId: string | null, products: any[]) {
+  if (!businessId) throw new Error("Business information is missing.");
+  if (!locationId) throw new Error("Select the location that will receive the imported stock.");
+  if (!products.length) return { imported: 0, errors: [] as string[] };
+
   const client = await ensureSupabaseConfigured();
-
-  let imported = 0;
-  const errors: string[] = [];
-
-  for (const row of products) {
-    try {
-      // Resolve category name to id if provided
-      let category_id: string | null = null;
-      const catName = (row.category_name || row.Category || row.category || "").trim();
-      if (catName) {
-        // Try to find existing category
-        const { data: catData } = await client
-          .from("categories")
-          .select("id")
-          .ilike("name", catName)
-          .limit(1)
-          .maybeSingle();
-
-        if (catData) {
-          category_id = catData.id;
-        } else {
-          // Create new category
-          const { data: newCat } = await client
-            .from("categories")
-            .insert({ name: catName })
-            .select("id")
-            .single();
-          if (newCat) category_id = newCat.id;
-        }
-      }
-
-      const productPayload: any = {
-        name: (row.name || row.Name || row.NAME || "").trim(),
-        barcode: (row.barcode || row.Barcode || row.BARCODE || "").trim() || null,
-        cost_price: parseFloat(row.cost_price || row.Cost || row.COST || "0") || 0,
-        selling_price: parseFloat(row.selling_price || row.Price || row.PRICE || "0") || 0,
-        reorder_level: parseInt(row.reorder_level || "5") || 5,
-        category_id,
-      };
-
-      if (!productPayload.name) continue;
-
-      // Check if product with same name already exists
-      const { data: existing } = await client
-        .from("products")
-        .select("id")
-        .ilike("name", productPayload.name)
-        .limit(1)
-        .maybeSingle();
-
-      let productId: string;
-
-      if (existing) {
-        productId = existing.id;
-        // Update existing product
-        await client.from("products").update(productPayload).eq("id", productId);
-      } else {
-        // Insert new product
-        const { data: newProduct, error: insertErr } = await client
-          .from("products")
-          .insert(productPayload)
-          .select("id")
-          .single();
-        if (insertErr) throw insertErr;
-        productId = newProduct.id;
-      }
-
-      // Upsert stock at location
-      if (locationId) {
-        const stockQty = parseInt(row.stock_quantity || row.Stock || row.STOCK || "0") || 0;
-        await client
-          .from("product_locations")
-          .upsert(
-            { product_id: productId, location_id: locationId, stock_quantity: stockQty },
-            { onConflict: "product_id,location_id" }
-          );
-      }
-
-      imported++;
-    } catch (err: any) {
-      errors.push(`Row "${row.name || row.Name || "?"}": ${err.message}`);
-    }
-  }
-
-  if (errors.length > 0 && imported === 0) {
-    throw new Error(errors.join("; "));
-  }
-
-  return { imported, errors };
+  const { data, error } = await client.rpc("import_products_with_stock", {
+    p_business_id: businessId,
+    p_location_id: locationId,
+    p_products: products,
+  });
+  if (error) throw error;
+  return { imported: Number(data) || 0, errors: [] as string[] };
 }
 
 // Attribute Management Functions

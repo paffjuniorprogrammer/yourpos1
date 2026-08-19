@@ -226,6 +226,11 @@ export type PosCustomerRecord = {
   id: string;
   full_name: string;
   phone: string | null;
+  email?: string | null;
+  address?: string | null;
+  credit_limit?: number | null;
+  discount_percentage?: number | null;
+  unpaid_balance?: number;
 };
 
 export type PosSaleItemInput = {

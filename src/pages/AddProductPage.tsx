@@ -48,7 +48,7 @@ type ProductForm = {
   bulkEnabled: boolean;
   bulkQuantity: string;
   bulkPricingMode: BulkPricingMode;
-  bulkFixedPrice: string;       // total price for the whole box (fixed mode)
+  bulkFixedPrice: string;       // price for one piece when sold as part of a box
   bulkDiscountValue: string;    // discount amount or percentage off total box price
   // Location availability
   allLocations: boolean;
@@ -163,8 +163,8 @@ export function AddProductPage() {
               bulkQuantity: hasBulk ? String(prod.bulk_quantity) : "",
               bulkPricingMode: (prod.bulk_pricing_mode as BulkPricingMode) || "fixed",
               bulkFixedPrice:
-                prod.bulk_pricing_mode === "fixed" && prod.bulk_price != null
-                  ? String(prod.bulk_price)
+                prod.bulk_pricing_mode === "fixed" && prod.bulk_price != null && prod.bulk_quantity
+                  ? String(Number(prod.bulk_price) / Number(prod.bulk_quantity))
                   : "",
               bulkDiscountValue:
                 prod.bulk_discount_value != null ? String(prod.bulk_discount_value) : "",
@@ -219,6 +219,7 @@ export function AddProductPage() {
   const unitPrice = Number(form.sellingPrice || 0);
   const bulkQty = Number(form.bulkQuantity || 0);
   const totalListPrice = bulkQty * unitPrice;
+  const fixedBoxTotal = bulkQty * Number(form.bulkFixedPrice || 0);
 
   const computedBulkTotal = useMemo(() => {
     if (!form.bulkEnabled || bulkQty < 2 || unitPrice <= 0) return null;
@@ -226,13 +227,13 @@ export function AddProductPage() {
       form.bulkPricingMode,
       bulkQty,
       unitPrice,
-      form.bulkFixedPrice,
+      form.bulkPricingMode === "fixed" ? String(fixedBoxTotal) : form.bulkFixedPrice,
       form.bulkDiscountValue
     );
   }, [
     form.bulkEnabled,
     form.bulkPricingMode,
-    form.bulkFixedPrice,
+    fixedBoxTotal,
     form.bulkDiscountValue,
     bulkQty,
     unitPrice,
@@ -279,14 +280,12 @@ export function AddProductPage() {
         newUnit > 0 &&
         newBulkQty > 0
       ) {
-        // Auto-adjust fixed price: keep the same discount amount
+        // Keep the same discount per piece when the normal unit price changes.
         const oldUnit = Number(prev.sellingPrice || 0);
-        const oldTotal = oldUnit * newBulkQty;
-        const oldFixed = Number(prev.bulkFixedPrice);
-        const oldDiscount = oldTotal - oldFixed;
-        const newTotal = newUnit * newBulkQty;
-        const newFixed = Math.max(0, newTotal - oldDiscount);
-        return { ...prev, sellingPrice: newPrice, bulkFixedPrice: String(Math.round(newFixed)) };
+        const oldBoxUnit = Number(prev.bulkFixedPrice);
+        const discountPerPiece = oldUnit - oldBoxUnit;
+        const newBoxUnit = Math.max(0, newUnit - discountPerPiece);
+        return { ...prev, sellingPrice: newPrice, bulkFixedPrice: String(Math.round(newBoxUnit)) };
       }
 
       return { ...prev, sellingPrice: newPrice };
@@ -703,7 +702,7 @@ export function AddProductPage() {
                   <div className="grid grid-cols-3 gap-2">
                     {(
                       [
-                        { value: "fixed", label: "Fixed Price", icon: Lock, desc: "Set the total box price directly" },
+                        { value: "fixed", label: "Box Piece Price", icon: Lock, desc: "Set the price of one piece inside a box" },
                         { value: "discount_amount", label: "Discount (FRW)", icon: Minus, desc: "Deduct a fixed amount from list price" },
                         { value: "discount_percentage", label: "Discount (%)", icon: Percent, desc: "Deduct a percentage from list price" },
                       ] as { value: BulkPricingMode; label: string; icon: any; desc: string }[]
@@ -730,7 +729,7 @@ export function AddProductPage() {
                 {form.bulkPricingMode === "fixed" && (
                   <div>
                     <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-600">
-                      Box Total Price (FRW) *
+                      Price per Piece in Box (FRW) *
                     </label>
                     <div className="relative">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">FRW</span>
@@ -738,13 +737,13 @@ export function AddProductPage() {
                         type="number"
                         value={form.bulkFixedPrice}
                         onChange={(e) => setForm({ ...form, bulkFixedPrice: e.target.value })}
-                        placeholder={bulkQty > 0 && unitPrice > 0 ? `List price: ${formatCurrency(totalListPrice)}` : "e.g. 11400"}
+                        placeholder={unitPrice > 0 ? `Normal piece price: ${formatCurrency(unitPrice)}` : "e.g. 833"}
                         className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-12 pr-3 text-sm font-bold outline-none focus:border-brand-500 transition"
                       />
                     </div>
                     {bulkQty > 0 && unitPrice > 0 && (
                       <p className="mt-1 text-[11px] text-slate-500">
-                        List price for {bulkQty} units = <strong>{formatCurrency(totalListPrice)}</strong>. Box price must be less than this.
+                        The system calculates the box total: {bulkQty} × {formatCurrency(Number(form.bulkFixedPrice || 0))} = <strong>{formatCurrency(fixedBoxTotal)}</strong>.
                       </p>
                     )}
                     {fixedPriceOutOfSync && (

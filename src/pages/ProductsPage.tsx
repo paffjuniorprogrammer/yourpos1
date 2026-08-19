@@ -24,9 +24,9 @@ import {
   deleteProduct,
   listCategories,
   listProducts,
-  getProductHistory
 } from "../services/productService";
 import { listLocations } from "../services/settingsService";
+import { getProductHistory as getProductMovements } from "../services/productHistoryService";
 import { useRealtimeSync } from "../hooks/useRealtimeSync";
 import { useTranslation } from "react-i18next";
 import { formatCurrency } from "../lib/format";
@@ -49,9 +49,14 @@ export function ProductsPage() {
   const [locationFilter, setLocationFilter] = useState(activeLocationId || "all");
   
   const [selectedProduct, setSelectedProduct] = useState<any | null>(null);
-  const [productHistory, setProductHistory] = useState<{sales: any[], purchases: any[]} | null>(null);
+  const [productHistory, setProductHistory] = useState<any>([]);
+  const [historySearch, setHistorySearch] = useState("");
+  const [historyFromDate, setHistoryFromDate] = useState("");
+  const [historyToDate, setHistoryToDate] = useState("");
   const [activeTab, setActiveTab] = useState<'details' | 'history'>('details');
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [importLocationId, setImportLocationId] = useState("");
+  const [showImportDialog, setShowImportDialog] = useState(false);
   
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 15;
@@ -87,14 +92,30 @@ export function ProductsPage() {
     if (!selectedProduct) return;
     setHistoryLoading(true);
     try {
-      const history = await getProductHistory(selectedProduct.id);
-      setProductHistory(history);
+      const movements = await getProductMovements(selectedProduct.id);
+      setProductHistory(movements.map((movement: any) => ({
+        partner: movement.referenceType === "import" ? "Product import" : movement.referenceType || movement.movementType,
+        reference: movement.locationName || movement.destinationLocationName || "Unknown location",
+        date: movement.occurredAt,
+        quantity: movement.quantity,
+        balanceAfter: movement.balanceAfter,
+        notes: movement.notes,
+      })));
     } catch (err) {
       console.error("Failed to load history:", err);
     } finally {
       setHistoryLoading(false);
     }
   };
+
+  const filteredProductHistory = useMemo(() => productHistory.filter((movement: any) => {
+    const date = String(movement.date || "").slice(0, 10);
+    const text = `${movement.partner || ""} ${movement.reference || ""} ${movement.notes || ""}`.toLowerCase();
+    return (!historySearch || text.includes(historySearch.toLowerCase()))
+      && (!historyFromDate || date >= historyFromDate)
+      && (!historyToDate || date <= historyToDate);
+  }), [productHistory, historySearch, historyFromDate, historyToDate]);
+
 
   useEffect(() => {
     loadData();
@@ -196,6 +217,11 @@ export function ProductsPage() {
   const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!importLocationId) {
+      showToast("error", "Select the location that will receive the imported stock.");
+      e.target.value = "";
+      return;
+    }
 
     Papa.parse(file, {
       header: true,
@@ -207,14 +233,15 @@ export function ProductsPage() {
           return;
         }
 
-        const confirmed = await confirm("Import Products", `Are you sure you want to import ${rows.length} products?`);
+        const receivingLocation = locations.find((location) => location.id === importLocationId);
+        const confirmed = await confirm("Import Products", `Import ${rows.length} products and add their stock to ${receivingLocation?.name || "the selected location"}?`);
         if (!confirmed) return;
 
         try {
           const { bulkImportProducts } = await import("../services/productService");
           const result = await bulkImportProducts(
             profile?.business_id || "",
-            activeLocationId || null,
+            importLocationId,
             rows.map(r => ({
               name: r.Name || r.name || "",
               category_name: r.Category || r.category || "",
@@ -228,6 +255,8 @@ export function ProductsPage() {
             ? `Imported ${result.imported} products. ${result.errors.length} skipped.`
             : `Successfully imported ${result?.imported ?? rows.length} products!`;
           showToast("success", msg);
+          setShowImportDialog(false);
+          setImportLocationId("");
           loadData();
         } catch (err: any) {
           showToast("error", "Import failed: " + err.message);
@@ -267,11 +296,14 @@ export function ProductsPage() {
             Template
           </button>
 
-          <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-600 transition hover:bg-slate-50">
+          <button
+            type="button"
+            onClick={() => setShowImportDialog(true)}
+            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-600 transition hover:bg-slate-50"
+          >
             <Upload size={18} />
             Import
-            <input type="file" accept=".csv" onChange={handleImport} className="hidden" />
-          </label>
+          </button>
 
           {can("Products", "add") && (
             <button
@@ -569,27 +601,30 @@ export function ProductsPage() {
                   ) : (
                     <>
                       <section>
-                        <h3 className="mb-4 text-xs font-black uppercase tracking-[0.2em] text-brand-600">Recent Sales</h3>
+                        <div className="grid gap-2 sm:grid-cols-3">
+                          <input value={historySearch} onChange={(event) => setHistorySearch(event.target.value)} placeholder="Search action or location" className="rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-brand-500" />
+                          <input type="date" value={historyFromDate} onChange={(event) => setHistoryFromDate(event.target.value)} className="rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-brand-500" />
+                          <input type="date" value={historyToDate} onChange={(event) => setHistoryToDate(event.target.value)} className="rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-brand-500" />
+                        </div>
                         <div className="space-y-3">
-                          {productHistory?.sales.length ? productHistory.sales.map((s, i) => (
+                          {filteredProductHistory.length ? filteredProductHistory.map((s: any, i: number) => (
                             <div key={i} className="flex items-center justify-between rounded-2xl bg-slate-50 p-4 border border-slate-100">
                               <div>
-                                <p className="text-sm font-black text-ink">{s.partner}</p>
+                                <p className="text-sm font-black capitalize text-ink">{String(s.partner).replace(/_/g, " ")}</p>
                                 <p className="text-[10px] font-bold text-slate-400 uppercase">{s.reference} • {new Date(s.date).toLocaleDateString()}</p>
                               </div>
                               <div className="text-right">
-                                <p className="text-sm font-black text-rose-600">-{s.quantity} pcs</p>
-                                <p className="text-xs text-slate-500">{formatCurrency(s.total)}</p>
+                                <p className={`text-sm font-black ${s.quantity < 0 ? "text-rose-600" : "text-emerald-600"}`}>{s.quantity > 0 ? "+" : ""}{s.quantity} pcs</p>
+                                <p className="text-xs font-bold text-slate-500">Stock left: {s.balanceAfter ?? 0} pcs</p>
                               </div>
                             </div>
-                          )) : <p className="text-sm text-slate-400 italic">No recent sales recorded.</p>}
+                          )) : <p className="py-8 text-center text-sm text-slate-400">No movements match these dates or search.</p>}
                         </div>
                       </section>
 
-                      <section>
-                        <h3 className="mb-4 text-xs font-black uppercase tracking-[0.2em] text-amber-600">Recent Purchases</h3>
+                      <section className="hidden">
                         <div className="space-y-3">
-                          {productHistory?.purchases.length ? productHistory.purchases.map((p, i) => (
+                          {productHistory?.purchases.length ? productHistory.purchases.map((p: any, i: number) => (
                             <div key={i} className="flex items-center justify-between rounded-2xl bg-amber-50/30 p-4 border border-amber-100">
                               <div>
                                 <p className="text-sm font-black text-ink">{p.partner}</p>
@@ -597,7 +632,7 @@ export function ProductsPage() {
                               </div>
                               <div className="text-right">
                                 <p className="text-sm font-black text-emerald-600">+{p.quantity} pcs</p>
-                                <p className="text-xs text-slate-500">{formatCurrency(p.total)}</p>
+                                <p className="text-xs font-bold text-slate-500">Stock left: {p.balanceAfter ?? 0} pcs</p>
                               </div>
                             </div>
                           )) : <p className="text-sm text-slate-400 italic">No recent purchases recorded.</p>}
@@ -637,6 +672,31 @@ export function ProductsPage() {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {showImportDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm" onClick={() => setShowImportDialog(false)}>
+          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-black text-ink">Import products</h2>
+                <p className="mt-1 text-sm text-slate-500">Choose where the CSV stock will be added before selecting the file.</p>
+              </div>
+              <button onClick={() => setShowImportDialog(false)} className="rounded-full bg-slate-100 p-2 text-slate-500"><X size={18} /></button>
+            </div>
+            <label className="mb-5 block text-sm font-bold text-slate-700">
+              Receiving location
+              <select value={importLocationId} onChange={(event) => setImportLocationId(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm outline-none focus:border-brand-500">
+                <option value="">Select location</option>
+                {locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
+              </select>
+            </label>
+            <label className={`flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold ${importLocationId ? "cursor-pointer bg-brand-500 text-white hover:bg-brand-600" : "cursor-not-allowed bg-slate-100 text-slate-400"}`}>
+              <Upload size={18} /> Select CSV file
+              <input type="file" accept=".csv" onChange={handleImport} disabled={!importLocationId} className="hidden" />
+            </label>
           </div>
         </div>
       )}

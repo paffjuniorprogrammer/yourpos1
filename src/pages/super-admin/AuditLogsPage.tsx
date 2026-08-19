@@ -21,6 +21,7 @@ export function AuditLogsPage() {
   const [logs, setLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedLog, setSelectedLog] = useState<any | null>(null);
 
   useEffect(() => {
     fetchLogs();
@@ -39,16 +40,17 @@ export function AuditLogsPage() {
   }
 
   const filtered = logs.filter(log => 
-    log.table_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    log.action.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    log.business?.name?.toLowerCase().includes(searchTerm.toLowerCase())
+    String(log.entity_type || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    String(log.action || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    String(log.business_name || log.business?.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    String(log.actor_name || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const getActionIcon = (action: string) => {
-    switch (action) {
-      case 'INSERT': return <Plus size={16} className="text-success" />;
-      case 'UPDATE': return <Edit3 size={16} className="text-warning" />;
-      case 'DELETE': return <Trash2 size={16} className="text-error" />;
+    switch (action.toLowerCase()) {
+      case 'insert': return <Plus size={16} className="text-success" />;
+      case 'update': return <Edit3 size={16} className="text-warning" />;
+      case 'delete': return <Trash2 size={16} className="text-error" />;
       default: return <ArrowLeftRight size={16} />;
     }
   };
@@ -106,23 +108,23 @@ export function AuditLogsPage() {
                         {getActionIcon(log.action)}
                       </div>
                       <div>
-                        <div className="text-sm font-black text-slate-900">{log.action}</div>
-                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{log.table_name}</div>
+                        <div className="text-sm font-black capitalize text-slate-900">{log.action}</div>
+                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{log.entity_type}</div>
                       </div>
                     </div>
                   </td>
                   <td className="px-8 py-6">
                     <div className="flex items-center gap-2">
                        <Building2 size={14} className="text-slate-400" />
-                       <span className="text-sm font-bold text-slate-600">{log.business?.name || t('super_admin.audit_logs.system')}</span>
+                       <span className="text-sm font-bold text-slate-600">{log.business_name || log.business?.name || t('super_admin.audit_logs.system')}</span>
                     </div>
                   </td>
                   <td className="px-8 py-6">
                     <div className="flex items-center gap-2">
                        <User size={14} className="text-slate-400" />
                        <div className="overflow-hidden">
-                          <div className="text-sm font-bold text-slate-600 truncate">{log.user?.full_name || t('super_admin.audit_logs.system')}</div>
-                          <div className="text-[10px] text-slate-400 truncate">{log.user?.email}</div>
+                          <div className="text-sm font-bold text-slate-600 truncate">{log.actor_name || log.user?.full_name || t('super_admin.audit_logs.system')}</div>
+                          <div className="text-[10px] text-slate-400 truncate">{log.module}</div>
                        </div>
                     </div>
                   </td>
@@ -133,7 +135,7 @@ export function AuditLogsPage() {
                     </div>
                   </td>
                   <td className="px-8 py-6 text-right">
-                    <button className="text-[10px] font-black uppercase tracking-widest text-primary hover:underline">
+                    <button onClick={() => setSelectedLog(log)} className="text-[10px] font-black uppercase tracking-widest text-primary hover:underline">
                       {t('super_admin.audit_logs.view_diff')}
                     </button>
                   </td>
@@ -143,6 +145,15 @@ export function AuditLogsPage() {
           </table>
         </div>
       </div>
+
+      {selectedLog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4" onClick={() => setSelectedLog(null)}>
+          <div className="max-h-[85vh] w-full max-w-4xl overflow-auto rounded-3xl bg-white p-6 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+            <div className="mb-5 flex items-start justify-between"><div><h2 className="text-xl font-black text-slate-900 capitalize">{selectedLog.action} {selectedLog.entity_type}</h2><p className="text-sm text-slate-500">{selectedLog.actor_name || 'System'} • {new Date(selectedLog.created_at).toLocaleString()}</p></div><button onClick={() => setSelectedLog(null)} className="rounded-xl bg-slate-100 px-3 py-2 text-sm font-bold text-slate-600">Close</button></div>
+            <div className="grid gap-5 md:grid-cols-2"><section><h3 className="mb-2 text-sm font-black text-slate-700">Before</h3><pre className="overflow-auto rounded-xl bg-slate-950 p-4 text-xs text-slate-100">{JSON.stringify(selectedLog.before_data, null, 2) || '—'}</pre></section><section><h3 className="mb-2 text-sm font-black text-slate-700">After</h3><pre className="overflow-auto rounded-xl bg-slate-950 p-4 text-xs text-slate-100">{JSON.stringify(selectedLog.after_data, null, 2) || '—'}</pre></section></div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

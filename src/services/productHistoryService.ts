@@ -6,12 +6,14 @@ export type ProductMovement = {
   productName: string;
   movementType: 'in' | 'out' | 'transfer' | 'count';
   quantity: number;
+  balanceAfter?: number;
   locationName?: string;
   destinationLocationName?: string;
   userName?: string;
-  referenceType?: 'purchase' | 'sale' | 'stock_count' | 'transfer';
+  referenceType?: 'purchase' | 'sale' | 'stock_count' | 'transfer' | 'import';
   referenceNumber?: string;
   createdAt: string;
+  occurredAt: string;
   notes?: string;
 };
 
@@ -24,6 +26,18 @@ export type ProductHistoryStats = {
   lastMovement?: ProductMovement;
   movementCount: number;
 };
+
+// Older sale RPCs stored an `out` movement with a positive quantity. Treat the
+// movement direction as the source of truth, so historic and new records read
+// consistently even before old data is corrected by the migration.
+function signedQuantity(movement: any): number {
+  const quantity = Math.abs(Number(movement.quantity) || 0);
+  if (movement.movement_type === "out") return -quantity;
+  if (movement.movement_type === "transfer") {
+    return movement.location_id ? -quantity : quantity;
+  }
+  return movement.movement_type === "count" ? Number(movement.quantity) || 0 : quantity;
+}
 
 /**
  * Get the history of all movements for a product
@@ -50,11 +64,13 @@ export async function getProductHistory(
       products(name),
       movement_type,
       quantity,
-      location:locations(name),
-      destination_location:locations(name),
+      location_id,
+      location:locations!stock_movements_location_id_fkey(name),
+      destination_location:locations!stock_movements_destination_location_id_fkey(name),
       user:users(full_name),
       reference_type,
       reference_id,
+      notes,
       created_at
     `)
     .eq("product_id", productId)
@@ -77,19 +93,37 @@ export async function getProductHistory(
 
   if (error) throw error;
 
-  return (data || []).map((movement: any) => ({
+  const { data: stocks, error: stocksError } = await client
+    .from("product_stocks")
+    .select("quantity")
+    .eq("product_id", productId);
+  if (stocksError) throw stocksError;
+
+  // Results are newest first. Rewind from today's quantity to show the stock
+  // remaining immediately after every past movement.
+  let balance = (stocks || []).reduce((total: number, stock: any) => total + (Number(stock.quantity) || 0), 0);
+
+  return (data || []).map((movement: any) => {
+    const quantity = signedQuantity(movement);
+    const balanceAfter = balance;
+    balance -= quantity;
+    return {
     id: movement.id,
     productId: movement.product_id,
-    productName: movement.products?.[0]?.name || "Unknown",
+    productName: movement.products?.name || "Unknown",
     movementType: movement.movement_type,
-    quantity: movement.quantity,
+    quantity,
+    balanceAfter,
     locationName: movement.location?.name,
     destinationLocationName: movement.destination_location?.name,
     userName: movement.user?.full_name || "System",
     referenceType: movement.reference_type,
     referenceNumber: movement.reference_id,
+    notes: movement.notes,
     createdAt: new Date(movement.created_at).toLocaleString(),
-  }));
+    occurredAt: movement.created_at,
+  };
+  });
 }
 
 /**
@@ -127,15 +161,13 @@ export async function getProductHistoryStats(
   let productName = "Unknown";
 
   (data || []).forEach((movement: any) => {
-    productName = movement.products?.[0]?.name || productName;
-    if (movement.movement_type === "in" || movement.movement_type === "count") {
-      totalIncoming += movement.quantity;
-    } else if (movement.movement_type === "out") {
-      totalOutgoing += movement.quantity;
-    }
+    productName = movement.products?.name || productName;
+    const quantity = signedQuantity(movement);
+    if (quantity >= 0) totalIncoming += quantity;
+    else totalOutgoing += Math.abs(quantity);
   });
 
-  const lastMovement = data?.[0];
+  const lastMovement: any = data?.[0];
 
   return {
     productId,
@@ -146,10 +178,11 @@ export async function getProductHistoryStats(
     lastMovement: lastMovement ? {
       id: lastMovement.id,
       productId: lastMovement.product_id,
-      productName: lastMovement.products?.[0]?.name || "Unknown",
+      productName: Array.isArray(lastMovement.products) ? lastMovement.products[0]?.name || "Unknown" : lastMovement.products?.name || "Unknown",
       movementType: lastMovement.movement_type,
-      quantity: lastMovement.quantity,
+      quantity: signedQuantity(lastMovement),
       createdAt: new Date(lastMovement.created_at).toLocaleString(),
+      occurredAt: lastMovement.created_at,
     } : undefined,
     movementCount: data?.length || 0,
   };
@@ -177,11 +210,13 @@ export async function getAllProductMovements(
       products(name),
       movement_type,
       quantity,
-      location:locations(name),
-      destination_location:locations(name),
+      location_id,
+      location:locations!stock_movements_location_id_fkey(name),
+      destination_location:locations!stock_movements_destination_location_id_fkey(name),
       user:users(full_name),
       reference_type,
       reference_id,
+      notes,
       created_at
     `)
     .order("created_at", { ascending: false })
@@ -198,14 +233,16 @@ export async function getAllProductMovements(
   return (data || []).map((movement: any) => ({
     id: movement.id,
     productId: movement.product_id,
-    productName: movement.products?.[0]?.name || "Unknown",
+    productName: movement.products?.name || "Unknown",
     movementType: movement.movement_type,
-    quantity: movement.quantity,
+    quantity: signedQuantity(movement),
     locationName: movement.location?.name,
     destinationLocationName: movement.destination_location?.name,
     userName: movement.user?.full_name || "System",
     referenceType: movement.reference_type,
     referenceNumber: movement.reference_id,
+    notes: movement.notes,
     createdAt: new Date(movement.created_at).toLocaleString(),
+    occurredAt: movement.created_at,
   }));
 }

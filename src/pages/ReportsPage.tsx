@@ -474,6 +474,7 @@ export function ReportsPage() {
         <div className="text-center mb-8">
           <h1 className="text-3xl font-black text-slate-900 mb-2">{t('reports.print_report.title')}</h1>
           <p className="text-lg text-slate-600">{t('reports.print_report.date_range', { start: startDate, end: endDate })}</p>
+          <p className="text-sm font-bold text-slate-700 mt-1">Location: {selectedLocation ? locations.find((location) => location.id === selectedLocation)?.name || 'Selected location' : 'All locations'}</p>
         </div>
 
         <div className="mb-10 p-6 border-2 border-slate-900 rounded-3xl">

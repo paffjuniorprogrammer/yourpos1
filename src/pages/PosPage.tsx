@@ -46,6 +46,7 @@ import { ShoppingBag, Tablet, CreditCard, Printer } from "lucide-react";
 import type { PaymentMethod, PosCustomerRecord, PosProductRecord, ShopSettingsRecord } from "../types/database";
 import { createPortal } from "react-dom";
 import { Receipt80mm } from "../components/print/Receipt80mm";
+import { ShiftClosureReceipt } from "../components/print/ShiftClosureReceipt";
 import { formatCurrency } from "../lib/format";
 import { calculateVatLine, getVatSettings, isVatEnabled } from "../services/vatService";
 
@@ -95,6 +96,9 @@ export function PosPage() {
   const { showToast } = useNotification();
   const searchRef = useRef<HTMLInputElement>(null);
   const soundRef = useRef<HTMLAudioElement | null>(null);
+  const cartListRef = useRef<HTMLDivElement>(null);
+  // Track how many times each product has been sold this session for best-seller sorting
+  const salesCountRef = useRef<Record<string, number>>({});
   const { 
     products: cachedProducts, 
     customers: cachedCustomers, 
@@ -108,11 +112,22 @@ export function PosPage() {
   const [loading, setLoading] = useState(cachedProducts.length === 0);
   const [pageError, setPageError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const [cart, setCart] = useState<CartItem[]>([]);
+  const [cart, setCart] = useState<CartItem[]>(() => {
+    try {
+      const key = `pos_cart_${activeLocationId ?? 'default'}`;
+      const saved = localStorage.getItem(key);
+      if (saved) return JSON.parse(saved) as CartItem[];
+    } catch { /* ignore */ }
+    return [];
+  });
+
   const [customerQuery, setCustomerQuery] = useState("");
   const [selectedCustomer, setSelectedCustomer] = useState(t('pos.walk_in_customer'));
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [closeDayOpen, setCloseDayOpen] = useState(false);
+  const [closeDaySubmitting, setCloseDaySubmitting] = useState(false);
+  const [closeDayError, setCloseDayError] = useState<string | null>(null);
+
   const [calculatorOpen, setCalculatorOpen] = useState(false);
   const [paymentMode, setPaymentMode] = useState<PaymentMethod | "multiple" | null>(null);
   const [amountPaid, setAmountPaid] = useState("");
@@ -151,6 +166,7 @@ export function PosPage() {
   const [processingReturn, setProcessingReturn] = useState(false);
   const [autoPrint, setAutoPrint] = useState(false);
   const [lastSaleForPrint, setLastSaleForPrint] = useState<any>(null);
+  const [shiftClosureForPrint, setShiftClosureForPrint] = useState<any>(null);
   const PRODUCTS_PER_PAGE = 30;
 
   // Top-level permission check
@@ -177,6 +193,18 @@ export function PosPage() {
   useEffect(() => {
     searchRef.current?.focus();
   }, []);
+
+  // Persist cart to localStorage so it survives disconnects / page refreshes
+  useEffect(() => {
+    try {
+      const key = `pos_cart_${activeLocationId ?? 'default'}`;
+      if (cart.length > 0) {
+        localStorage.setItem(key, JSON.stringify(cart));
+      } else {
+        localStorage.removeItem(key);
+      }
+    } catch { /* ignore storage errors */ }
+  }, [cart, activeLocationId]);
 
   function getErrorMessage(error: unknown) {
     if (!error) {
@@ -255,26 +283,53 @@ export function PosPage() {
 
   const filteredProducts = useMemo(() => {
     const normalized = query.trim().toLowerCase();
-    if (!normalized) return products;
-    return products.filter(
-      (product) =>
-        product.name.toLowerCase().includes(normalized) ||
-        (product.barcode ?? "").toLowerCase().includes(normalized) ||
-        (product.category_name ?? "").toLowerCase().includes(normalized),
-    );
+    const list = normalized
+      ? products.filter(
+          (product) =>
+            product.name.toLowerCase().includes(normalized) ||
+            (product.barcode ?? "").toLowerCase().includes(normalized) ||
+            (product.category_name ?? "").toLowerCase().includes(normalized),
+        )
+      : products;
+    return list;
   }, [products, query]);
 
-  const filteredCustomers = useMemo(() => {
-    const normalized = customerQuery.trim().toLowerCase();
-    const realCustomers = [t('pos.walk_in_customer'), ...customers.map((customer) => customer.full_name)];
-    return realCustomers.filter((customer) => customer.toLowerCase().includes(normalized));
-  }, [customerQuery, customers]);
+  // Best-seller sort: in-stock products with higher session sales count appear first.
+  // Out-of-stock always goes to the bottom. When searching, results stay in filter order.
+  const sortedProducts = useMemo(() => {
+    const normalized = query.trim().toLowerCase();
+    if (normalized) return filteredProducts; // keep search relevance order
+    return [...filteredProducts].sort((a, b) => {
+      const aOut = a.stock_quantity <= 0;
+      const bOut = b.stock_quantity <= 0;
+      if (aOut && !bOut) return 1;
+      if (!aOut && bOut) return -1;
+      // Both in-stock: rank by session sales count desc, then by stock level desc
+      const aSales = salesCountRef.current[a.id] ?? 0;
+      const bSales = salesCountRef.current[b.id] ?? 0;
+      if (bSales !== aSales) return bSales - aSales;
+      return b.stock_quantity - a.stock_quantity;
+    });
+  }, [filteredProducts, query]);
 
   const pagedProducts = useMemo(() => {
     const start = (productPage - 1) * PRODUCTS_PER_PAGE;
-    return filteredProducts.slice(start, start + PRODUCTS_PER_PAGE);
-  }, [filteredProducts, productPage, PRODUCTS_PER_PAGE]);
+    return sortedProducts.slice(start, start + PRODUCTS_PER_PAGE);
+  }, [sortedProducts, productPage, PRODUCTS_PER_PAGE]);
   const totalProductPages = Math.max(1, Math.ceil(filteredProducts.length / PRODUCTS_PER_PAGE));
+
+  const filteredCustomers = useMemo(() => {
+    const normalized = customerQuery.trim().toLowerCase();
+    if (!normalized) return [];
+    return customers.filter((c) =>
+      c.full_name.toLowerCase().includes(normalized) ||
+      (c.phone && c.phone.toLowerCase().includes(normalized))
+    );
+  }, [customerQuery, customers]);
+
+  const currentCustomer = useMemo(() => {
+    return customers.find((c) => c.full_name === selectedCustomer) ?? null;
+  }, [customers, selectedCustomer]);
 
   const totalAmount = cart.reduce((sum, item) => {
     const base = item.bulkBreakdown ? item.bulkBreakdown.lineTotal : item.qty * item.price;
@@ -313,6 +368,7 @@ export function PosPage() {
     bank_amount: 0,
     card_amount: 0,
     credit_amount: 0,
+    credit_collected_amount: 0,
     total_amount: 0,
   });
 
@@ -369,6 +425,7 @@ export function PosPage() {
             bank_amount: 0,
             card_amount: 0,
             credit_amount: 0,
+            credit_collected_amount: 0,
             total_amount: 0,
           });
         }
@@ -391,11 +448,13 @@ export function PosPage() {
       const newQty = existing ? existing.qty + 1 : 1;
       const breakdown = computeBulkBreakdown(newQty, price, product.bulk_quantity, product.bulk_price);
       if (existing) {
+        // Item already in cart — update qty but keep its current position
         return current.map((item) =>
           item.id === productId ? { ...item, qty: newQty, bulkBreakdown: breakdown } : item
         );
       }
-      return [...current, { 
+      // New item — prepend to top of list so the user sees it immediately
+      return [{ 
         id: product.id, 
         name: product.name, 
         price, 
@@ -403,12 +462,19 @@ export function PosPage() {
         discount_type: null, 
         discount_value: 0, 
         bulkBreakdown: breakdown 
-      }];
+      }, ...current];
+    });
+    // Track how many times this product has been added (for best-seller sort)
+    salesCountRef.current[productId] = (salesCountRef.current[productId] ?? 0) + 1;
+    // Scroll cart list to top so the user can see the newly added item
+    requestAnimationFrame(() => {
+      cartListRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
     });
     playAddBeep();
     setQuery("");
     searchRef.current?.focus();
   }
+
 
   function onSearchKeyDown(event: KeyboardEvent<HTMLInputElement>) {
     if (event.key === "Enter") {
@@ -518,10 +584,14 @@ export function PosPage() {
 
     const selectedCustomerRecord = customers.find((customer) => customer.full_name === selectedCustomer) ?? null;
 
-    if (paymentMode === "credit" && selectedCustomerRecord) {
-      const creditLimit = (selectedCustomerRecord as any).credit_limit;
-      if (creditLimit != null && creditLimit > 0) {
-        const currentUnpaid = (selectedCustomerRecord as any).unpaid_balance || 0;
+    if (paymentMode === "credit") {
+      if (!selectedCustomerRecord || selectedCustomer === t('pos.walk_in_customer')) {
+        setPaymentError("Please select a registered customer to record a sale on credit.");
+        return;
+      }
+      const creditLimit = Number(selectedCustomerRecord.credit_limit || 0);
+      if (creditLimit > 0) {
+        const currentUnpaid = Number(selectedCustomerRecord.unpaid_balance || 0);
         if (currentUnpaid + checkoutTotalWithVat > creditLimit) {
           setPaymentError(
             `⚠️ Credit limit of ${formatCurrency(creditLimit)} exceeded for ${selectedCustomerRecord.full_name}. (Current Debt: ${formatCurrency(currentUnpaid)}, Sale: ${formatCurrency(checkoutTotalWithVat)})`
@@ -691,29 +761,64 @@ export function PosPage() {
     setCalcValue((current) => `${current}${key}`);
   }
 
-  async function confirmCloseDay() {
-    if (profile?.id && authConfigured && activeLocationId && business?.id) {
-      try {
-        const finalSummary = await getCloseDaySummary(
-          profile.id,
-          activeLocationId,
-          activeShift?.opened_at ?? activeShift?.created_at ?? null,
-        );
-        await createDayClosure(profile.id, business.id, activeLocationId, finalSummary);
-        showToast('success', t('pos.shift.closed_success', 'Day closed successfully.'));
-        setCloseDayOpen(false);
-        setRegisterOpen(false);
-        setActiveShift(null);
-        await logout();
-        navigate("/login", { replace: true });
-        return;
-      } catch (err) {
-        console.error("Failed to close day:", err);
-        showToast("error", getErrorMessage(err));
-      }
+  async function confirmCloseDay(shouldPrint = false) {
+    if (!(profile?.id && authConfigured && activeLocationId && business?.id)) {
+      setCloseDayOpen(false);
+      return;
     }
-    setCloseDayOpen(false);
+    try {
+      setCloseDaySubmitting(true);
+      setCloseDayError(null);
+      const finalSummary = await getCloseDaySummary(
+        profile.id,
+        activeLocationId,
+        activeShift?.opened_at ?? activeShift?.created_at ?? null,
+      );
+
+      // Close the shift in the database using exact shift ID
+      await createDayClosure(profile.id, business.id, activeLocationId, finalSummary, activeShift?.id);
+
+      // If print requested, trigger Z-Report printing
+      if (shouldPrint) {
+        const locationName = assignedLocations.find((l) => l.id === activeLocationId)?.name || "Store";
+        setShiftClosureForPrint({
+          cashier_name: profile.full_name,
+          location_name: locationName,
+          opened_at: activeShift?.opened_at ?? activeShift?.created_at ?? null,
+          closed_at: new Date().toISOString(),
+          opening_cash: Number(activeShift?.opening_cash || 0),
+          summary: finalSummary,
+          settings: shopSettings,
+        });
+
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        window.print();
+        await new Promise((resolve) => setTimeout(resolve, 600));
+        setShiftClosureForPrint(null);
+      }
+
+      // Clear the saved cart so the next shift starts fresh
+      try {
+        localStorage.removeItem(`pos_cart_${activeLocationId}`);
+      } catch { /* ignore */ }
+
+      showToast('success', t('pos.shift.closed_success', 'Day closed successfully.'));
+      setCart([]);
+      setCloseDayOpen(false);
+      setRegisterOpen(false);
+      setActiveShift(null);
+      await logout();
+      navigate("/login", { replace: true });
+    } catch (err) {
+      console.error("Failed to close day:", err);
+      const msg = getErrorMessage(err);
+      setCloseDayError(msg);
+      showToast("error", msg);
+    } finally {
+      setCloseDaySubmitting(false);
+    }
   }
+
 
   async function loadRecentSales() {
     try {
@@ -1145,46 +1250,88 @@ export function PosPage() {
                     <input
                       value={customerQuery}
                       onChange={(event) => setCustomerQuery(event.target.value)}
-                      className={`w-full rounded-2xl bg-slate-950 py-2.5 pl-10 pr-12 text-sm text-white outline-none ${
-                        selectedCustomer && selectedCustomer !== t('pos.walk_in_customer')
+                      className={`w-full rounded-2xl bg-slate-950 py-2.5 pl-10 pr-20 text-sm text-white outline-none ${
+                        currentCustomer
                           ? "border border-brand-500"
                           : "border border-slate-700"
                       }`}
                       placeholder={selectedCustomer}
                     />
-                    <button 
-                      onClick={() => setAddCustomerOpen(true)}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-xl bg-brand-500/10 text-brand-400 transition hover:bg-brand-500 hover:text-white"
-                      title={t('pos.ui.add_customer_tooltip')}
-                    >
-                      <UserPlus size={16} />
-                    </button>
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                      {currentCustomer && (
+                        <button
+                          onClick={() => {
+                            setSelectedCustomer(t('pos.walk_in_customer'));
+                            setCustomerQuery('');
+                          }}
+                          className="flex h-8 w-8 items-center justify-center rounded-xl bg-red-500/10 text-red-400 transition hover:bg-red-500 hover:text-white"
+                          title="Clear customer"
+                        >
+                          <X size={14} />
+                        </button>
+                      )}
+                      <button 
+                        onClick={() => setAddCustomerOpen(true)}
+                        className="flex h-8 w-8 items-center justify-center rounded-xl bg-brand-500/10 text-brand-400 transition hover:bg-brand-500 hover:text-white"
+                        title={t('pos.ui.add_customer_tooltip')}
+                      >
+                        <UserPlus size={16} />
+                      </button>
+                    </div>
                   {!!customerQuery && filteredCustomers.length > 0 ? (
                     <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-20 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 shadow-lg">
-                      {filteredCustomers.slice(0, 5).map((customer) => (
+                      {filteredCustomers.slice(0, 6).map((c) => (
                         <button
-                          key={customer}
+                          key={c.id}
                           onClick={() => {
-                            setSelectedCustomer(customer);
+                            setSelectedCustomer(c.full_name);
                             setCustomerQuery("");
-                            const customerRec = customers.find((c) => c.full_name === customer);
-                            if (customerRec && (customerRec as any).discount_percentage > 0) {
-                              setOrderDiscount({ type: 'percentage', value: (customerRec as any).discount_percentage });
-                              showToast("info", `✓ Applied ${customer}'s ${(customerRec as any).discount_percentage}% customer discount`);
+                            if (Number(c.discount_percentage) > 0) {
+                              setOrderDiscount({ type: 'percentage', value: Number(c.discount_percentage) });
+                              showToast("info", `✓ Applied ${c.full_name}'s ${c.discount_percentage}% customer discount`);
                             }
                           }}
-                          className="flex w-full items-center px-4 py-3 text-sm font-semibold text-white hover:bg-slate-800"
+                          className="flex w-full items-center gap-3 px-4 py-3 text-sm text-white hover:bg-slate-800 border-b border-slate-800 last:border-b-0"
                         >
-                          <UserPlus size={14} className="mr-3 opacity-50" />
-                          {customer}
+                          <UserPlus size={14} className="shrink-0 opacity-50" />
+                          <div className="flex-1 min-w-0 text-left">
+                            <p className="font-semibold truncate">{c.full_name}</p>
+                            {c.phone && <p className="text-xs text-slate-400 truncate">{c.phone}</p>}
+                          </div>
+                          <div className="flex flex-col items-end gap-0.5 shrink-0">
+                            {Number(c.discount_percentage) > 0 && (
+                              <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded-full">
+                                -{c.discount_percentage}%
+                              </span>
+                            )}
+                            {Number(c.credit_limit) > 0 && (
+                              <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded-full">
+                                {formatCurrency(Number(c.credit_limit))} limit
+                              </span>
+                            )}
+                          </div>
                         </button>
                       ))}
                     </div>
                   ) : null}
+                  {currentCustomer && (
+                    <div className="mt-2 flex flex-wrap gap-1.5 px-1">
+                      {Number(currentCustomer.discount_percentage) > 0 && (
+                        <span className="text-[11px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                          🏷️ {currentCustomer.discount_percentage}% discount
+                        </span>
+                      )}
+                      {Number(currentCustomer.credit_limit) > 0 && (
+                        <span className="text-[11px] font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
+                          💳 {formatCurrency(Number(currentCustomer.credit_limit))} limit
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 
-              <div className="flex min-h-0 flex-1 flex-col space-y-2 overflow-y-auto pr-1 min-h-[320px]">
+              <div ref={cartListRef} className="flex min-h-0 flex-1 flex-col space-y-2 overflow-y-auto pr-1 min-h-[320px]">
                 {cart.length > 0 ? (
                   cart.map((item) => (
                     <div
@@ -1625,11 +1772,19 @@ export function PosPage() {
                     <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">{t('pos.ui.card_sales')}</p>
                     <p className="mt-1 text-lg font-black text-ink">{rwf(closeDaySummary.card_amount)}</p>
                   </div>
+                  <div className="rounded-3xl bg-rose-50 p-5">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-rose-500">Outstanding Credit</p>
+                    <p className="mt-1 text-lg font-black text-rose-600">{rwf(closeDaySummary.credit_amount)}</p>
+                  </div>
+                  <div className="rounded-3xl bg-emerald-50 p-5">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-600">Credit Collected Today</p>
+                    <p className="mt-1 text-lg font-black text-emerald-700">{rwf(closeDaySummary.credit_collected_amount)}</p>
+                  </div>
                </div>
                <div className="rounded-[2rem] bg-slate-950 p-6 text-white shadow-xl">
                   <div className="flex justify-between items-center">
                     <div>
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 opacity-60">{t('pos.ui.total_closed_sales')}</p>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 opacity-60">Collected Today</p>
                       <p className="mt-1 text-2xl font-black text-brand-400">{rwf(closeDaySummary.total_amount)}</p>
                     </div>
                     <div className="h-12 w-12 rounded-2xl bg-white/10 flex items-center justify-center">
@@ -1639,20 +1794,44 @@ export function PosPage() {
                </div>
              </div>
 
-             <div className="mt-8 grid grid-cols-2 gap-4">
+             <div className="mt-8 flex flex-col sm:flex-row gap-3">
                 <button
-                  onClick={() => setCloseDayOpen(false)}
-                  className="rounded-2xl border border-slate-100 py-4 font-bold text-slate-400 hover:bg-slate-50 transition"
+                  onClick={() => { setCloseDayOpen(false); setCloseDayError(null); }}
+                  disabled={closeDaySubmitting}
+                  className="rounded-2xl border border-slate-200 py-4 px-5 font-bold text-slate-500 hover:bg-slate-50 transition disabled:opacity-50"
                 >
                   {t('common.cancel')}
                 </button>
                 <button
-                  onClick={confirmCloseDay}
-                  className="rounded-2xl bg-rose-500 py-4 font-bold text-white shadow-soft hover:bg-rose-600 transition active:scale-95"
+                  onClick={() => confirmCloseDay(true)}
+                  disabled={closeDaySubmitting}
+                  className="flex-1 rounded-2xl bg-slate-900 py-4 px-4 font-bold text-white shadow-soft hover:bg-black transition active:scale-95 disabled:opacity-60 flex items-center justify-center gap-2"
                 >
-                  {t('pos.ui.end_shift_logout')}
+                  <Printer size={18} />
+                  {closeDaySubmitting ? "Processing..." : "Print & Close Shift"}
+                </button>
+                <button
+                  onClick={() => confirmCloseDay(false)}
+                  disabled={closeDaySubmitting}
+                  className="flex-1 rounded-2xl bg-rose-500 py-4 px-4 font-bold text-white shadow-soft hover:bg-rose-600 transition active:scale-95 disabled:opacity-60 flex items-center justify-center gap-2"
+                >
+                  {closeDaySubmitting ? (
+                    <>
+                      <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+                      </svg>
+                      Closing...
+                    </>
+                  ) : t('pos.ui.end_shift_logout')}
                 </button>
              </div>
+             {closeDayError && (
+               <div className="mt-4 rounded-2xl bg-rose-50 border border-rose-200 p-4 text-sm font-semibold text-rose-700">
+                 ⚠️ {closeDayError}
+               </div>
+             )}
+
           </div>
         </div>
       )}
@@ -2072,6 +2251,13 @@ export function PosPage() {
       {lastSaleForPrint && createPortal(
         <Receipt80mm
           {...lastSaleForPrint}
+        />,
+        document.body
+      )}
+
+      {shiftClosureForPrint && createPortal(
+        <ShiftClosureReceipt
+          {...shiftClosureForPrint}
         />,
         document.body
       )}

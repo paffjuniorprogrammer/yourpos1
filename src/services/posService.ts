@@ -41,6 +41,7 @@ type CloseDaySummary = {
   bank_amount: number;
   card_amount: number;
   credit_amount: number;
+  credit_collected_amount: number;
   total_amount: number;
 };
 
@@ -132,7 +133,7 @@ export async function listPosCustomers() {
       const client = await ensureSupabaseConfigured();
       const { data, error } = await withFastCacheTimeout(client
         .from("customers")
-        .select("id, full_name, phone")
+        .select("id, full_name, phone, email, address, credit_limit, discount_percentage")
         .order("full_name", { ascending: true })
         .limit(1000));
 
@@ -156,6 +157,7 @@ export async function listPosCustomers() {
   const cached = await db.cached_customers.toArray();
   return cached.map((record) => record.data) as PosCustomerRecord[];
 }
+
 
 export async function getShopSettings(businessId?: string) {
   if (navigator.onLine) {
@@ -217,6 +219,7 @@ export async function pushPosSaleToSupabase(input: CreatePosSaleInput) {
   }
 
   const sale_id = String(saleId);
+  const now = new Date().toISOString();
 
   const vatSaleUpdates = {
     vat_rate: input.vat_rate ?? 0,
@@ -225,11 +228,12 @@ export async function pushPosSaleToSupabase(input: CreatePosSaleInput) {
     output_vat: input.output_vat ?? input.tax_amount,
   };
 
-  await client.from("sales").update(vatSaleUpdates).eq("id", sale_id);
-
-  await Promise.all(
-    input.items.map(async (item: any) => {
-      await client
+  // Fire VAT updates and audit log in the background — don't await them.
+  // This shaves 3–5 network round trips off the critical path.
+  void Promise.all([
+    client.from("sales").update(vatSaleUpdates).eq("id", sale_id),
+    ...input.items.map((item: any) =>
+      client
         .from("sale_items")
         .update({
           vat_rate: item.vat_rate ?? input.vat_rate ?? 0,
@@ -237,53 +241,69 @@ export async function pushPosSaleToSupabase(input: CreatePosSaleInput) {
           output_vat: item.output_vat ?? 0,
         })
         .eq("sale_id", sale_id)
-        .eq("product_id", item.product_id);
+        .eq("product_id", item.product_id)
+    ),
+    client.from("vat_audit_transactions").insert({
+      business_id: input.business_id,
+      source_type: "sale",
+      source_id: sale_id,
+      transaction_date: now,
+      vat_rate: input.vat_rate ?? 0,
+      amount_before_vat: input.amount_before_vat ?? input.subtotal,
+      input_vat: 0,
+      output_vat: input.output_vat ?? input.tax_amount,
+      total_amount: input.total_amount,
     }),
-  );
-
-  await client.from("vat_audit_transactions").insert({
-    business_id: input.business_id,
-    source_type: "sale",
-    source_id: sale_id,
-    transaction_date: new Date().toISOString(),
-    vat_rate: input.vat_rate ?? 0,
-    amount_before_vat: input.amount_before_vat ?? input.subtotal,
-    input_vat: 0,
-    output_vat: input.output_vat ?? input.tax_amount,
-    total_amount: input.total_amount,
+  ]).catch((err) => {
+    // Non-critical background update failed — log only, don't surface to user
+    console.warn("[POS] Background VAT update failed:", err);
   });
 
-  // Fetch the full record back for consistency
-  const { data: sale, error: saleFetchError } = await client
-    .from("sales")
-    .select("*")
-    .eq("id", sale_id)
-    .single();
+  // Build the response optimistically from input data.
+  // We already have everything the UI needs (receipt, stock update, etc.).
+  // This replaces 3 extra sequential DB fetch-back calls.
+  const sale = {
+    id: sale_id,
+    business_id: input.business_id,
+    sale_number: `SALE-${sale_id.split('-')[0].toUpperCase()}`,
+    status: 'completed',
+    customer_id: input.customer_id,
+    cashier_id: input.cashier_id,
+    location_id: input.location_id ?? null,
+    subtotal: input.subtotal,
+    tax_amount: input.tax_amount,
+    vat_rate: input.vat_rate ?? 0,
+    price_type: input.price_type ?? "inclusive",
+    amount_before_vat: input.amount_before_vat ?? input.subtotal,
+    output_vat: input.output_vat ?? input.tax_amount,
+    total_amount: input.total_amount,
+    discount_amount: input.discount_amount ?? 0,
+    discount_type: input.discount_type ?? null,
+    payment_method: input.payment_method,
+    payment_status: input.payment_status,
+    notes: input.notes ?? null,
+    created_at: now,
+  } as SaleRecord;
 
-  if (saleFetchError) throw saleFetchError;
+  const items = input.items.map((it: any) => ({
+    id: crypto.randomUUID(),
+    sale_id,
+    ...it,
+    created_at: now,
+  })) as SaleItemRecord[];
 
-  const { data: items, error: itemsFetchError } = await client
-    .from("sale_items")
-    .select("*")
-    .eq("sale_id", sale_id);
+  const payments = (input.payments ?? []).map((p: any) => ({
+    id: crypto.randomUUID(),
+    sale_id,
+    ...p,
+    paid_at: now,
+  })) as SalePaymentRecord[];
 
-  if (itemsFetchError) throw itemsFetchError;
-
-  const { data: payments, error: paymentsError } = await client
-    .from("sale_payments")
-    .select("*")
-    .eq("sale_id", sale_id);
-
-  if (paymentsError) throw paymentsError;
-
-  return {
-    sale: sale as SaleRecord,
-    items: (items ?? []) as SaleItemRecord[],
-    payments: (payments ?? []) as SalePaymentRecord[],
-  };
+  return { sale, items, payments };
 }
 
 export async function createPosSale(input: CreatePosSaleInput) {
+
   const isOnline = navigator.onLine;
 
   if (isOnline) {
@@ -443,91 +463,170 @@ export async function getCloseDaySummary(userId: string, locationId: string, ope
   const today = new Date().toISOString().split('T')[0];
   const startAt = openedAt ?? `${today}T00:00:00Z`;
 
-  const { data: sales, error: salesError } = await client
-    .from('sales')
-    .select('id, total_amount, payment_method, payment_status, sale_payments(payment_method, amount)')
-    .eq('cashier_id', userId)
-    .eq('location_id', locationId)
-    .gte('created_at', startAt);
-
-  if (salesError) throw salesError;
-
   const summary = {
     cash_amount: 0,
     momo_amount: 0,
     bank_amount: 0,
     card_amount: 0,
     credit_amount: 0,
+    credit_collected_amount: 0,
     total_amount: 0
   };
 
-  sales?.forEach((sale: any) => {
-    summary.total_amount += Number(sale.total_amount);
-    
-    if (sale.payment_status === 'unpaid') {
-      summary.credit_amount += Number(sale.total_amount);
-      return;
-    }
+  try {
+    const { data: sales, error: salesError } = await client
+      .from('sales')
+      .select('id, total_amount, payment_method, payment_status, sale_payments(payment_method, amount)')
+      .eq('cashier_id', userId)
+      .eq('location_id', locationId)
+      .gte('created_at', startAt);
 
-    const payments = Array.isArray(sale.sale_payments) ? sale.sale_payments : [];
-    if (payments.length > 0) {
-      payments.forEach((payment: any) => {
-        const amount = Number(payment.amount || 0);
-        if (payment.payment_method === 'cash') summary.cash_amount += amount;
-        if (payment.payment_method === 'momo') summary.momo_amount += amount;
-        if (payment.payment_method === 'bank') summary.bank_amount += amount;
-        if (payment.payment_method === 'card') summary.card_amount += amount;
+    if (salesError) throw salesError;
+
+    sales?.forEach((sale: any) => {
+      const payments = Array.isArray(sale.sale_payments) ? sale.sale_payments : [];
+      const paidAmount = payments.reduce((total: number, payment: any) => total + Number(payment.amount || 0), 0);
+      
+      if (sale.payment_status === 'unpaid') {
+        summary.credit_amount += Number(sale.total_amount || 0);
+        return;
+      }
+
+      if (sale.payment_status === 'partial') {
+        summary.credit_amount += Math.max(0, Number(sale.total_amount) - paidAmount);
+      }
+
+      if (payments.length > 0) {
+        payments.forEach((p: any) => {
+          const amt = Number(p.amount || 0);
+          if (p.payment_method === 'cash') summary.cash_amount += amt;
+          else if (p.payment_method === 'momo') summary.momo_amount += amt;
+          else if (p.payment_method === 'bank') summary.bank_amount += amt;
+          else if (p.payment_method === 'card') summary.card_amount += amt;
+        });
+      } else {
+        const amt = Number(sale.total_amount || 0);
+        if (sale.payment_method === 'cash') summary.cash_amount += amt;
+        else if (sale.payment_method === 'momo') summary.momo_amount += amt;
+        else if (sale.payment_method === 'bank') summary.bank_amount += amt;
+        else if (sale.payment_method === 'card') summary.card_amount += amt;
+      }
+    });
+
+    // Credit collections made during this shift (for debts from earlier sales)
+    try {
+      const { data: paymentsToday } = await client
+        .from('sale_payments')
+        .select('amount, payment_method, paid_at, sales!inner(id, created_at, location_id)')
+        .eq('sales.location_id', locationId)
+        .gte('paid_at', startAt);
+
+      (paymentsToday || []).forEach((payment: any) => {
+        if (new Date(payment.sales?.created_at || 0).getTime() < new Date(startAt).getTime()) {
+          const amt = Number(payment.amount || 0);
+          summary.credit_collected_amount += amt;
+          if (payment.payment_method === 'cash') summary.cash_amount += amt;
+          else if (payment.payment_method === 'momo') summary.momo_amount += amt;
+          else if (payment.payment_method === 'bank') summary.bank_amount += amt;
+          else if (payment.payment_method === 'card') summary.card_amount += amt;
+        }
       });
-      return;
+    } catch {
+      // Ignore inner join failure if debt collections query is unsupported
     }
+  } catch (err) {
+    console.error("Error computing close day summary:", err);
+  }
 
-    if (sale.payment_method === 'cash') summary.cash_amount += Number(sale.total_amount);
-    if (sale.payment_method === 'momo') summary.momo_amount += Number(sale.total_amount);
-    if (sale.payment_method === 'bank') summary.bank_amount += Number(sale.total_amount);
-    if (sale.payment_method === 'card') summary.card_amount += Number(sale.total_amount);
-  });
-
+  summary.total_amount = summary.cash_amount + summary.momo_amount + summary.bank_amount + summary.card_amount;
   return summary;
 }
 
-export async function pushDayClosureToSupabase(payload: any) {
+export async function pushDayClosureToSupabase(payload: any, shiftId?: string) {
   const client = await ensureSupabaseConfigured();
-  let request = client.from('day_closures').update(payload);
-  request = request.eq('user_id', payload.user_id);
-  request = request.eq('status', 'open');
 
-  if (payload.location_id) {
-    request = request.eq('location_id', payload.location_id);
+  // Strip any properties that are not columns in day_closures table
+  const { credit_collected_amount, ...cleanPayload } = payload;
+
+  // 1. If we have a specific shift ID, update that exact row
+  if (shiftId) {
+    const { data: updatedById, error: errorById } = await client
+      .from('day_closures')
+      .update(cleanPayload)
+      .eq('id', shiftId)
+      .select('*');
+
+    if (!errorById && updatedById && updatedById.length > 0) {
+      return updatedById[0];
+    }
   }
 
-  if (payload.business_id) {
-    request = request.eq('business_id', payload.business_id);
+  // 2. Otherwise update open register matching user and location
+  const { data: updated, error } = await client
+    .from('day_closures')
+    .update(cleanPayload)
+    .eq('user_id', cleanPayload.user_id)
+    .eq('location_id', cleanPayload.location_id)
+    .eq('status', 'open')
+    .select('*');
+
+  if (!error && updated && updated.length > 0) {
+    return updated[0];
   }
 
-  const { error } = await request;
-  if (error) throw error;
+  // 3. Fallback: update any open register for this user
+  const { data: fallbackUpdated, error: fallbackError } = await client
+    .from('day_closures')
+    .update(cleanPayload)
+    .eq('user_id', cleanPayload.user_id)
+    .eq('status', 'open')
+    .select('*');
+
+  if (!fallbackError && fallbackUpdated && fallbackUpdated.length > 0) {
+    return fallbackUpdated[0];
+  }
+
+  // 4. Ultimate safeguard: insert a closed record if no open row existed
+  const { data: inserted, error: insertError } = await client
+    .from('day_closures')
+    .insert({ ...cleanPayload, status: 'closed' })
+    .select('*')
+    .single();
+
+  if (insertError) throw insertError;
+  return inserted;
 }
 
-export async function createDayClosure(userId: string, businessId: string, locationId: string, summary: CloseDaySummary) {
+export async function createDayClosure(
+  userId: string,
+  businessId: string,
+  locationId: string,
+  summary: CloseDaySummary,
+  shiftId?: string
+) {
   const payload = {
-    ...summary,
     user_id: userId,
     business_id: businessId,
     location_id: locationId,
     closing_date: new Date().toISOString().split('T')[0],
+    cash_amount: Number(summary.cash_amount || 0),
+    momo_amount: Number(summary.momo_amount || 0),
+    bank_amount: Number(summary.bank_amount || 0),
+    card_amount: Number(summary.card_amount || 0),
+    credit_amount: Number(summary.credit_amount || 0),
+    total_amount: Number(summary.total_amount || 0),
     status: 'closed',
     closed_at: new Date().toISOString()
   };
 
   const isOnline = navigator.onLine;
+
   if (isOnline) {
-    try {
-      await pushDayClosureToSupabase(payload);
-    } catch (e) {
-      console.warn("Offline day closure fallback");
-    }
+    const closedShift = await pushDayClosureToSupabase(payload, shiftId);
+    return closedShift ?? payload;
   }
 
+  // Offline only: queue for sync when connection returns
   await db.pending_actions.add({
     id: crypto.randomUUID(),
     type: 'register_close',

@@ -15,6 +15,29 @@ export function LoginPage() {
 
   const redirectTo = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname;
 
+  function formatLoginError(err: unknown): string {
+    if (!err) return t('login.error_unable', { defaultValue: 'Unable to sign in. Please try again.' });
+    const msg = err instanceof Error ? err.message : String(err);
+    const lower = msg.toLowerCase();
+
+    if (lower.includes("invalid login credentials") || lower.includes("invalid_grant") || lower.includes("invalid password")) {
+      return "⚠️ Incorrect email or password. Please check your credentials and try again.";
+    }
+    if (lower.includes("failed to fetch") || lower.includes("network") || lower.includes("networkerror") || lower.includes("timeout")) {
+      return "⚠️ Unable to connect to the server. Please check your internet connection and try again.";
+    }
+    if (lower.includes("email not confirmed")) {
+      return "⚠️ Your email has not been confirmed yet. Please verify your email before signing in.";
+    }
+    if (lower.includes("too many requests") || lower.includes("rate limit")) {
+      return "⚠️ Too many sign-in attempts. Please wait 1 minute and try again.";
+    }
+    if (lower.includes("user not found") || lower.includes("no profile")) {
+      return "⚠️ No cashier or user account found for this email. Please contact your manager.";
+    }
+    return msg;
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitting(true);
@@ -33,7 +56,7 @@ export function LoginPage() {
         navigate(redirectTo ?? "/dashboard", { replace: true });
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('login.error_unable', { defaultValue: 'Unable to sign in.' }));
+      setError(formatLoginError(err));
     } finally {
       setSubmitting(false);
     }
