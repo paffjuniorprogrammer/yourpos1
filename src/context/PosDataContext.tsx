@@ -3,6 +3,7 @@ import { useAuth } from './AuthContext';
 import { listPosProducts, listPosCustomers, getShopSettings } from '../services/posService';
 import type { PosProductRecord, PosCustomerRecord, ShopSettingsRecord } from '../types/database';
 import { useRealtimeSync } from '../hooks/useRealtimeSync';
+import { db } from '../lib/db';
 
 type PosDataContextType = {
   products: PosProductRecord[];
@@ -30,10 +31,20 @@ export const PosDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     
     if (!silent) setLoading(true);
     try {
+      // Publish each result as it arrives. A slow settings response should not
+      // make cashiers wait to see products or customers.
+      const productsRequest = listPosProducts(locationId, 1000);
+      const customersRequest = listPosCustomers();
+      const settingsRequest = getShopSettings(profile.business_id);
+
+      void productsRequest.then((nextProducts) => setProducts(nextProducts)).catch(() => undefined);
+      void customersRequest.then((nextCustomers) => setCustomers(nextCustomers)).catch(() => undefined);
+      void settingsRequest.then((nextSettings) => setSettings(nextSettings)).catch(() => undefined);
+
       const [nextProducts, nextCustomers, nextSettings] = await Promise.all([
-        listPosProducts(locationId, 1000), // Increase limit for better coverage
-        listPosCustomers(),
-        getShopSettings(profile.business_id)
+        productsRequest,
+        customersRequest,
+        settingsRequest,
       ]);
       
       setProducts(nextProducts);
@@ -48,6 +59,42 @@ export const PosDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (!silent) setLoading(false);
     }
   }, [authConfigured, profile]);
+
+  // Show the last successful POS data immediately, then refresh it from the
+  // server in the background. This keeps the POS responsive on slow networks.
+  useEffect(() => {
+    const businessId = profile?.business_id;
+    if (!activeLocationId || !businessId) return;
+    const cacheBusinessId: string = businessId;
+    let active = true;
+
+    async function hydrateFromCache() {
+      try {
+        const [cachedProducts, cachedCustomers, cachedSettings] = await Promise.all([
+          db.cached_products.where('business_id').equals(cacheBusinessId).toArray(),
+          db.cached_customers.toArray(),
+          db.cached_settings.get('shop_settings_' + cacheBusinessId),
+        ]);
+        if (!active) return;
+
+        if (cachedProducts.length > 0) {
+          setProducts(cachedProducts.map((record) => record.data as PosProductRecord));
+        }
+        if (cachedCustomers.length > 0) {
+          setCustomers(cachedCustomers.map((record) => record.data as PosCustomerRecord));
+        }
+        if (cachedSettings?.data) {
+          setSettings(cachedSettings.data as ShopSettingsRecord);
+        }
+      } catch (error) {
+        // Cache access is optional; the normal server load remains the fallback.
+        console.warn('Unable to hydrate POS cache:', error);
+      }
+    }
+
+    void hydrateFromCache();
+    return () => { active = false; };
+  }, [activeLocationId, profile?.business_id]);
 
   // Pre-fetch when location changes or on mount
   useEffect(() => {

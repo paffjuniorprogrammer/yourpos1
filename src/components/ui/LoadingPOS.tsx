@@ -22,7 +22,7 @@ export const LoadingPOS: React.FC = () => {
       
       {/* Branding Message */}
       <div className="mt-8 flex flex-col items-center">
-        <h2 className="text-sm font-semibold uppercase tracking-[0.4em] text-brand-600 animate-pulse">Your POS</h2>
+        <h2 className="text-sm font-semibold uppercase tracking-[0.4em] text-brand-600 animate-pulse">UMUCURUZI POS</h2>
         <div className="mt-4 h-1 w-48 overflow-hidden rounded-full bg-slate-100">
           <div className="h-full bg-brand-500 animate-[progress_1s_ease-in-out_infinite]"></div>
         </div>

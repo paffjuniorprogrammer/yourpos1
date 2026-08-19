@@ -2,6 +2,7 @@ import { type FormEvent, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useTranslation } from "react-i18next";
+import { ArrowLeft, LockKeyhole } from "lucide-react";
 
 export function LoginPage() {
   const { t } = useTranslation();
@@ -63,14 +64,21 @@ export function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-4 py-10">
-      <div className="grid w-full max-w-5xl overflow-hidden rounded-[2rem] bg-white shadow-soft lg:grid-cols-[1.1fr_0.9fr]">
-        <section className="bg-slate-950 px-8 py-10 flex flex-col justify-center text-white">
+    <div className="min-h-screen bg-slate-50 px-4 py-6 sm:py-10">
+      <div className="mx-auto mb-6 flex max-w-5xl items-center justify-between">
+        <button onClick={() => navigate("/")} className="flex items-center gap-3 text-left">
+          <img src="/pos-logo.jpg" alt="UMUCURUZI POS" className="h-10 w-10 rounded-xl object-cover shadow-sm" />
+          <div><p className="font-black text-ink">UMUCURUZI POS</p><p className="text-xs font-semibold text-slate-400">P &amp; D Digital Solution</p></div>
+        </button>
+        <button onClick={() => navigate("/")} className="inline-flex items-center gap-2 text-sm font-bold text-slate-600 hover:text-brand-600"><ArrowLeft size={16} /> Back to home</button>
+      </div>
+      <div className="mx-auto grid w-full max-w-5xl overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-2xl shadow-slate-200/60 lg:grid-cols-[1.1fr_0.9fr]">
+        <section className="relative bg-slate-950 px-8 py-10 flex flex-col justify-center text-white sm:px-12">
           <p className="text-sm font-semibold uppercase tracking-[0.3em] text-brand-400">
             {t('login.brand')}
           </p>
-          <h1 className="mt-6 text-5xl font-black leading-tight tracking-tight">
-            Control <br />Every <br />Shift.
+          <h1 className="mt-6 text-4xl font-black leading-tight tracking-tight sm:text-5xl">
+            The faster way to <br />run your shop.
           </h1>
           <div className="mt-12 h-1 w-20 bg-brand-500 rounded-full"></div>
           <p className="mt-8 max-w-sm text-lg font-medium text-slate-400 leading-relaxed">
@@ -78,15 +86,15 @@ export function LoginPage() {
           </p>
         </section>
 
-        <section className="px-8 py-10">
-          <p className="text-sm font-semibold uppercase tracking-[0.25em] text-brand-600">
-            {t('login.secure_login')}
+        <section className="px-8 py-10 sm:px-12">
+          <p className="inline-flex items-center gap-2 rounded-full bg-brand-50 px-3 py-1.5 text-xs font-black uppercase tracking-[0.16em] text-brand-700">
+            <LockKeyhole size={13} /> {t('login.secure_login')}
           </p>
-          <h2 className="mt-3 text-3xl font-bold text-ink">{t('login.welcome')}</h2>
+          <h2 className="mt-5 text-3xl font-black text-ink">{t('login.welcome')}</h2>
           <p className="mt-3 text-sm text-slate-500">
             {t('login.welcome_desc')}
           </p>
-          <p className="mt-4 text-sm text-brand-600 hover:underline cursor-pointer" onClick={() => navigate('/home')}>
+          <p className="mt-4 cursor-pointer text-sm font-semibold text-brand-600 hover:underline" onClick={() => navigate('/home')}>
             Learn more about our subscription and how this POS helps your business.
           </p>
 
@@ -133,7 +141,7 @@ export function LoginPage() {
             <button
               type="submit"
               disabled={!authConfigured || submitting}
-              className="w-full rounded-2xll bg-slate-950 px-4 py-5 text-sm font-bold text-white shadow-xl transition hover:bg-black disabled:cursor-not-allowed disabled:bg-slate-300 active:scale-[0.98]"
+              className="w-full rounded-xl bg-slate-950 px-4 py-4 text-sm font-black text-white shadow-xl transition hover:bg-black disabled:cursor-not-allowed disabled:bg-slate-300 active:scale-[0.98]"
             >
               {submitting ? t('login.entering') : t('login.sign_in')}
             </button>

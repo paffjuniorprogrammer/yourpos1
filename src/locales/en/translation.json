@@ -63,7 +63,7 @@
     "logout": "Logout"
   },
   "login": {
-    "brand": "Your POS",
+    "brand": "UMUCURUZI POS",
     "title_part1": "Control",
     "title_part2": "Every",
     "title_part3": "Shift.",
@@ -75,7 +75,7 @@
     "email": "Email Address",
     "password": "Secret Password",
     "entering": "Entering System...",
-    "sign_in": "Sign Into Your POS",
+    "sign_in": "Sign Into UMUCURUZI POS",
     "error_failed": "Login failed. Please check your credentials.",
     "error_unable": "Unable to sign in.",
     "assistance": "Need Assistance?",

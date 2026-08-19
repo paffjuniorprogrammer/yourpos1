@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowRight,
@@ -25,7 +25,11 @@ import {
   Clock3,
   Star,
   ChevronRight,
+  ChevronLeft,
+  MessageCircle,
 } from "lucide-react";
+
+const WHATSAPP_NUMBER = "250793063512";
 
 // ─── Feature screens data ─────────────────────────────────────────────────────
 const screens = [
@@ -150,8 +154,33 @@ const colorMap: Record<string, { badge: string; ring: string; dot: string }> = {
 export function HomePage() {
   const navigate = useNavigate();
   const [activeScreen, setActiveScreen] = useState(0);
+  const [requestSent, setRequestSent] = useState(false);
   const active = screens[activeScreen];
   const colors = colorMap[active.color];
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setActiveScreen((current) => (current + 1) % screens.length), 6000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  function showRequestForm() {
+    document.getElementById("request-access")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function handleRequest(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const message = [
+      "Hello P & D Digital Solution, I would like to use UMUCURUZI POS.", "",
+      `Name: ${form.get("name")}`,
+      `Contact: ${form.get("contact")}`,
+      `Business name: ${form.get("businessName")}`,
+      `Location: ${form.get("location")}`,
+      `Email: ${form.get("email")}`,
+    ].join("\n");
+    window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
+    setRequestSent(true);
+  }
 
   return (
     <div className="min-h-screen bg-[#f8f9fb] text-ink">
@@ -162,11 +191,17 @@ export function HomePage() {
           <button onClick={() => navigate("/")} className="flex items-center gap-3 text-left">
             <img src="/pos-logo.jpg" alt="POS logo" className="h-10 w-10 rounded-xl object-cover shadow-sm" />
             <div>
-              <p className="text-sm font-black uppercase tracking-[0.18em] text-ink">YourPOS</p>
+              <p className="text-sm font-black uppercase tracking-[0.18em] text-ink">UMUCURUZI POS</p>
               <p className="text-[11px] font-semibold text-slate-400">Sales · Stock · Reports</p>
             </div>
           </button>
           <div className="flex items-center gap-3">
+            <button
+              onClick={showRequestForm}
+              className="hidden text-sm font-bold text-slate-600 transition hover:text-brand-600 sm:inline-flex"
+            >
+              Request access
+            </button>
             <button
               onClick={() => navigate("/subscription")}
               className="hidden rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-600 transition hover:bg-slate-50 sm:inline-flex"
@@ -203,10 +238,10 @@ export function HomePage() {
             </p>
             <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
               <button
-                onClick={() => navigate("/login")}
+                onClick={showRequestForm}
                 className="inline-flex items-center gap-2 rounded-2xl bg-brand-600 px-7 py-4 text-sm font-black text-white shadow-lg shadow-brand-500/25 transition hover:bg-brand-700"
               >
-                Start using the system <ArrowRight size={17} />
+                Request the system <ArrowRight size={17} />
               </button>
               <button
                 onClick={() => navigate("/subscription")}
@@ -237,7 +272,7 @@ export function HomePage() {
             <div className="relative overflow-hidden rounded-[1.5rem] border border-slate-200 shadow-[0_32px_100px_rgba(15,23,42,0.15)]">
               <img
                 src="/screenshots/dashboard.png"
-                alt="YourPOS Dashboard"
+                alt="UMUCURUZI POS Dashboard"
                 className="w-full object-cover"
               />
             </div>
@@ -264,6 +299,33 @@ export function HomePage() {
         </section>
 
         {/* ── SCREENSHOT SHOWCASE ──────────────────────────────────────────────── */}
+        <section id="request-access" className="border-y border-slate-200 bg-slate-50 px-4 py-20 sm:px-6 lg:px-8">
+          <div className="mx-auto grid max-w-5xl gap-10 rounded-[2rem] bg-white p-6 shadow-xl shadow-slate-200/50 sm:p-10 lg:grid-cols-[0.85fr_1.15fr] lg:p-12">
+            <div>
+              <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-black uppercase tracking-widest text-emerald-700">
+                <MessageCircle size={14} /> WhatsApp request
+              </span>
+              <h2 className="mt-5 text-3xl font-black text-ink">Ready to run your business with UMUCURUZI POS?</h2>
+              <p className="mt-4 leading-7 text-slate-500">Tell us a little about your business. Your request opens in WhatsApp so the P &amp; D Digital Solution team can respond quickly.</p>
+              <div className="mt-8 rounded-2xl bg-slate-950 p-5 text-sm text-slate-300">
+                <p className="font-bold text-white">What happens next?</p>
+                <p className="mt-2 leading-6">We receive your details on WhatsApp, discuss your shop needs, then help you get set up.</p>
+              </div>
+            </div>
+            <form onSubmit={handleRequest} className="grid gap-4 sm:grid-cols-2">
+              <label className="sm:col-span-2"><span className="mb-1.5 block text-sm font-bold text-slate-700">Your name</span><input name="name" required autoComplete="name" placeholder="Full name" className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-brand-500 focus:ring-4 focus:ring-brand-100" /></label>
+              <label><span className="mb-1.5 block text-sm font-bold text-slate-700">Contact number</span><input name="contact" required autoComplete="tel" inputMode="tel" placeholder="e.g. +250 ..." className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-brand-500 focus:ring-4 focus:ring-brand-100" /></label>
+              <label><span className="mb-1.5 block text-sm font-bold text-slate-700">Business name</span><input name="businessName" required autoComplete="organization" placeholder="Your business" className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-brand-500 focus:ring-4 focus:ring-brand-100" /></label>
+              <label><span className="mb-1.5 block text-sm font-bold text-slate-700">Location</span><input name="location" required autoComplete="address-level2" placeholder="Town / district" className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-brand-500 focus:ring-4 focus:ring-brand-100" /></label>
+              <label><span className="mb-1.5 block text-sm font-bold text-slate-700">Email address</span><input name="email" required type="email" autoComplete="email" placeholder="you@business.com" className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-brand-500 focus:ring-4 focus:ring-brand-100" /></label>
+              <div className="sm:col-span-2">
+                <button type="submit" className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#25D366] px-5 py-3.5 text-sm font-black text-white shadow-lg shadow-emerald-500/20 transition hover:bg-[#20bd5a]">Send request on WhatsApp <MessageCircle size={18} /></button>
+                {requestSent ? <p className="mt-3 text-center text-sm font-semibold text-emerald-700">WhatsApp has opened with your request ready to send.</p> : null}
+              </div>
+            </form>
+          </div>
+        </section>
+
         <section className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
           <div className="text-center">
             <p className="text-xs font-black uppercase tracking-[0.22em] text-brand-600">See it in action</p>
@@ -275,8 +337,17 @@ export function HomePage() {
             </p>
           </div>
 
-          {/* tab pills */}
-          <div className="mt-10 flex flex-wrap justify-center gap-2">
+          {/* Auto-advancing screenshot carousel controls */}
+          <div className="mt-10 flex items-center justify-center gap-3">
+            <button
+              type="button"
+              aria-label="Show previous screen"
+              onClick={() => setActiveScreen((current) => (current - 1 + screens.length) % screens.length)}
+              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:border-brand-200 hover:text-brand-600"
+            >
+              <ChevronLeft size={18} />
+            </button>
+            <div className="flex flex-wrap justify-center gap-2">
             {screens.map((s, i) => {
               const c = colorMap[s.color];
               return (
@@ -294,6 +365,26 @@ export function HomePage() {
                 </button>
               );
             })}
+            </div>
+            <button
+              type="button"
+              aria-label="Show next screen"
+              onClick={() => setActiveScreen((current) => (current + 1) % screens.length)}
+              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:border-brand-200 hover:text-brand-600"
+            >
+              <ChevronRight size={18} />
+            </button>
+          </div>
+          <div className="mt-5 flex justify-center gap-2" aria-label="Screenshot carousel position">
+            {screens.map((screen, index) => (
+              <button
+                key={screen.id}
+                type="button"
+                aria-label={`Show ${screen.label}`}
+                onClick={() => setActiveScreen(index)}
+                className={`h-2 rounded-full transition-all ${activeScreen === index ? "w-8 bg-brand-600" : "w-2 bg-slate-200 hover:bg-slate-300"}`}
+              />
+            ))}
           </div>
 
           {/* content */}
@@ -453,15 +544,15 @@ export function HomePage() {
                   Start managing your business the right way.
                 </h2>
                 <p className="mt-4 max-w-xl text-base leading-7 text-white/80">
-                  Join shops already using YourPOS to track sales, manage stock, handle supplier payments, and generate reports — all in one place.
+                  Join shops already using UMUCURUZI POS to track sales, manage stock, handle supplier payments, and generate reports — all in one place.
                 </p>
               </div>
               <div className="flex flex-col gap-3">
                 <button
-                  onClick={() => navigate("/login")}
+                  onClick={showRequestForm}
                   className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-7 py-4 text-sm font-black text-brand-700 shadow-lg transition hover:bg-slate-50"
                 >
-                  Login now <Receipt size={18} />
+                  Request access <MessageCircle size={18} />
                 </button>
                 <button
                   onClick={() => navigate("/subscription")}
@@ -478,11 +569,10 @@ export function HomePage() {
       {/* ── FOOTER ───────────────────────────────────────────────────────────── */}
       <footer className="border-t border-slate-200 bg-white px-4 py-8 text-center text-sm font-semibold text-slate-400">
         <span className="inline-flex items-center gap-2">
-          <FileText size={15} /> YourPOS — Sales · Inventory · Reports · Subscriptions
+          <FileText size={15} /> UMUCURUZI POS — Sales · Inventory · Reports · Subscriptions
         </span>
+        <p className="mt-2 font-black text-slate-600">System powered by P &amp; D Digital Solution</p>
       </footer>
     </div>
   );
 }
-
-

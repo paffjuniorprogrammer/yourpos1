@@ -117,7 +117,7 @@ export function AppShell() {
             </div>
           )}
           <span className="text-xs font-black uppercase tracking-widest truncate max-w-[150px]">
-            {settings?.shop_name || "YOUR POS"}
+            {settings?.shop_name || "UMUCURUZI POS"}
           </span>
         </div>
         <button
@@ -230,7 +230,7 @@ export function AppShell() {
               </p>
             </div>
             <h2 className="mt-4 text-xl font-bold line-clamp-2">
-              {settings?.shop_name || "Your POS"}
+              {settings?.shop_name || "UMUCURUZI POS"}
             </h2>
             <p className="mt-2 text-xs text-blue-50/70">
               {settings?.address || "Fast checkout and oversight."}

@@ -71,8 +71,8 @@ export async function listPosProducts(locationId?: string | null, limit = 500) {
       
       // Use a lean select to speed up transfer, conditionally including product_stocks
       const selectQuery = locationId 
-        ? `id, name, barcode, selling_price, stock_quantity, reorder_level, image_url, bulk_quantity, bulk_price, product_stocks(quantity, location_id)`
-        : `id, name, barcode, selling_price, stock_quantity, reorder_level, image_url, bulk_quantity, bulk_price`;
+        ? `id, business_id, name, barcode, selling_price, stock_quantity, reorder_level, image_url, bulk_quantity, bulk_price, product_stocks(quantity, location_id)`
+        : `id, business_id, name, barcode, selling_price, stock_quantity, reorder_level, image_url, bulk_quantity, bulk_price`;
 
       const { data, error } = await withFastCacheTimeout(client
         .from("products")

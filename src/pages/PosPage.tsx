@@ -169,6 +169,28 @@ export function PosPage() {
   const [shiftClosureForPrint, setShiftClosureForPrint] = useState<any>(null);
   const PRODUCTS_PER_PAGE = 30;
 
+  function selectCustomer(customer: PosCustomerRecord) {
+    const customerDiscount = Number(customer.discount_percentage) || 0;
+    setSelectedCustomer(customer.full_name);
+    setCustomerQuery('');
+    // A customer selection owns the automatic order discount. This prevents a
+    // previous customer's discount from remaining on the current order.
+    setOrderDiscount({ type: 'percentage', value: customerDiscount });
+    if (customerDiscount > 0) {
+      showToast("info", "Applied " + customer.full_name + "'s " + customerDiscount + "% customer discount");
+    }
+  }
+
+  function resetToWalkInCustomer() {
+    const hadCustomerDiscount = orderDiscount.type === 'percentage' && orderDiscount.value > 0;
+    setSelectedCustomer(t('pos.walk_in_customer'));
+    setCustomerQuery('');
+    setOrderDiscount({ type: 'percentage', value: 0 });
+    if (hadCustomerDiscount) {
+      showToast("info", "Customer discount removed. Walk-in Customer is now selected.");
+    }
+  }
+
   // Top-level permission check
   if (authConfigured && profile && !can("POS", "view")) {
     return (
@@ -734,7 +756,7 @@ export function PosPage() {
       
       // Update local state if needed (though pre-fetch will catch it, we want it NOW)
       setCustomers(prev => [...prev, customer]);
-      setSelectedCustomer(customer.full_name);
+      selectCustomer(customer);
       
       // Reset and close
       setNewCustomerName("");
@@ -987,7 +1009,10 @@ export function PosPage() {
     );
   }
 
-  if (!registerOpen && checkingRegister) {
+  // Do not hide already available products and customers while the register
+  // status check is finishing. First-time visits still show the normal status
+  // screen until there is data to display.
+  if (!registerOpen && checkingRegister && products.length === 0 && customers.length === 0) {
     return (
       <div className="flex h-screen items-center justify-center bg-slate-50">
         <div className="text-center font-medium text-slate-500">
@@ -1000,40 +1025,40 @@ export function PosPage() {
   return (
     <div className="h-screen overflow-hidden bg-slate-100 px-2 py-1 text-ink sm:px-3 lg:px-4">
       <div className="mx-auto flex h-full max-w-[1700px] flex-col">
-        <div className="mb-1 rounded-[16px] bg-white px-2 py-1 shadow-soft">
-          <div className="flex min-h-12 items-center gap-2 flex-wrap lg:flex-nowrap">
+        <div className="mb-0.5 rounded-[16px] bg-white px-2 py-0.5 shadow-soft">
+          <div className="flex min-h-10 items-center gap-2 flex-wrap lg:flex-nowrap">
             <div className="flex gap-2 items-center">
               <button
                 onClick={() => { setHistoryOpen(true); void loadRecentSales(); }}
                 title={t('pos.ui.recent_sales')}
-                className="flex h-10 items-center justify-center rounded-2xl bg-slate-100 px-3 text-slate-700 transition hover:bg-slate-200"
+                className="flex h-9 items-center justify-center rounded-xl bg-slate-100 px-3 text-slate-700 transition hover:bg-slate-200"
               >
                 <History size={14} />
               </button>
               <button
                 onClick={() => setCloseDayOpen(true)}
                 title={t('pos.ui.close_day')}
-                className="flex h-10 items-center justify-center rounded-2xl bg-rose-50 px-3 text-rose-700 transition hover:bg-rose-100"
+                className="flex h-9 items-center justify-center rounded-xl bg-rose-50 px-3 text-rose-700 transition hover:bg-rose-100"
               >
                 <Clock3 size={14} />
               </button>
               <button
                 onClick={() => setCalculatorOpen(true)}
                 title={t('pos.ui.calculator')}
-                className="flex h-10 items-center justify-center rounded-2xl bg-amber-50 px-3 text-amber-700 transition hover:bg-amber-100"
+                className="flex h-9 items-center justify-center rounded-xl bg-amber-50 px-3 text-amber-700 transition hover:bg-amber-100"
               >
                 <Calculator size={14} />
               </button>
               <button
                 onClick={() => navigate("/dashboard")}
                 title={t('common.dashboard')}
-                className="flex h-10 items-center justify-center rounded-2xl bg-brand-50 px-3 text-brand-700 transition hover:bg-brand-100"
+                className="flex h-9 items-center justify-center rounded-xl bg-brand-50 px-3 text-brand-700 transition hover:bg-brand-100"
               >
                 <LayoutDashboard size={14} />
               </button>
             </div>
 
-            <div className="hidden sm:flex h-10 min-w-0 flex-1 items-center justify-center gap-2 rounded-2xl bg-slate-50 px-3 text-center">
+            <div className="hidden sm:flex h-9 min-w-0 flex-1 items-center justify-center gap-2 rounded-xl bg-slate-50 px-3 text-center">
               <Clock3 size={13} className="text-brand-600" />
               <p className="truncate text-xs font-semibold text-ink">{liveTime}</p>
               <p className="truncate text-[11px] text-slate-500">{liveDate}</p>
@@ -1084,7 +1109,7 @@ export function PosPage() {
 
                 <button
                   onClick={() => setMenuOpen((current) => !current)}
-                  className="flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 transition hover:bg-slate-100"
+                  className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 transition hover:bg-slate-100"
                 >
                   <ChevronDown size={14} className={`text-slate-500 transition-transform ${menuOpen ? 'rotate-180' : ''}`} />
                 </button>
@@ -1116,7 +1141,7 @@ export function PosPage() {
           </div>
         </div>
 
-        <div className="grid flex-1 gap-1 xl:grid-cols-[0.92fr_1.08fr]" style={{ minHeight: 0, height: 'calc(100vh - 56px)' }}>
+        <div className="grid flex-1 gap-1 xl:grid-cols-[0.92fr_1.08fr]" style={{ minHeight: 0, height: 'calc(100vh - 46px)' }}>
           <section className="flex min-h-0 flex-col gap-1">
             {pageError ? (
               <div className="rounded-[18px] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
@@ -1246,24 +1271,26 @@ export function PosPage() {
             <div className="flex min-h-0 flex-1 flex-col space-y-3">
               <div className="w-full rounded-3xl border border-slate-800 bg-slate-900 p-2.5">
                 <div className="relative">
-                  <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                  <Search size={15} className="absolute left-3 top-5 -translate-y-1/2 text-slate-500" />
                     <input
-                      value={customerQuery}
+                      value={customerQuery || selectedCustomer}
+                      onFocus={() => {
+                        // Keep the selected name visible until the cashier starts
+                        // a new search, then open an empty search field.
+                        if (!customerQuery) setCustomerQuery(' ');
+                      }}
                       onChange={(event) => setCustomerQuery(event.target.value)}
-                      className={`w-full rounded-2xl bg-slate-950 py-2.5 pl-10 pr-20 text-sm text-white outline-none ${
+                      className={`w-full rounded-2xl bg-slate-950 py-2.5 pl-10 pr-[19rem] text-sm text-white outline-none ${
                         currentCustomer
                           ? "border border-brand-500"
                           : "border border-slate-700"
                       }`}
-                      placeholder={selectedCustomer}
+                      placeholder={t('pos.walk_in_customer')}
                     />
-                    <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                    <div className="absolute right-2 top-5 -translate-y-1/2 flex items-center gap-1">
                       {currentCustomer && (
                         <button
-                          onClick={() => {
-                            setSelectedCustomer(t('pos.walk_in_customer'));
-                            setCustomerQuery('');
-                          }}
+                          onClick={resetToWalkInCustomer}
                           className="flex h-8 w-8 items-center justify-center rounded-xl bg-red-500/10 text-red-400 transition hover:bg-red-500 hover:text-white"
                           title="Clear customer"
                         >
@@ -1283,14 +1310,7 @@ export function PosPage() {
                       {filteredCustomers.slice(0, 6).map((c) => (
                         <button
                           key={c.id}
-                          onClick={() => {
-                            setSelectedCustomer(c.full_name);
-                            setCustomerQuery("");
-                            if (Number(c.discount_percentage) > 0) {
-                              setOrderDiscount({ type: 'percentage', value: Number(c.discount_percentage) });
-                              showToast("info", `✓ Applied ${c.full_name}'s ${c.discount_percentage}% customer discount`);
-                            }
-                          }}
+                          onClick={() => selectCustomer(c)}
                           className="flex w-full items-center gap-3 px-4 py-3 text-sm text-white hover:bg-slate-800 border-b border-slate-800 last:border-b-0"
                         >
                           <UserPlus size={14} className="shrink-0 opacity-50" />
@@ -1315,14 +1335,14 @@ export function PosPage() {
                     </div>
                   ) : null}
                   {currentCustomer && (
-                    <div className="mt-2 flex flex-wrap gap-1.5 px-1">
+                    <div className="absolute right-20 top-5 flex -translate-y-1/2 items-center gap-1.5">
                       {Number(currentCustomer.discount_percentage) > 0 && (
-                        <span className="text-[11px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                        <span className="whitespace-nowrap text-[11px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
                           🏷️ {currentCustomer.discount_percentage}% discount
                         </span>
                       )}
                       {Number(currentCustomer.credit_limit) > 0 && (
-                        <span className="text-[11px] font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
+                        <span className="whitespace-nowrap text-[11px] font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
                           💳 {formatCurrency(Number(currentCustomer.credit_limit))} limit
                         </span>
                       )}
