@@ -73,16 +73,23 @@ type CartItem = {
 function computeBulkBreakdown(
   qty: number,
   unitPrice: number,
-  bulkQty: number | null,
-  bulkPrice: number | null
+  bulkQty: number | string | null | undefined,
+  bulkPrice: number | string | null | undefined
 ): BulkBreakdown | undefined {
-  if (!bulkQty || !bulkPrice || bulkQty <= 1) return undefined;
+  const bQty = Number(bulkQty);
+  const bPrice = Number(bulkPrice);
+  const uPrice = Number(unitPrice);
+  const q = Number(qty);
+
+  if (!bQty || !bPrice || isNaN(bQty) || isNaN(bPrice) || bQty <= 1 || bPrice <= 0 || isNaN(uPrice) || uPrice <= 0 || isNaN(q) || q <= 0) {
+    return undefined;
+  }
   // Only apply bulk pricing when it's actually cheaper
-  if (bulkPrice >= bulkQty * unitPrice) return undefined;
-  const packages = Math.floor(qty / bulkQty);
-  const remaining = qty % bulkQty;
-  const lineTotal = packages * bulkPrice + remaining * unitPrice;
-  return { bulkPackages: packages, bulkQty, bulkPrice, remainingUnits: remaining, unitPrice, lineTotal };
+  if (bPrice >= bQty * uPrice) return undefined;
+  const packages = Math.floor(q / bQty);
+  const remaining = Math.round((q % bQty) * 1000) / 1000;
+  const lineTotal = packages * bPrice + remaining * uPrice;
+  return { bulkPackages: packages, bulkQty: bQty, bulkPrice: bPrice, remainingUnits: remaining, unitPrice: uPrice, lineTotal };
 }
 
 const calcKeys = ["7", "8", "9", "/", "4", "5", "6", "*", "1", "2", "3", "-", "0", ".", "=", "+"];
@@ -120,6 +127,60 @@ export function PosPage() {
     } catch { /* ignore */ }
     return [];
   });
+
+  // Keep state synchronized with PosDataContext updates
+  useEffect(() => {
+    if (cachedProducts && cachedProducts.length > 0) {
+      setProducts(cachedProducts);
+      setLoading(false);
+    }
+  }, [cachedProducts]);
+
+  useEffect(() => {
+    if (cachedCustomers && cachedCustomers.length > 0) {
+      setCustomers(cachedCustomers);
+    }
+  }, [cachedCustomers]);
+
+  useEffect(() => {
+    if (cachedSettings) {
+      setShopSettings(cachedSettings);
+    }
+  }, [cachedSettings]);
+
+  // Reconcile and calculate bulkBreakdown for items in cart whenever products are loaded or modified
+  useEffect(() => {
+    if (products.length === 0 || cart.length === 0) return;
+    setCart((currentCart) => {
+      let hasChanges = false;
+      const updated = currentCart.map((item) => {
+        const product = products.find((p) => p.id === item.id);
+        if (!product) return item;
+        const newBreakdown = computeBulkBreakdown(
+          item.qty,
+          item.price,
+          product.bulk_quantity,
+          product.bulk_price
+        );
+        const oldBd = item.bulkBreakdown;
+        const bdChanged =
+          Boolean(oldBd) !== Boolean(newBreakdown) ||
+          (oldBd && newBreakdown && (
+            oldBd.bulkPackages !== newBreakdown.bulkPackages ||
+            oldBd.bulkQty !== newBreakdown.bulkQty ||
+            oldBd.bulkPrice !== newBreakdown.bulkPrice ||
+            oldBd.remainingUnits !== newBreakdown.remainingUnits ||
+            oldBd.lineTotal !== newBreakdown.lineTotal
+          ));
+        if (bdChanged) {
+          hasChanges = true;
+          return { ...item, bulkBreakdown: newBreakdown };
+        }
+        return item;
+      });
+      return hasChanges ? updated : currentCart;
+    });
+  }, [products]);
 
   const [customerQuery, setCustomerQuery] = useState("");
   const [selectedCustomer, setSelectedCustomer] = useState(t('pos.walk_in_customer'));
@@ -462,7 +523,7 @@ export function PosPage() {
   }, [authConfigured, closeDayOpen, profile?.id, todayIso, activeLocationId, activeShift]);
 
   function addToCart(productId: string) {
-    const product = products.find((item) => item.id === productId);
+    const product = products.find((item) => item.id === productId) || cachedProducts.find((item) => item.id === productId);
     if (!product) return;
     const price = Number(product.selling_price || 0);
     setCart((current) => {
@@ -548,7 +609,7 @@ export function PosPage() {
         .map((item) => {
           if (item.id !== id) return item;
           const newQty = Math.max(0, Math.round((item.qty + delta) * 1000) / 1000);
-          const product = products.find(p => p.id === id);
+          const product = products.find(p => p.id === id) || cachedProducts.find(p => p.id === id);
           const breakdown = product
             ? computeBulkBreakdown(newQty, item.price, product.bulk_quantity, product.bulk_price)
             : undefined;
@@ -567,7 +628,7 @@ export function PosPage() {
     if (parsed > 0) {
       setCart((current) => current.map((item) => {
         if (item.id !== id) return item;
-        const product = products.find(p => p.id === id);
+        const product = products.find(p => p.id === id) || cachedProducts.find(p => p.id === id);
         const breakdown = product
           ? computeBulkBreakdown(parsed, item.price, product.bulk_quantity, product.bulk_price)
           : undefined;
@@ -1245,7 +1306,15 @@ export function PosPage() {
                       </div>
                     )}
                     <div className="flex w-full flex-1 flex-col justify-between px-1 pb-0.5">
-                      <p className="line-clamp-2 text-[13px] font-black leading-tight text-ink">{product.name}</p>
+                      <div>
+                        <p className="line-clamp-2 text-[13px] font-black leading-tight text-ink">{product.name}</p>
+                        {Number(product.bulk_quantity) > 1 && Number(product.bulk_price) > 0 && Number(product.bulk_price) < Number(product.bulk_quantity) * Number(product.selling_price) && (
+                          <div className="mt-1 inline-flex items-center gap-1 rounded bg-emerald-50 px-1.5 py-0.5 text-[9px] font-black text-emerald-700">
+                            <span>📦 Box ({product.bulk_quantity}):</span>
+                            <span>{formatCurrency(Number(product.bulk_price))}</span>
+                          </div>
+                        )}
+                      </div>
                       <div className="mt-2 flex items-center justify-between gap-1 w-full">
                         <span className="text-[13px] font-black text-brand-600">{formatCurrency(product.selling_price)}</span>
                         <span className={`text-[10px] font-black rounded-lg px-2 py-0.5 ${

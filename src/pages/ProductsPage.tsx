@@ -427,6 +427,11 @@ export function ProductsPage() {
                         </td>
                         <td className="border-b border-slate-100 px-5 py-4 text-right">
                           <p className="text-base font-black text-ink">{formatCurrency(product.selling_price)}</p>
+                          {Number(product.bulk_quantity) > 1 && Number(product.bulk_price) > 0 && (
+                            <p className="text-[10px] font-extrabold text-emerald-700 whitespace-nowrap">
+                              📦 Box ({product.bulk_quantity}): {formatCurrency(Number(product.bulk_price))}
+                            </p>
+                          )}
                         </td>
                         <td className="border-b border-slate-100 px-5 py-4 text-center">
                           <div className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-black ${
@@ -575,6 +580,12 @@ export function ProductsPage() {
                         <span className="text-sm text-slate-500">Selling Price</span>
                         <span className="text-lg font-black text-brand-600">{formatCurrency(selectedProduct.selling_price)}</span>
                       </div>
+                      {Number(selectedProduct.bulk_quantity) > 1 && Number(selectedProduct.bulk_price) > 0 && (
+                        <div className="flex justify-between items-center py-2 border-t border-slate-100">
+                          <span className="text-sm text-slate-500">Box Deal ({selectedProduct.bulk_quantity} pcs)</span>
+                          <span className="font-black text-emerald-600">{formatCurrency(Number(selectedProduct.bulk_price))}</span>
+                        </div>
+                      )}
                     </div>
 
                     <div className={`rounded-3xl p-4 ${selectedProduct.stock_quantity <= (selectedProduct.reorder_level || 5) ? 'bg-amber-50' : 'bg-emerald-50'}`}>

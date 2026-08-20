@@ -327,6 +327,16 @@ export async function createProduct(values: ProductFormValues, businessId: strin
 
   if (data?.id) {
     await syncProductLocations(data.id, businessId, values);
+    try {
+      await db.cached_products.put({
+        id: data.id,
+        business_id: data.business_id ?? businessId,
+        data: data,
+        updated_at: new Date().toISOString(),
+      });
+    } catch (cacheErr) {
+      console.warn("Failed to update cache on product creation:", cacheErr);
+    }
   }
 
   return data as ProductRecord;
