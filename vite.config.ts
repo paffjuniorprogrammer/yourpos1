@@ -9,10 +9,14 @@ export default defineConfig({
       registerType: "autoUpdate",
       includeAssets: ["pos-logo.jpg"],
       manifest: {
-        name: "Antigravity POS",
-        short_name: "AG POS",
-        description: "Modern Multi-Tenant Point of Sale System",
+        name: "UMUCURUZI POS",
+        short_name: "UMUCURUZI",
+        description: "Smart Point of Sale system for businesses in Rwanda. Manage sales, inventory, purchases, VAT reports and more.",
         theme_color: "#2563eb",
+        background_color: "#ffffff",
+        display: "standalone",
+        start_url: "/",
+        lang: "en",
         icons: [
           {
             src: "/pos-logo.jpg",
@@ -25,3 +29,4 @@ export default defineConfig({
     }),
   ],
 });
+

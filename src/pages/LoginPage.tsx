@@ -3,6 +3,8 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useTranslation } from "react-i18next";
 import { ArrowLeft, LockKeyhole } from "lucide-react";
+import { SEO } from "../components/seo/SEO";
+
 
 export function LoginPage() {
   const { t } = useTranslation();
@@ -65,6 +67,7 @@ export function LoginPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 px-4 py-6 sm:py-10">
+      <SEO title="Sign In" description="Sign in to your UMUCURUZI POS account." canonical="/login" noIndex />
       <div className="mx-auto mb-6 flex max-w-5xl items-center justify-between">
         <button onClick={() => navigate("/")} className="flex items-center gap-3 text-left">
           <img src="/pos-logo.jpg" alt="UMUCURUZI POS" className="h-10 w-10 rounded-xl object-cover shadow-sm" />

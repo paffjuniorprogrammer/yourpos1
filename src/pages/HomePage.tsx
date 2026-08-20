@@ -1,5 +1,6 @@
 import { type FormEvent, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { SEO } from "../components/seo/SEO";
 import {
   ArrowRight,
   BarChart3,
@@ -184,6 +185,49 @@ export function HomePage() {
 
   return (
     <div className="min-h-screen bg-[#f8f9fb] text-ink">
+      {/* ── SEO ──────────────────────────────────────────────────────────────── */}
+      <SEO
+        title="Smart Point of Sale for Rwanda"
+        description="UMUCURUZI POS is a modern Point of Sale system for businesses in Rwanda. Manage sales, inventory, purchases, VAT reports, customers, and suppliers — all in one place."
+        canonical="/"
+      >
+        <script type="application/ld+json">{JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "SoftwareApplication",
+          "name": "UMUCURUZI POS",
+          "url": "https://umucuruzipos.vercel.app/",
+          "logo": "https://umucuruzipos.vercel.app/pos-logo.jpg",
+          "description": "Modern Point of Sale system for businesses in Rwanda. Manage sales, inventory, purchases, VAT reports, customers, and multi-store transfers.",
+          "applicationCategory": "BusinessApplication",
+          "operatingSystem": "Web Browser",
+          "browserRequirements": "Requires JavaScript",
+          "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "RWF",
+            "description": "Contact for subscription pricing"
+          },
+          "featureList": [
+            "Point of Sale (POS) checkout",
+            "Inventory & stock management",
+            "Sales & purchase tracking",
+            "VAT report generation (18%)",
+            "Customer & supplier management",
+            "Multi-store transfers",
+            "Barcode scanning support",
+            "MoMo, Cash & Card payment modes"
+          ],
+          "areaServed": {
+            "@type": "Country",
+            "name": "Rwanda"
+          },
+          "provider": {
+            "@type": "Organization",
+            "name": "P & D Digital Solution",
+            "url": "https://umucuruzipos.vercel.app/"
+          }
+        })}</script>
+      </SEO>
 
       {/* ── NAV ──────────────────────────────────────────────────────────────── */}
       <header className="sticky top-0 z-50 border-b border-slate-200/80 bg-white/90 backdrop-blur-md">

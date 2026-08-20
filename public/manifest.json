@@ -1,11 +1,14 @@
 {
   "name": "UMUCURUZI POS",
-  "short_name": "POS",
-  "description": "Modern Point of Sale System",
+  "short_name": "UMUCURUZI",
+  "description": "Smart Point of Sale system for businesses in Rwanda. Manage sales, inventory, purchases, VAT reports, customers, and suppliers.",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#2563eb",
+  "lang": "en",
+  "categories": ["business", "finance", "productivity"],
   "icons": [
     {
       "src": "/pos-logo.jpg",

@@ -1,0 +1,28 @@
+# robots.txt for UMUCURUZI POS
+# https://umucuruzipos.vercel.app
+
+User-agent: *
+
+# Allow public marketing pages
+Allow: /
+Allow: /home
+
+# Block all authenticated/private app routes
+Disallow: /dashboard
+Disallow: /pos
+Disallow: /products
+Disallow: /sales
+Disallow: /purchases
+Disallow: /requisitions
+Disallow: /customers
+Disallow: /suppliers
+Disallow: /stock
+Disallow: /transfers
+Disallow: /reports
+Disallow: /vat-report
+Disallow: /settings
+Disallow: /subscription
+Disallow: /super-admin
+
+# Sitemap location
+Sitemap: https://umucuruzipos.vercel.app/sitemap.xml
