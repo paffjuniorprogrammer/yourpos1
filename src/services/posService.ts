@@ -64,7 +64,21 @@ function withFastCacheTimeout<T>(promise: PromiseLike<T>) {
   ]);
 }
 
+const DEMO_PRODUCTS: PosProductRecord[] = [
+  { id: "demo-prod-1", name: "Inyange Fresh Milk 1L", barcode: "600123456789", selling_price: 1200, stock_quantity: 45, reorder_level: 10, image_url: null, category_name: "Dairy", bulk_quantity: null, bulk_price: null, bulk_pricing_mode: null, bulk_discount_value: null, parent_id: null, is_parent: false, variant_combination: null },
+  { id: "demo-prod-2", name: "Baking Powder 100g", barcode: "600123456790", selling_price: 800, stock_quantity: 30, reorder_level: 5, image_url: null, category_name: "Bakery", bulk_quantity: null, bulk_price: null, bulk_pricing_mode: null, bulk_discount_value: null, parent_id: null, is_parent: false, variant_combination: null },
+  { id: "demo-prod-3", name: "Rwandan Coffee Beans 500g", barcode: "600123456791", selling_price: 6500, stock_quantity: 18, reorder_level: 4, image_url: null, category_name: "Beverages", bulk_quantity: null, bulk_price: null, bulk_pricing_mode: null, bulk_discount_value: null, parent_id: null, is_parent: false, variant_combination: null },
+  { id: "demo-prod-4", name: "Basmati Rice 5kg", barcode: "600123456792", selling_price: 8500, stock_quantity: 25, reorder_level: 6, image_url: null, category_name: "Grains", bulk_quantity: null, bulk_price: null, bulk_pricing_mode: null, bulk_discount_value: null, parent_id: null, is_parent: false, variant_combination: null },
+  { id: "demo-prod-5", name: "Sunflower Cooking Oil 3L", barcode: "600123456793", selling_price: 9200, stock_quantity: 12, reorder_level: 5, image_url: null, category_name: "Oil", bulk_quantity: null, bulk_price: null, bulk_pricing_mode: null, bulk_discount_value: null, parent_id: null, is_parent: false, variant_combination: null },
+  { id: "demo-prod-6", name: "White Sugar 1kg", barcode: "600123456794", selling_price: 1500, stock_quantity: 60, reorder_level: 15, image_url: null, category_name: "Groceries", bulk_quantity: null, bulk_price: null, bulk_pricing_mode: null, bulk_discount_value: null, parent_id: null, is_parent: false, variant_combination: null },
+  { id: "demo-prod-7", name: "Blueband Butter 250g", barcode: "600123456795", selling_price: 2200, stock_quantity: 22, reorder_level: 8, image_url: null, category_name: "Dairy", bulk_quantity: null, bulk_price: null, bulk_pricing_mode: null, bulk_discount_value: null, parent_id: null, is_parent: false, variant_combination: null },
+  { id: "demo-prod-8", name: "Mineral Water 1.5L Pack", barcode: "600123456796", selling_price: 3500, stock_quantity: 50, reorder_level: 10, image_url: null, category_name: "Beverages", bulk_quantity: null, bulk_price: null, bulk_pricing_mode: null, bulk_discount_value: null, parent_id: null, is_parent: false, variant_combination: null },
+];
+
 export async function listPosProducts(locationId?: string | null, limit = 500) {
+  if (localStorage.getItem("is_demo_mode") === "true") {
+    return DEMO_PRODUCTS;
+  }
   if (navigator.onLine) {
     try {
       const client = await ensureSupabaseConfigured();
@@ -127,7 +141,35 @@ export async function listPosProducts(locationId?: string | null, limit = 500) {
   return cached.map((record) => record.data).filter((product) => product.is_active !== false) as PosProductRecord[];
 }
 
+const DEMO_CUSTOMERS: PosCustomerRecord[] = [
+  { id: "demo-cust-1", full_name: "Jean Paul Ndayisaba", phone: "+250 788 123 456", email: "jeanpaul@gmail.com", address: "Kigali, Nyarugenge", credit_limit: 150000, discount_percentage: 5 },
+  { id: "demo-cust-2", full_name: "Marie Claire Uwase", phone: "+250 789 234 567", email: "uwase.claire@yahoo.com", address: "Kicukiro, Niboye", credit_limit: 200000, discount_percentage: 0 },
+  { id: "demo-cust-3", full_name: "Eric Mugisha (VIP)", phone: "+250 783 345 678", email: "mugisha.eric@outlook.com", address: "Gasabo, Kimironko", credit_limit: 500000, discount_percentage: 10 },
+  { id: "demo-cust-4", full_name: "Aline Mukamana", phone: "+250 790 456 789", email: "aline.m@gmail.com", address: "Gasabo, Gisozi", credit_limit: 100000, discount_percentage: 0 },
+];
+
+const DEMO_SHOP_SETTINGS: ShopSettingsRecord = {
+  id: "demo-settings-id",
+  business_id: "demo-business-id",
+  shop_name: "Kigali Fresh Market (Demo)",
+  phone: "+250 793 063 512",
+  email: "demo@umucuruzipos.rw",
+  address: "KN 4 Ave, Nyarugenge, Kigali, Rwanda",
+  tin_number: "109876543",
+  receipt_footer: "Murakoze cyane kugana Kigali Fresh Market! Karibu tena.",
+  logo_url: null,
+  currency: "RWF",
+  tax_rate: 18,
+  vat_rate: 18,
+  price_type: "inclusive",
+  created_at: new Date().toISOString(),
+  updated_at: new Date().toISOString(),
+} as any;
+
 export async function listPosCustomers() {
+  if (localStorage.getItem("is_demo_mode") === "true") {
+    return DEMO_CUSTOMERS;
+  }
   if (navigator.onLine) {
     try {
       const client = await ensureSupabaseConfigured();
@@ -160,6 +202,9 @@ export async function listPosCustomers() {
 
 
 export async function getShopSettings(businessId?: string) {
+  if (localStorage.getItem("is_demo_mode") === "true") {
+    return DEMO_SHOP_SETTINGS;
+  }
   if (navigator.onLine) {
     try {
       const client = await ensureSupabaseConfigured();
@@ -303,6 +348,48 @@ export async function pushPosSaleToSupabase(input: CreatePosSaleInput) {
 }
 
 export async function createPosSale(input: CreatePosSaleInput) {
+  if (localStorage.getItem("is_demo_mode") === "true") {
+    const sale_id = `demo-${Date.now()}`;
+    const now = new Date().toISOString();
+    const sale = {
+      id: sale_id,
+      business_id: input.business_id,
+      sale_number: `SAL-DEMO-${Math.floor(100 + Math.random() * 900)}`,
+      status: 'completed',
+      customer_id: input.customer_id,
+      cashier_id: input.cashier_id,
+      location_id: input.location_id ?? "demo-loc-1",
+      subtotal: input.subtotal,
+      tax_amount: input.tax_amount,
+      vat_rate: input.vat_rate ?? 0,
+      price_type: input.price_type ?? "inclusive",
+      amount_before_vat: input.amount_before_vat ?? input.subtotal,
+      output_vat: input.output_vat ?? input.tax_amount,
+      total_amount: input.total_amount,
+      discount_amount: input.discount_amount ?? 0,
+      discount_type: input.discount_type ?? null,
+      payment_method: input.payment_method,
+      payment_status: input.payment_status,
+      notes: input.notes ?? null,
+      created_at: now,
+    } as SaleRecord;
+
+    const items = input.items.map((it: any) => ({
+      id: crypto.randomUUID(),
+      sale_id,
+      ...it,
+      created_at: now,
+    })) as SaleItemRecord[];
+
+    const payments = (input.payments ?? []).map((p: any) => ({
+      id: crypto.randomUUID(),
+      sale_id,
+      ...p,
+      paid_at: now,
+    })) as SalePaymentRecord[];
+
+    return { sale, items, payments };
+  }
 
   const isOnline = navigator.onLine;
 
@@ -374,6 +461,25 @@ export async function createPosSale(input: CreatePosSaleInput) {
 }
 
 export async function checkOpenRegister(userId: string, locationId: string) {
+  if (localStorage.getItem("is_demo_mode") === "true") {
+    return {
+      id: "demo-register-1",
+      user_id: userId,
+      business_id: "demo-business-id",
+      location_id: locationId || "demo-loc-1",
+      closing_date: new Date().toISOString().split('T')[0],
+      opened_at: new Date(Date.now() - 3600000).toISOString(),
+      opening_cash: 50000,
+      cash_amount: 145000,
+      momo_amount: 82000,
+      bank_amount: 0,
+      card_amount: 25000,
+      credit_amount: 0,
+      total_amount: 252000,
+      status: 'open',
+      closed_at: null,
+    } as any;
+  }
   const client = await ensureSupabaseConfigured();
 
   const { data, error } = await client
@@ -459,6 +565,17 @@ export async function openRegister(userId: string, businessId: string, locationI
 }
 
 export async function getCloseDaySummary(userId: string, locationId: string, openedAt?: string | null): Promise<CloseDaySummary> {
+  if (localStorage.getItem("is_demo_mode") === "true") {
+    return {
+      cash_amount: 145000,
+      momo_amount: 82000,
+      bank_amount: 0,
+      card_amount: 25000,
+      credit_amount: 0,
+      credit_collected_amount: 0,
+      total_amount: 252000
+    };
+  }
   const client = await ensureSupabaseConfigured();
   const today = new Date().toISOString().split('T')[0];
   const startAt = openedAt ?? `${today}T00:00:00Z`;

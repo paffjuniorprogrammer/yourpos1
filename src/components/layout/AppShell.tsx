@@ -9,6 +9,8 @@ import { useTranslation } from "react-i18next";
 import { getBusinessReminders, type BusinessReminder } from "../../services/reminderService";
 
 
+import { DemoModeBanner } from "../ui/DemoModeBanner";
+
 export function AppShell() {
   const { i18n, t } = useTranslation();
   const location = useLocation();
@@ -106,6 +108,7 @@ export function AppShell() {
 
   return (
     <div className="min-h-screen bg-transparent text-ink">
+      <DemoModeBanner />
       {/* Mobile Top Bar */}
       <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-white/70 bg-slate-950 px-4 text-white lg:hidden">
         <div className="flex items-center gap-3">

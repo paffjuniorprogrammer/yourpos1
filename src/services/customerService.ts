@@ -83,7 +83,17 @@ export async function checkCustomerExists(full_name: string, phone: string, emai
   return Array.isArray(data) && data.length > 0;
 }
 
+const DEMO_CUSTOMERS_LIST: CustomerMetrics[] = [
+  { id: "demo-cust-1", full_name: "Jean Paul Ndayisaba", phone: "+250 788 123 456", email: "jeanpaul@gmail.com", address: "Kigali, Nyarugenge", credit_limit: 150000, discount_percentage: 5, total_spent: 420000, unpaid_balance: 65000, created_at: new Date().toISOString() },
+  { id: "demo-cust-2", full_name: "Marie Claire Uwase", phone: "+250 789 234 567", email: "uwase.claire@yahoo.com", address: "Kicukiro, Niboye", credit_limit: 200000, discount_percentage: 0, total_spent: 310000, unpaid_balance: 0, created_at: new Date().toISOString() },
+  { id: "demo-cust-3", full_name: "Eric Mugisha (VIP)", phone: "+250 783 345 678", email: "mugisha.eric@outlook.com", address: "Gasabo, Kimironko", credit_limit: 500000, discount_percentage: 10, total_spent: 980000, unpaid_balance: 120000, created_at: new Date().toISOString() },
+  { id: "demo-cust-4", full_name: "Aline Mukamana", phone: "+250 790 456 789", email: "aline.m@gmail.com", address: "Gasabo, Gisozi", credit_limit: 100000, discount_percentage: 0, total_spent: 175000, unpaid_balance: 0, created_at: new Date().toISOString() },
+];
+
 export async function listCustomers() {
+  if (localStorage.getItem("is_demo_mode") === "true") {
+    return DEMO_CUSTOMERS_LIST;
+  }
   const client = await ensureSupabaseConfigured();
   const { data, error } = await client
     .from("customers")
@@ -98,6 +108,9 @@ export async function listCustomers() {
 }
 
 export async function listCustomersWithMetrics() {
+  if (localStorage.getItem("is_demo_mode") === "true") {
+    return DEMO_CUSTOMERS_LIST;
+  }
   const client = await ensureSupabaseConfigured();
   
   // Fetch customers with their sales and the payments for those sales

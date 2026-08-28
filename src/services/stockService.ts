@@ -47,7 +47,43 @@ function mapStockStatus(status: string | null): StockTransferSummary["status"] {
   return "Pending";
 }
 
+const DEMO_STOCK_COUNTS: StockCountSummary[] = [
+  {
+    id: "demo-count-1",
+    countNumber: 101,
+    stockName: "Main Branch - Nyarugenge (Demo)",
+    createdBy: "Demo Store Admin",
+    createdAt: new Date(Date.now() - 86400000).toLocaleString(),
+    lines: [
+      { id: "demo-cl-1", productId: "demo-prod-1", name: "Inyange Fresh Milk 1L", stockQty: 50, mode: "Subtract", reason: "damage", countedQty: 5 },
+      { id: "demo-cl-2", productId: "demo-prod-6", name: "White Sugar 1kg", stockQty: 60, mode: "Add", reason: "recount", countedQty: 2 },
+    ]
+  }
+];
+
+const DEMO_TRANSFERS: StockTransferSummary[] = [
+  {
+    id: "demo-trans-1",
+    transferNumber: 201,
+    fromLocationId: "demo-loc-1",
+    toLocationId: "demo-loc-2",
+    fromStock: "Main Branch - Nyarugenge (Demo)",
+    toStock: "Kicukiro Branch (Demo)",
+    status: "Completed",
+    createdAt: new Date(Date.now() - 43200000).toLocaleDateString(),
+    createdBy: "Demo Store Admin",
+    createdById: "demo-user-id",
+    lines: [
+      { id: "demo-tl-1", productId: "demo-prod-3", name: "Rwandan Coffee Beans 500g", availableQty: 25, sendQty: 7 },
+      { id: "demo-tl-2", productId: "demo-prod-5", name: "Sunflower Cooking Oil 3L", availableQty: 20, sendQty: 8 },
+    ]
+  }
+];
+
 export async function listStockCounts(): Promise<StockCountSummary[]> {
+  if (localStorage.getItem("is_demo_mode") === "true") {
+    return DEMO_STOCK_COUNTS;
+  }
   const client = await ensureSupabaseConfigured();
   
   // Try with count_number first
@@ -89,6 +125,9 @@ export async function listStockCounts(): Promise<StockCountSummary[]> {
 }
 
 export async function listStockTransfers(locationIds: string[] = []): Promise<StockTransferSummary[]> {
+  if (localStorage.getItem("is_demo_mode") === "true") {
+    return DEMO_TRANSFERS;
+  }
   const client = await ensureSupabaseConfigured();
 
   // 1. Fetch the transfers (Try with transfer_number first)
@@ -210,6 +249,316 @@ export async function recordStockCount(
 
   if (error) throw error;
   return data;
+}
+
+export type LossOrExpenseType = "expired" | "damage" | "expense";
+
+export type StockLossRecord = {
+  id: string;
+  createdAt: string;
+  createdBy: string;
+  createdById: string;
+  locationId: string;
+  locationName: string;
+  productId: string;
+  productName: string;
+  category: LossOrExpenseType;
+  quantity: number;
+  unitCost: number;
+  totalLossAmount: number;
+  notes: string;
+};
+
+export async function recordStockLossOrExpense(params: {
+  locationId: string;
+  businessId: string;
+  createdBy: string;
+  productId: string;
+  quantity: number;
+  category: LossOrExpenseType;
+  notes: string;
+}): Promise<string> {
+  const client = await ensureSupabaseConfigured();
+
+  // Try RPC process_stock_count first
+  try {
+    const { data, error } = await client.rpc("process_stock_count", {
+      p_location_id: params.locationId,
+      p_created_by: params.createdBy,
+      p_notes: params.notes,
+      p_items: [
+        {
+          product_id: params.productId,
+          counted_quantity: params.quantity,
+          adjustment_mode: "subtract",
+          reason: params.category,
+        },
+      ],
+    });
+
+    if (!error && data) {
+      return data;
+    }
+  } catch (rpcErr) {
+    console.warn("RPC process_stock_count failed, falling back to direct table update:", rpcErr);
+  }
+
+  // Fallback to direct table updates
+  const { data: prod } = await client
+    .from("products")
+    .select("id, name, cost_price, selling_price")
+    .eq("id", params.productId)
+    .single();
+
+  const costPrice = Number(prod?.cost_price || prod?.selling_price || 0);
+  const totalLoss = params.quantity * costPrice;
+
+  const { data: stockRow } = await client
+    .from("product_stocks")
+    .select("quantity")
+    .eq("product_id", params.productId)
+    .eq("location_id", params.locationId)
+    .maybeSingle();
+
+  const currentQty = stockRow ? Number(stockRow.quantity) : 0;
+  const newQty = Math.max(0, currentQty - params.quantity);
+
+  const { data: master, error: masterErr } = await client
+    .from("stock_counts")
+    .insert({
+      business_id: params.businessId,
+      stock_name: `Write-Off (${params.category})`,
+      location_id: params.locationId,
+      created_by: params.createdBy,
+      notes: params.notes,
+      total_loss_value: totalLoss,
+    })
+    .select("id")
+    .single();
+
+  if (masterErr) throw masterErr;
+  const countId = master.id;
+
+  await client.from("stock_count_items").insert({
+    business_id: params.businessId,
+    stock_count_id: countId,
+    product_id: params.productId,
+    system_quantity: currentQty,
+    adjustment_mode: "subtract",
+    adjustment_reason: params.category,
+    counted_quantity: params.quantity,
+    final_quantity: newQty,
+  });
+
+  await client
+    .from("product_stocks")
+    .upsert({
+      business_id: params.businessId,
+      product_id: params.productId,
+      location_id: params.locationId,
+      quantity: newQty,
+    }, { onConflict: "product_id,location_id" });
+
+  const { data: totalStock } = await client
+    .from("product_stocks")
+    .select("quantity")
+    .eq("product_id", params.productId);
+
+  const newGlobalTotal = (totalStock || []).reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+  await client
+    .from("products")
+    .update({ stock_quantity: newGlobalTotal })
+    .eq("id", params.productId);
+
+  await client.from("stock_movements").insert({
+    business_id: params.businessId,
+    product_id: params.productId,
+    user_id: params.createdBy,
+    movement_type: params.category,
+    quantity: -params.quantity,
+    location_id: params.locationId,
+    reference_type: "stock_count",
+    reference_id: countId,
+    notes: params.notes,
+  });
+
+  return countId;
+}
+
+const DEMO_LOSS_RECORDS: StockLossRecord[] = [
+  {
+    id: "demo-loss-1",
+    createdAt: new Date(Date.now() - 86400000).toLocaleString(),
+    createdBy: "Demo Store Admin",
+    createdById: "demo-user-id",
+    locationId: "demo-loc-1",
+    locationName: "Main Branch - Nyarugenge (Demo)",
+    productId: "demo-prod-1",
+    productName: "Inyange Fresh Milk 1L",
+    category: "expired",
+    quantity: 4,
+    unitCost: 900,
+    totalLossAmount: 3600,
+    notes: "Expired past sell-by date (Demo)",
+  },
+  {
+    id: "demo-loss-2",
+    createdAt: new Date(Date.now() - 172800000).toLocaleString(),
+    createdBy: "Demo Store Admin",
+    createdById: "demo-user-id",
+    locationId: "demo-loc-1",
+    locationName: "Main Branch - Nyarugenge (Demo)",
+    productId: "demo-prod-8",
+    productName: "Mineral Water 1.5L Pack",
+    category: "expense",
+    quantity: 2,
+    unitCost: 2600,
+    totalLossAmount: 5200,
+    notes: "Used for office staff hydration (Demo)",
+  },
+  {
+    id: "demo-loss-3",
+    createdAt: new Date(Date.now() - 259200000).toLocaleString(),
+    createdBy: "Demo Store Admin",
+    createdById: "demo-user-id",
+    locationId: "demo-loc-2",
+    locationName: "Kicukiro Branch (Demo)",
+    productId: "demo-prod-2",
+    productName: "Baking Powder 100g",
+    category: "damage",
+    quantity: 3,
+    unitCost: 550,
+    totalLossAmount: 1650,
+    notes: "Damaged during warehouse unpacking (Demo)",
+  }
+];
+
+export async function listStockLossesAndExpenses(): Promise<StockLossRecord[]> {
+  if (localStorage.getItem("is_demo_mode") === "true") {
+    return DEMO_LOSS_RECORDS;
+  }
+  const client = await ensureSupabaseConfigured();
+
+  // Primary: query stock_movements for write-off movement_types
+  const { data: movements, error: movErr } = await client
+    .from("stock_movements")
+    .select(`
+      id,
+      created_at,
+      user_id,
+      product_id,
+      quantity,
+      location_id,
+      movement_type,
+      notes,
+      reference_id,
+      products(name, cost_price, selling_price),
+      locations(name),
+      users(full_name)
+    `)
+    .in("movement_type", ["expired", "damage", "expense", "wastage", "write-off", "loss"])
+    .order("created_at", { ascending: false })
+    .limit(200);
+
+  if (!movErr && movements && movements.length > 0) {
+    return (movements as any[]).map((m) => {
+      const prod = Array.isArray(m.products) ? m.products[0] : m.products;
+      const loc  = Array.isArray(m.locations) ? m.locations[0] : m.locations;
+      const usr  = Array.isArray(m.users)  ? m.users[0]  : m.users;
+      const qty  = Math.abs(Number(m.quantity) || 0);
+      const unitCost = Number(prod?.cost_price || prod?.selling_price || 0);
+      const rawType = (m.movement_type || "expense").toLowerCase();
+      const category: LossOrExpenseType =
+        rawType === "expired" ? "expired"
+        : rawType === "damage" || rawType === "wastage" || rawType === "loss" ? "damage"
+        : "expense";
+
+      return {
+        id: m.id,
+        createdAt: m.created_at ? new Date(m.created_at).toLocaleString() : "N/A",
+        createdBy: usr?.full_name || "Unknown",
+        createdById: m.user_id || "",
+        locationId: m.location_id || "",
+        locationName: loc?.name || "Unknown Location",
+        productId: m.product_id || "",
+        productName: prod?.name || "Unknown Product",
+        category,
+        quantity: qty,
+        unitCost,
+        totalLossAmount: qty * unitCost,
+        notes: m.notes || "-",
+      } as StockLossRecord;
+    });
+  }
+
+  // Fallback: query stock_counts joined with stock_count_items
+  const { data, error } = await client
+    .from("stock_counts")
+    .select(`
+      id,
+      created_at,
+      created_by,
+      location_id,
+      notes,
+      total_loss_value,
+      locations(name),
+      users(full_name),
+      stock_count_items(
+        id,
+        product_id,
+        adjustment_reason,
+        counted_quantity,
+        system_quantity,
+        final_quantity,
+        products(name, cost_price, selling_price)
+      )
+    `)
+    .order("created_at", { ascending: false })
+    .limit(200);
+
+  if (error) {
+    console.error("listStockLossesAndExpenses fallback error:", error);
+    return [];
+  }
+
+  const records: StockLossRecord[] = [];
+
+  for (const item of (data || []) as any[]) {
+    const itemsList = item.stock_count_items || [];
+    const loc = Array.isArray(item.locations) ? item.locations[0] : item.locations;
+    const usr = Array.isArray(item.users) ? item.users[0] : item.users;
+
+    for (const sub of itemsList) {
+      const rawReason = (sub.adjustment_reason || "").toLowerCase();
+      if (!["expired", "damage", "expense", "wastage", "write-off", "loss"].includes(rawReason)) continue;
+
+      const qty = Number(sub.counted_quantity) || 0;
+      const prod = Array.isArray(sub.products) ? sub.products[0] : sub.products;
+      const unitCost = Number(prod?.cost_price || prod?.selling_price || 0);
+      const category: LossOrExpenseType =
+        rawReason === "expired" ? "expired"
+        : rawReason === "expense" ? "expense"
+        : "damage";
+
+      records.push({
+        id: sub.id || item.id,
+        createdAt: item.created_at ? new Date(item.created_at).toLocaleString() : "N/A",
+        createdBy: usr?.full_name || "Unknown",
+        createdById: item.created_by || "",
+        locationId: item.location_id || "",
+        locationName: loc?.name || "Unknown Location",
+        productId: sub.product_id || "",
+        productName: prod?.name || "Unknown Product",
+        category,
+        quantity: qty,
+        unitCost,
+        totalLossAmount: Number(item.total_loss_value) > 0 ? Number(item.total_loss_value) : qty * unitCost,
+        notes: item.notes || "-",
+      });
+    }
+  }
+
+  return records;
 }
 
 export async function recordStockTransfer(

@@ -28,7 +28,9 @@ import {
   ChevronRight,
   ChevronLeft,
   MessageCircle,
+  Rocket,
 } from "lucide-react";
+import { useAuth } from "../context/AuthContext";
 
 const WHATSAPP_NUMBER = "250793063512";
 
@@ -154,6 +156,7 @@ const colorMap: Record<string, { badge: string; ring: string; dot: string }> = {
 
 export function HomePage() {
   const navigate = useNavigate();
+  const { startDemoMode } = useAuth();
   const [activeScreen, setActiveScreen] = useState(0);
   const [requestSent, setRequestSent] = useState(false);
   const active = screens[activeScreen];
@@ -282,16 +285,26 @@ export function HomePage() {
             </p>
             <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
               <button
+                onClick={() => {
+                  startDemoMode();
+                  navigate("/dashboard");
+                }}
+                className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-purple-600 via-brand-600 to-indigo-600 px-7 py-4 text-sm font-black text-white shadow-xl shadow-purple-500/25 transition hover:opacity-95 active:scale-95"
+              >
+                <Rocket size={18} />
+                Try Interactive Demo Now
+              </button>
+              <button
                 onClick={showRequestForm}
                 className="inline-flex items-center gap-2 rounded-2xl bg-brand-600 px-7 py-4 text-sm font-black text-white shadow-lg shadow-brand-500/25 transition hover:bg-brand-700"
               >
-                Request the system <ArrowRight size={17} />
+                Request access <ArrowRight size={17} />
               </button>
               <button
                 onClick={() => navigate("/subscription")}
                 className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-7 py-4 text-sm font-black text-slate-700 transition hover:bg-slate-50"
               >
-                View subscription plans <CreditCard size={17} />
+                View plans <CreditCard size={17} />
               </button>
             </div>
             {/* trust row */}
@@ -544,33 +557,46 @@ export function HomePage() {
           <div className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
             <div className="grid gap-12 lg:grid-cols-2 lg:items-center">
               <div>
-                <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-xs font-black uppercase tracking-widest text-blue-200">
-                  <Star size={12} /> Subscription protected
+                <span className="inline-flex items-center gap-2 rounded-full bg-emerald-500/20 border border-emerald-400/30 px-4 py-2 text-xs font-black uppercase tracking-widest text-emerald-300">
+                  <Star size={12} className="text-amber-400" /> Ifatabuguzi ry'Ukwezi: 10,000 FRW
                 </span>
                 <h2 className="mt-6 text-3xl font-black sm:text-4xl">
-                  Your subscription keeps everything running safely.
+                  Cunga Ubucuruzi Bwawe <br />Ku Mafanga 10,000 FRW Gusa Ku Kwezi.
                 </h2>
                 <p className="mt-5 text-base leading-8 text-slate-300">
-                  Every business on this system works on a subscription model. When the plan is active, your team has full access. If it expires, the system blocks access automatically — protecting your data and keeping accounts clean.
+                  Koresha UMUCURUZI POS ucunge ibicuruzwa, ugurishe vuba, ucape inyemezabwishyu (Receipts), umenye inyungu winjije buri munsi, kandi ukurikirane amadeni y'abakiriya ahantu hamwe.
                 </p>
-                <button
-                  onClick={() => navigate("/subscription")}
-                  className="mt-8 inline-flex items-center gap-2 rounded-xl bg-white px-6 py-3.5 text-sm font-black text-slate-900 transition hover:bg-slate-100"
-                >
-                  View plans <ArrowRight size={16} />
-                </button>
+                <div className="mt-8 flex flex-wrap items-center gap-4">
+                  <a
+                    href={`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent("Mwiriwe, nshaka kugura ifatabuguzi rya 10,000 FRW ry'ukwezi kuri UMUCURUZI POS.")}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 rounded-2xl bg-emerald-600 hover:bg-emerald-500 px-6 py-4 text-sm font-black text-white shadow-lg shadow-emerald-900/40 transition-all active:scale-95"
+                  >
+                    <MessageCircle size={18} /> Gura Ifatabuguzi (10,000 FRW)
+                  </a>
+                  <button
+                    onClick={() => {
+                      startDemoMode();
+                      navigate("/dashboard");
+                    }}
+                    className="inline-flex items-center gap-2 rounded-2xl border border-white/20 bg-white/10 px-6 py-4 text-sm font-black text-white transition hover:bg-white/20 active:scale-95"
+                  >
+                    <Rocket size={18} /> Gerageza Demo ku Buntu
+                  </button>
+                </div>
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 {[
-                  { icon: ShieldCheck, title: "Active access", text: "Paid and approved businesses run without interruption." },
-                  { icon: CreditCard, title: "Easy renewal", text: "Admins renew subscriptions from the billing page in seconds." },
-                  { icon: Users, title: "Role-based access", text: "Admins, managers, and cashiers each see only what they need." },
-                  { icon: Zap, title: "Multi-branch", text: "Run one subscription across multiple shop locations." },
+                  { icon: ShieldCheck, title: "Sisitemu Yizewe", text: "Ibicuruzwa n'amakuru byawe birinzwe 100% nta kibazo." },
+                  { icon: CreditCard, title: "10,000 FRW / Ukwezi", text: "Igiciro cyoroheye buri mucuruzi wese nta yandi mafaranga y'inyongera." },
+                  { icon: Users, title: "Abacungamari n'Abagurisha", text: "Buri mukozi agira konti ye imwemerera gukora akazi ke neza." },
+                  { icon: Zap, title: "Amashami Menshi (Multi-Branch)", text: "Cunga amaduka yawe yose ahantu hamwe kuri telefoni cyangwa mudasobwa." },
                 ].map((item) => (
-                  <div key={item.title} className="rounded-2xl border border-white/10 bg-white/5 p-5">
-                    <item.icon className="text-blue-300" size={22} />
-                    <h3 className="mt-4 font-black">{item.title}</h3>
-                    <p className="mt-1.5 text-sm leading-6 text-slate-400">{item.text}</p>
+                  <div key={item.title} className="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
+                    <item.icon className="text-emerald-400" size={24} />
+                    <h3 className="mt-4 text-base font-black">{item.title}</h3>
+                    <p className="mt-2 text-xs leading-6 text-slate-400 font-medium">{item.text}</p>
                   </div>
                 ))}
               </div>

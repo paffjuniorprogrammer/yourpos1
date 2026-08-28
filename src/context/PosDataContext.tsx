@@ -18,7 +18,7 @@ type PosDataContextType = {
 const PosDataContext = createContext<PosDataContextType | undefined>(undefined);
 
 export const PosDataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { activeLocationId, authConfigured, profile } = useAuth();
+  const { activeLocationId, authConfigured, profile, isDemoMode } = useAuth();
   const [products, setProducts] = useState<PosProductRecord[]>([]);
   const [customers, setCustomers] = useState<PosCustomerRecord[]>([]);
   const [settings, setSettings] = useState<ShopSettingsRecord | null>(null);
@@ -27,10 +27,25 @@ export const PosDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [lastLocationId, setLastLocationId] = useState<string | null>(null);
 
   const loadData = useCallback(async (locationId: string, silent = false) => {
+    // In demo mode, products are served by posService which already returns DEMO_PRODUCTS.
+    // Customers and settings are not needed — but we still call listPosProducts so the
+    // POS shelf populates correctly. We skip listPosCustomers & getShopSettings which
+    // would fail with the non-UUID demo-business-id.
     if (!authConfigured || !profile) return;
-    
+
     if (!silent) setLoading(true);
     try {
+      if (isDemoMode) {
+        // listPosProducts already returns DEMO_PRODUCTS in demo mode
+        const demoProducts = await listPosProducts(locationId, 1000);
+        setProducts(demoProducts);
+        setCustomers([]);
+        setSettings({ shop_name: "Kigali Fresh Market (Demo)", logo_url: null } as any);
+        setLastLocationId(locationId);
+        setError(null);
+        return;
+      }
+
       // Publish each result as it arrives. A slow settings response should not
       // make cashiers wait to see products or customers.
       const productsRequest = listPosProducts(locationId, 1000);
@@ -58,13 +73,15 @@ export const PosDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [authConfigured, profile]);
+  }, [authConfigured, profile, isDemoMode]);
+
 
   // Show the last successful POS data immediately, then refresh it from the
   // server in the background. This keeps the POS responsive on slow networks.
   useEffect(() => {
     const businessId = profile?.business_id;
-    if (!activeLocationId || !businessId) return;
+    // Skip cache hydration in demo mode — IDs are not real UUIDs
+    if (!activeLocationId || !businessId || isDemoMode) return;
     const cacheBusinessId: string = businessId;
     let active = true;
 
@@ -94,7 +111,7 @@ export const PosDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     void hydrateFromCache();
     return () => { active = false; };
-  }, [activeLocationId, profile?.business_id]);
+  }, [activeLocationId, profile?.business_id, isDemoMode]);
 
   // Pre-fetch when location changes or on mount
   useEffect(() => {
@@ -113,9 +130,9 @@ export const PosDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     );
   };
 
-  // Real-time synchronization
+  // Real-time synchronization — disabled in demo mode (no real Supabase IDs)
   useRealtimeSync({
-    enabled: authConfigured && !!profile && !!activeLocationId,
+    enabled: authConfigured && !!profile && !!activeLocationId && !isDemoMode,
     onStockChanged: (payload) => {
       // If we have a payload with specific product update, apply it locally
       if (payload?.new && payload.new.product_id && payload.new.location_id === activeLocationId) {

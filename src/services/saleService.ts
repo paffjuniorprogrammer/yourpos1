@@ -137,6 +137,65 @@ export async function createSale(input: CreateSaleInput) {
   };
 }
 
+const DEMO_SALES_RECORDS = [
+  {
+    id: "demo-sale-1",
+    sale_number: "SAL-DEMO-891",
+    customer_id: "demo-cust-1",
+    subtotal: 12288,
+    tax_amount: 2212,
+    total_amount: 14500,
+    payment_method: "momo",
+    payment_status: "paid",
+    created_at: new Date(Date.now() - 1800000).toISOString(),
+    customers: { full_name: "Jean Paul Ndayisaba" },
+    users: { full_name: "Demo Store Admin" },
+    locations: { name: "Main Branch - Nyarugenge (Demo)" },
+    sale_items: [
+      { id: "demo-item-1", quantity: 5, unit_price: 1200, line_total: 6000, products: { name: "Inyange Fresh Milk 1L" } },
+      { id: "demo-item-2", quantity: 1, unit_price: 8500, line_total: 8500, products: { name: "Basmati Rice 5kg" } },
+    ],
+    sale_payments: [{ id: "demo-pay-1", payment_method: "momo", amount: 14500, paid_at: new Date().toISOString() }],
+  },
+  {
+    id: "demo-sale-2",
+    sale_number: "SAL-DEMO-890",
+    customer_id: null,
+    subtotal: 7203,
+    tax_amount: 1297,
+    total_amount: 8500,
+    payment_method: "cash",
+    payment_status: "paid",
+    created_at: new Date(Date.now() - 3600000).toISOString(),
+    customers: null,
+    users: { full_name: "Demo Store Admin" },
+    locations: { name: "Main Branch - Nyarugenge (Demo)" },
+    sale_items: [
+      { id: "demo-item-3", quantity: 1, unit_price: 8500, line_total: 8500, products: { name: "Basmati Rice 5kg" } },
+    ],
+    sale_payments: [{ id: "demo-pay-2", payment_method: "cash", amount: 8500, paid_at: new Date().toISOString() }],
+  },
+  {
+    id: "demo-sale-3",
+    sale_number: "SAL-DEMO-889",
+    customer_id: "demo-cust-2",
+    subtotal: 18644,
+    tax_amount: 3356,
+    total_amount: 22000,
+    payment_method: "card",
+    payment_status: "paid",
+    created_at: new Date(Date.now() - 7200000).toISOString(),
+    customers: { full_name: "Marie Claire Uwase" },
+    users: { full_name: "Demo Store Admin" },
+    locations: { name: "Kicukiro Branch (Demo)" },
+    sale_items: [
+      { id: "demo-item-4", quantity: 2, unit_price: 6500, line_total: 13000, products: { name: "Rwandan Coffee Beans 500g" } },
+      { id: "demo-item-5", quantity: 1, unit_price: 9000, line_total: 9000, products: { name: "Sunflower Cooking Oil 3L" } },
+    ],
+    sale_payments: [{ id: "demo-pay-3", payment_method: "card", amount: 22000, paid_at: new Date().toISOString() }],
+  },
+];
+
 export async function listSales(params: {
   page: number;
   pageSize: number;
@@ -147,6 +206,9 @@ export async function listSales(params: {
   minDate?: string;
   maxDate?: string;
 }): Promise<{ data: any[]; count: number }> {
+  if (localStorage.getItem("is_demo_mode") === "true") {
+    return { data: DEMO_SALES_RECORDS, count: DEMO_SALES_RECORDS.length };
+  }
   const isOnline = navigator.onLine;
 
   if (isOnline) {

@@ -73,12 +73,52 @@ function mapDeliveryStatus(status: string | null): PurchaseSummary["deliveryStat
   return "Pending";
 }
 
+const DEMO_PURCHASES: PurchaseSummary[] = [
+  {
+    id: "demo-purch-1",
+    purchaseNumber: 1042,
+    supplier: "Inyange Industries Ltd",
+    location: "Main Branch - Nyarugenge (Demo)",
+    amount: "450,000 RWF",
+    totalCost: 450000,
+    paidAmount: 450000,
+    remainingAmount: 0,
+    lastPaymentDate: "2026-08-26",
+    date: "2026-08-26",
+    paymentStatus: "Paid",
+    deliveryStatus: "Received",
+    items: [
+      { id: "demo-pl-1", productId: "demo-prod-1", product: "Inyange Fresh Milk 1L", quantity: 500, purchasePrice: 900, sellingPrice: 1200, profitPercentage: 33.3 },
+    ],
+  },
+  {
+    id: "demo-purch-2",
+    purchaseNumber: 1041,
+    supplier: "Bakhresa Grain Millers",
+    location: "Main Branch - Nyarugenge (Demo)",
+    amount: "340,000 RWF",
+    totalCost: 340000,
+    paidAmount: 220000,
+    remainingAmount: 120000,
+    lastPaymentDate: "2026-08-24",
+    date: "2026-08-24",
+    paymentStatus: "Partially Paid",
+    deliveryStatus: "Received",
+    items: [
+      { id: "demo-pl-2", productId: "demo-prod-4", product: "Basmati Rice 5kg", quantity: 50, purchasePrice: 6800, sellingPrice: 8500, profitPercentage: 25 },
+    ],
+  },
+];
+
 export async function listPurchases(params: {
   page: number;
   pageSize: number;
   search?: string;
   businessId?: string;
 }): Promise<{ data: PurchaseSummary[]; count: number }> {
+  if (localStorage.getItem("is_demo_mode") === "true") {
+    return { data: DEMO_PURCHASES, count: DEMO_PURCHASES.length };
+  }
   const cacheKey = `purchases:${params.businessId || 'all'}:${params.page}:${params.pageSize}:${params.search ?? ""}`;
   const isOnline = navigator.onLine;
 

@@ -11,7 +11,7 @@ type ProtectedRouteProps = {
 };
 
 export function ProtectedRoute({ children, allowedRoles, requiredPermission }: ProtectedRouteProps) {
-  const { authConfigured, hasRole, can, loading, profile, session } = useAuth();
+  const { authConfigured, hasRole, can, loading, profile, session, isDemoMode } = useAuth();
   const location = useLocation();
 
   if (!authConfigured) {
@@ -20,6 +20,11 @@ export function ProtectedRoute({ children, allowedRoles, requiredPermission }: P
 
   if (loading) {
     return <LoadingPOS />;
+  }
+
+  // Demo mode: profile is set but there is no real Supabase session — let them through
+  if (isDemoMode && profile) {
+    return <>{children}</>;
   }
 
   if (!session) {

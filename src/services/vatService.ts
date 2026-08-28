@@ -163,6 +163,34 @@ function calculateVatPosition(outputVat: number, inputVat: number) {
 }
 
 export async function getVatSummary(targetDate = new Date()): Promise<VatSummary> {
+  if (localStorage.getItem("is_demo_mode") === "true") {
+    const period = getCurrentVatPeriod(targetDate, "monthly");
+    return {
+      periodLabel: period.label,
+      periodStart: period.start.toISOString(),
+      periodEnd: period.end.toISOString(),
+      businessInfo: {
+        businessName: "Kigali Fresh Market (Demo)",
+        registrationStatus: "registered",
+        taxPeriod: "monthly",
+        tinNumber: "109876543",
+        vatRegistrationNumber: "VAT-109876543",
+        ebmSerialNumber: "EBM-00123",
+        vatRate: 18,
+        priceType: "inclusive"
+      },
+      salesBeforeVat: 4110169,
+      purchasesBeforeVat: 2118644,
+      outputVat: 739831,
+      inputVat: 381356,
+      salesIncludingVat: 4850000,
+      purchasesIncludingVat: 2500000,
+      vatPayable: 358475,
+      vatCredit: 0,
+      status: "VAT Payable",
+      disabled: false,
+    };
+  }
   const client = await ensureSupabaseConfigured();
   const { data: settings } = await client.from("shop_settings").select("*").maybeSingle();
   const businessInfo = getVatSettings(settings as any);

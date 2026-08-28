@@ -4,7 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { LoadingPOS } from '../ui/LoadingPOS';
 
 export const SubscriptionGuard: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
-  const { isSubscriptionActive, profile, loading } = useAuth();
+  const { isSubscriptionActive, profile, loading, isDemoMode } = useAuth();
 
   if (loading) {
     return <LoadingPOS />;
@@ -12,6 +12,11 @@ export const SubscriptionGuard: React.FC<{ children?: React.ReactNode }> = ({ ch
 
   // Super admins bypass subscription checks
   if (profile?.role === 'super_admin') {
+    return children ? <>{children}</> : <Outlet />;
+  }
+
+  // Demo mode bypasses subscription checks — demo business has no real subscription
+  if (isDemoMode) {
     return children ? <>{children}</> : <Outlet />;
   }
 

@@ -16,6 +16,9 @@ type AuthContextValue = {
   switchLocation: (id: string) => void;
   loading: boolean;
   authConfigured: boolean;
+  isDemoMode: boolean;
+  startDemoMode: () => void;
+  exitDemoMode: () => void;
   signIn: (email: string, password: string) => Promise<UserProfile | null>;
   logout: () => Promise<void>;
   impersonateBusiness: (id: string | null) => void;
@@ -61,15 +64,67 @@ function applyProfileLanguage(profile: UserProfile | null) {
   }
 }
 
+const DEMO_BUSINESS: BusinessRecord = {
+  id: "demo-business-id",
+  name: "Kigali Fresh Market (Demo)",
+  plan_id: null,
+  subscription_status: "active",
+  subscription_end_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+  status: "active",
+  created_at: new Date().toISOString(),
+} as unknown as BusinessRecord;
+
+const DEMO_LOCATIONS: LocationRecord[] = [
+  { id: "demo-loc-1", business_id: "demo-business-id", name: "Main Branch - Nyarugenge (Demo)", is_active: true, created_at: new Date().toISOString() },
+  { id: "demo-loc-2", business_id: "demo-business-id", name: "Kicukiro Branch (Demo)", is_active: true, created_at: new Date().toISOString() },
+];
+
+const DEMO_PROFILE: UserProfile = {
+  id: "demo-user-id",
+  auth_user_id: null,
+  business_id: "demo-business-id",
+  full_name: "Demo Store Admin",
+  role: "admin",
+  location_id: "demo-loc-1",
+  language: "en",
+  is_active: true,
+  email: "demo@poskigali.com",
+  created_at: new Date().toISOString(),
+  business: DEMO_BUSINESS,
+  assigned_locations: DEMO_LOCATIONS,
+};
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [business, setBusiness] = useState<BusinessRecord | null>(null);
+  const [isDemoMode, setIsDemoMode] = useState<boolean>(() => localStorage.getItem("is_demo_mode") === "true");
   const [subscriptionCheckTime, setSubscriptionCheckTime] = useState(() => Date.now());
   const [activeLocationId, setActiveLocationId] = useState<string | null>(localStorage.getItem("active_location_id"));
   const [assignedLocations, setAssignedLocations] = useState<LocationRecord[]>([]);
   const [impersonatedBusinessId, setImpersonatedBusinessId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const startDemoMode = () => {
+    setIsDemoMode(true);
+    setProfile(DEMO_PROFILE);
+    setBusiness(DEMO_BUSINESS);
+    setAssignedLocations(DEMO_LOCATIONS);
+    setActiveLocationId("demo-loc-1");
+    localStorage.setItem("is_demo_mode", "true");
+    localStorage.setItem("active_location_id", "demo-loc-1");
+  };
+
+  const exitDemoMode = () => {
+    setIsDemoMode(false);
+    setProfile(null);
+    setBusiness(null);
+    setAssignedLocations([]);
+    setActiveLocationId(null);
+    localStorage.removeItem("is_demo_mode");
+    localStorage.removeItem("cached_user_profile");
+    window.location.href = "/login";
+  };
 
   function applyBusiness(nextBusiness: BusinessRecord | null) {
     setBusiness(nextBusiness);
@@ -162,7 +217,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [business?.subscription_end_date, profile?.role]);
 
   useEffect(() => {
-    if (!supabaseConfigured || !profile?.business_id || profile.role === 'super_admin') {
+    // Skip for demo mode (IDs are not real UUIDs — would cause 400 errors)
+    if (!supabaseConfigured || !profile?.business_id || profile.role === 'super_admin' || isDemoMode) {
       return;
     }
 
@@ -207,7 +263,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       window.clearInterval(refreshInterval);
       void supabase.removeChannel(channel);
     };
-  }, [profile?.business_id, profile?.role]);
+  }, [profile?.business_id, profile?.role, isDemoMode]);
 
   useEffect(() => {
     if (!supabaseConfigured) {
@@ -218,6 +274,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let isMounted = true;
 
     async function bootstrap() {
+      if (localStorage.getItem("is_demo_mode") === "true") {
+        setProfile(DEMO_PROFILE);
+        setBusiness(DEMO_BUSINESS);
+        setAssignedLocations(DEMO_LOCATIONS);
+        setActiveLocationId(localStorage.getItem("active_location_id") || "demo-loc-1");
+        setLoading(false);
+        return;
+      }
+
       const cachedProfile = localStorage.getItem("cached_user_profile");
 
       if (cachedProfile) {
@@ -304,6 +369,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       switchLocation,
       loading,
       authConfigured: supabaseConfigured,
+      isDemoMode,
+      startDemoMode,
+      exitDemoMode,
       signIn: async (email, password) => {
         const profile = await signInWithPassword(email, password);
         if (profile) {
@@ -368,7 +436,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       },
     }),
-    [loading, profile, session, business, isSubscriptionActive, subscriptionDaysLeft, activeLocationId, assignedLocations, impersonatedBusinessId],
+    [loading, profile, session, business, isSubscriptionActive, subscriptionDaysLeft, activeLocationId, assignedLocations, impersonatedBusinessId, isDemoMode],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

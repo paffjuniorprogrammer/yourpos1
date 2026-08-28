@@ -58,7 +58,47 @@ export function clearDashboardCaches() {
   financeCache = null;
 }
 
+const DEMO_DASHBOARD_STATS: DashboardStat[] = [
+  { title: "Total Sales", value: "252,000 RWF", meta: "Today (Demo)" },
+  { title: "Revenue", value: "4,850,000 RWF", meta: "This month (Demo)" },
+  { title: "Unpaid Suppliers", value: "320,000 RWF", meta: "Owed to suppliers" },
+  { title: "Unpaid Customers", value: "185,000 RWF", meta: "Owed by customers" },
+  { title: "Products Sold", value: "42", meta: "Today" },
+  { title: "Low Stock Alerts", value: "3", meta: "Items need restocking" },
+];
+
+const DEMO_SALES_TREND: SalesTrendItem[] = [
+  { label: "Mon", value: 3400 },
+  { label: "Tue", value: 4100 },
+  { label: "Wed", value: 2900 },
+  { label: "Thu", value: 5200 },
+  { label: "Fri", value: 6800 },
+  { label: "Sat", value: 8500 },
+  { label: "Sun", value: 4900 },
+];
+
+const DEMO_RECENT_TRANSACTIONS: RecentTransaction[] = [
+  { id: "SAL-DEMO-891", customer: "Jean Paul Ndayisaba", total: "14,500 RWF", cashier: "Demo Store Admin", time: "12:45" },
+  { id: "SAL-DEMO-890", customer: "Walk-in Customer", total: "8,500 RWF", cashier: "Demo Store Admin", time: "11:30" },
+  { id: "SAL-DEMO-889", customer: "Marie Claire Uwase", total: "22,000 RWF", cashier: "Demo Store Admin", time: "10:15" },
+  { id: "SAL-DEMO-888", customer: "Eric Mugisha (VIP)", total: "45,000 RWF", cashier: "Demo Store Admin", time: "09:50" },
+  { id: "SAL-DEMO-887", customer: "Walk-in Customer", total: "3,500 RWF", cashier: "Demo Store Admin", time: "09:10" },
+];
+
+const DEMO_UNPAID_CUSTOMERS: UnpaidItem[] = [
+  { id: "demo-debt-1", name: "Eric Mugisha", amount: "120,000 RWF", date: "2026-08-25" },
+  { id: "demo-debt-2", name: "Jean Paul Ndayisaba", amount: "65,000 RWF", date: "2026-08-27" },
+];
+
+const DEMO_UNPAID_SUPPLIERS: UnpaidItem[] = [
+  { id: "demo-sup-debt-1", name: "Inyange Industries Ltd", amount: "200,000 RWF", date: "2026-08-20" },
+  { id: "demo-sup-debt-2", name: "Bakhresa Grain Millers", amount: "120,000 RWF", date: "2026-08-22" },
+];
+
 export async function getDashboardStats(forceRefresh = false): Promise<DashboardStat[]> {
+  if (localStorage.getItem("is_demo_mode") === "true") {
+    return DEMO_DASHBOARD_STATS;
+  }
   const now = Date.now();
   if (!forceRefresh && statsCache && now - statsCache.timestamp < CACHE_DURATION_MS) {
     return statsCache.data;
@@ -189,6 +229,9 @@ export async function getDashboardStats(forceRefresh = false): Promise<Dashboard
 }
 
 export async function getSalesTrend(): Promise<SalesTrendItem[]> {
+  if (localStorage.getItem("is_demo_mode") === "true") {
+    return DEMO_SALES_TREND;
+  }
   const now = Date.now();
   if (trendCache && now - trendCache.timestamp < CACHE_DURATION_MS) {
     return trendCache.data;
@@ -236,6 +279,9 @@ export async function getSalesTrend(): Promise<SalesTrendItem[]> {
 }
 
 export async function getRecentTransactions(): Promise<RecentTransaction[]> {
+  if (localStorage.getItem("is_demo_mode") === "true") {
+    return DEMO_RECENT_TRANSACTIONS;
+  }
   const now = Date.now();
   if (transactionsCache && now - transactionsCache.timestamp < CACHE_DURATION_MS) {
     return transactionsCache.data;
@@ -274,6 +320,9 @@ export async function getRecentTransactions(): Promise<RecentTransaction[]> {
 }
 
 export async function getUnpaidCustomers(): Promise<UnpaidItem[]> {
+  if (localStorage.getItem("is_demo_mode") === "true") {
+    return DEMO_UNPAID_CUSTOMERS;
+  }
   const now = Date.now();
   if (unpaidCustomersCache && now - unpaidCustomersCache.timestamp < CACHE_DURATION_MS) {
     return unpaidCustomersCache.data;
@@ -306,6 +355,9 @@ export async function getUnpaidCustomers(): Promise<UnpaidItem[]> {
 }
 
 export async function getUnpaidSuppliers(): Promise<UnpaidItem[]> {
+  if (localStorage.getItem("is_demo_mode") === "true") {
+    return DEMO_UNPAID_SUPPLIERS;
+  }
   const now = Date.now();
   if (unpaidSuppliersCache && now - unpaidSuppliersCache.timestamp < CACHE_DURATION_MS) {
     return unpaidSuppliersCache.data;

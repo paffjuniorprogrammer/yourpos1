@@ -12,6 +12,7 @@ import { PurchaseRequisitionPage } from "./pages/PurchaseRequisitionPage";
 import { ReportsPage } from "./pages/ReportsPage";
 import { VatReportPage } from "./pages/VatReportPage";
 import { SalesPage } from "./pages/SalesPage";
+import { StockLossExpensePage } from "./pages/StockLossExpensePage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { StockPage } from "./pages/StockPage";
 import { TransfersPage } from "./pages/TransfersPage";
@@ -84,6 +85,14 @@ export default function App() {
               element={
                 <ProtectedRoute requiredPermission={["Sales", "view"]}>
                   <SalesPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/stock-loss"
+              element={
+                <ProtectedRoute requiredPermission={["Sales", "view"]}>
+                  <StockLossExpensePage />
                 </ProtectedRoute>
               }
             />

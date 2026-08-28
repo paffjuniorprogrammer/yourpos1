@@ -83,7 +83,16 @@ export async function checkSupplierExists(name: string, phone: string, businessI
   return Array.isArray(data) && data.length > 0;
 }
 
+const DEMO_SUPPLIERS_LIST: SupplierMetrics[] = [
+  { id: "demo-sup-1", name: "Inyange Industries Ltd", contact_name: "Gatera Alex", phone: "+250 788 555 111", email: "sales@inyangeindustries.com", address: "Masaka, Kicukiro, Kigali", tin_number: "100234567", is_vat_registered: true, vat_registration_number: "VAT-100234567", payment_term: "30 days", bank_account: "BK 00012345678", created_at: new Date().toISOString(), total_supplied: 3500000, unpaid_balance: 200000 },
+  { id: "demo-sup-2", name: "Bakhresa Grain Millers", contact_name: "Said Omar", phone: "+250 788 666 222", email: "orders@bakhresa.rw", address: "Special Economic Zone, Kigali", tin_number: "100345678", is_vat_registered: true, vat_registration_number: "VAT-100345678", payment_term: "15 days", bank_account: "I&M 00098765432", created_at: new Date().toISOString(), total_supplied: 2800000, unpaid_balance: 120000 },
+  { id: "demo-sup-3", name: "Sulfo Rwanda Industries", contact_name: "Kamali Jean", phone: "+250 788 777 333", email: "contact@sulfo.com", address: "Nyarugenge, Kigali", tin_number: "100456789", is_vat_registered: true, vat_registration_number: "VAT-100456789", payment_term: "Cash", bank_account: "Cogebanque 000456123", created_at: new Date().toISOString(), total_supplied: 1200000, unpaid_balance: 0 },
+];
+
 export async function listSuppliers(businessId?: string) {
+  if (localStorage.getItem("is_demo_mode") === "true") {
+    return DEMO_SUPPLIERS_LIST;
+  }
   const isOnline = navigator.onLine;
 
   if (isOnline) {
@@ -123,6 +132,9 @@ export async function listSuppliers(businessId?: string) {
 }
 
 export async function listSuppliersWithMetrics() {
+  if (localStorage.getItem("is_demo_mode") === "true") {
+    return DEMO_SUPPLIERS_LIST;
+  }
   const client = await ensureSupabaseConfigured();
   
   // Fetch suppliers with their purchases and the payments for those purchases

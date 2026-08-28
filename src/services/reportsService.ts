@@ -28,7 +28,28 @@ export type FinancialSummary = {
   totalStockValue: number;
 };
 
+const DEMO_REPORT_CARDS: ReportCard[] = [
+  { title: "Daily Sales", value: "252,000 RWF", meta: "Shift Summary" },
+  { title: "Paid Invoices", value: "252,000 RWF", meta: "Direct cash / MoMo collected" },
+  { title: "Unpaid Invoices", value: "0 RWF", meta: "0 unpaid today" },
+  { title: "Best Cashier", value: "Demo Store Admin", meta: "42 sales completed" },
+];
+
+const DEMO_FINANCIAL_SUMMARY: FinancialSummary = {
+  totalSales: 4850000,
+  totalCost: 3200000,
+  grossProfit: 1650000,
+  taxCollected: 739831,
+  netSales: 4110169,
+  netIncome: 910169,
+  totalPurchases: 2500000,
+  totalStockValue: 8450000,
+};
+
 export async function getReportCards(forceRefresh = false): Promise<ReportCard[]> {
+  if (localStorage.getItem("is_demo_mode") === "true") {
+    return DEMO_REPORT_CARDS;
+  }
   const now = Date.now();
   if (!forceRefresh && cardsCache && now - cardsCache.timestamp < CACHE_DURATION_MS) {
     return cardsCache.data;
@@ -218,6 +239,29 @@ export async function getDailyReport(forceRefresh = false) {
 }
 
 export async function getRecentShifts(limit = 10) {
+  if (localStorage.getItem("is_demo_mode") === "true") {
+    return [
+      {
+        id: "demo-shift-1",
+        user_id: "demo-user-id",
+        location_id: "demo-loc-1",
+        closing_date: new Date().toISOString().split('T')[0],
+        opened_at: new Date(Date.now() - 32400000).toISOString(),
+        closed_at: new Date(Date.now() - 3600000).toISOString(),
+        opening_cash: 50000,
+        opening_amount: 50000,
+        total_amount: 252000,
+        total_sales: 252000,
+        cash_amount: 145000,
+        momo_amount: 82000,
+        bank_amount: 0,
+        card_amount: 25000,
+        status: "closed",
+        users: { full_name: "Demo Store Admin" },
+        locations: { name: "Main Branch - Nyarugenge (Demo)" },
+      }
+    ];
+  }
   const client = await ensureSupabaseConfigured();
   const { data, error } = await client
     .from('day_closures')
@@ -239,6 +283,27 @@ export async function getRecentShifts(limit = 10) {
 }
 
 export async function getShiftClosure(userId: string, locationId: string, date: string): Promise<DayClosureRecord | null> {
+  if (localStorage.getItem("is_demo_mode") === "true") {
+    return {
+      id: "demo-shift-1",
+      business_id: "demo-business-id",
+      user_id: "demo-user-id",
+      location_id: "demo-loc-1",
+      closing_date: new Date().toISOString().split('T')[0],
+      opened_at: new Date(Date.now() - 32400000).toISOString(),
+      closed_at: new Date(Date.now() - 3600000).toISOString(),
+      opening_cash: 50000,
+      cash_amount: 145000,
+      momo_amount: 82000,
+      bank_amount: 0,
+      card_amount: 25000,
+      credit_amount: 0,
+      total_amount: 252000,
+      status: "closed",
+      notes: "Demo closed shift report",
+      created_at: new Date().toISOString()
+    } as any;
+  }
   const client = await ensureSupabaseConfigured();
   const { data, error } = await client
     .from('day_closures')
@@ -255,6 +320,9 @@ export async function getShiftClosure(userId: string, locationId: string, date: 
 }
 
 export async function getRecentReturns(limit = 10) {
+  if (localStorage.getItem("is_demo_mode") === "true") {
+    return [];
+  }
   const client = await ensureSupabaseConfigured();
   const { data, error } = await client
     .from('sale_returns')
@@ -275,6 +343,9 @@ export async function getFinancialReport(
   endDate: string, 
   locationId?: string | null
 ): Promise<FinancialSummary> {
+  if (localStorage.getItem("is_demo_mode") === "true") {
+    return DEMO_FINANCIAL_SUMMARY;
+  }
   const key = `${startDate}:${endDate}:${locationId || 'all'}`;
   const now = Date.now();
   if (financialReportCache?.key === key && now - financialReportCache.timestamp < CACHE_DURATION_MS) {

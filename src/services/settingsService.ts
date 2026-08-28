@@ -13,7 +13,40 @@ function withFastCacheTimeout<T>(promise: PromiseLike<T>) {
   ]);
 }
 
+const DEMO_STAFF_ACCOUNTS = [
+  {
+    id: "demo-user-id",
+    business_id: "demo-business-id",
+    full_name: "Demo Store Admin",
+    email: "demo@umucuruzipos.rw",
+    role: "admin",
+    is_active: true,
+    created_at: new Date().toISOString(),
+    locations: { name: "Main Branch - Nyarugenge (Demo)" },
+    user_locations: [{ location_id: "demo-loc-1" }, { location_id: "demo-loc-2" }],
+  },
+  {
+    id: "demo-user-2",
+    business_id: "demo-business-id",
+    full_name: "Aline Mukamana (Cashier)",
+    email: "aline.cashier@gmail.com",
+    role: "cashier",
+    is_active: true,
+    created_at: new Date().toISOString(),
+    locations: { name: "Main Branch - Nyarugenge (Demo)" },
+    user_locations: [{ location_id: "demo-loc-1" }],
+  }
+];
+
+const DEMO_LOCATIONS_LIST = [
+  { id: "demo-loc-1", business_id: "demo-business-id", name: "Main Branch - Nyarugenge (Demo)", is_active: true, created_at: new Date().toISOString() },
+  { id: "demo-loc-2", business_id: "demo-business-id", name: "Kicukiro Branch (Demo)", is_active: true, created_at: new Date().toISOString() },
+];
+
 export async function listStaffAccounts() {
+  if (localStorage.getItem("is_demo_mode") === "true") {
+    return DEMO_STAFF_ACCOUNTS;
+  }
   const client = await ensureSupabaseConfigured();
   const { data, error } = await client
     .from("users")
@@ -257,6 +290,9 @@ export async function upsertShopSettings(
 }
 
 export async function listLocations(businessId?: string) {
+  if (localStorage.getItem("is_demo_mode") === "true") {
+    return DEMO_LOCATIONS_LIST as any;
+  }
   if (navigator.onLine) {
     try {
       const client = await ensureSupabaseConfigured();

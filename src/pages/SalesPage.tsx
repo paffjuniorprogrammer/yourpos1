@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
-import { ArrowLeftRight, CreditCard, DollarSign, Eye, FileText, Minus, Pencil, Plus, Printer, Search, Trash2, X } from "lucide-react";
+import { ArrowLeftRight, CreditCard, DollarSign, Eye, FileText, Minus, Pencil, Plus, Printer, Search, Trash2, X, PackageX } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useNotification } from "../context/NotificationContext";
 import { SectionCard } from "../components/ui/SectionCard";
@@ -16,6 +17,7 @@ import { listUsers } from "../services/userService";
 import { processReturn, type ReturnItemInput } from "../services/returnService";
 import { Receipt80mm } from "../components/print/Receipt80mm";
 import { InvoiceA4 } from "../components/print/InvoiceA4";
+import { StockLossExpenseModal } from "../components/ui/StockLossExpenseModal";
 import { useTranslation } from "react-i18next";
 import type { PaymentMethod, PosProductRecord, SaleRecord } from "../types/database";
 import { formatCurrency } from "../lib/format";
@@ -29,6 +31,7 @@ type SaleWithDetails = SaleRecord & {
 type PrintMode = "receipt" | "invoice";
 
 export function SalesPage() {
+  const navigate = useNavigate();
   const { t } = useTranslation();
   const { can, profile, business } = useAuth();
 
@@ -49,6 +52,7 @@ export function SalesPage() {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showReturnModal, setShowReturnModal] = useState(false);
+  const [showLossExpenseModal, setShowLossExpenseModal] = useState(false);
   const [printMode, setPrintMode] = useState<PrintMode>("receipt");
   const [showPrintPreview, setShowPrintPreview] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState("");
@@ -272,6 +276,15 @@ export function SalesPage() {
           <p className="text-sm font-semibold uppercase tracking-[0.25em] text-brand-600">{t('sales.title')}</p>
           <h1 className="mt-3 text-3xl font-bold text-ink">{t('sales.title')}</h1>
           <p className="mt-2 text-sm text-slate-500">{t('sales.subtitle')}</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => navigate("/stock-loss")}
+            className="flex items-center gap-2 px-5 py-3 rounded-2xl font-black text-xs uppercase tracking-wider bg-rose-50 border border-rose-200 text-rose-800 hover:bg-rose-100 shadow-sm transition-all active:scale-95"
+          >
+            <PackageX size={18} className="text-rose-600" />
+            Expenses, Damage & Expired
+          </button>
         </div>
       </div>
 
@@ -800,6 +813,12 @@ export function SalesPage() {
           </div>
         </div>
       )}
+
+      <StockLossExpenseModal
+        isOpen={showLossExpenseModal}
+        onClose={() => setShowLossExpenseModal(false)}
+        onSuccess={() => void loadSales()}
+      />
     </div>
   );
 }

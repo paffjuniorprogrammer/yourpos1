@@ -72,7 +72,30 @@ function mapProductPayload(values: ProductFormValues, businessId?: string) {
   };
 }
 
+const DEMO_PRODUCT_RECORDS: ProductRecord[] = [
+  { id: "demo-prod-1", business_id: "demo-business-id", name: "Inyange Fresh Milk 1L", category_id: "demo-cat-1", category: "Dairy", barcode: "600123456789", cost_price: 900, selling_price: 1200, stock_quantity: 45, reorder_level: 10, image_url: null, is_active: true, created_at: new Date().toISOString() },
+  { id: "demo-prod-2", business_id: "demo-business-id", name: "Baking Powder 100g", category_id: "demo-cat-2", category: "Bakery", barcode: "600123456790", cost_price: 550, selling_price: 800, stock_quantity: 30, reorder_level: 5, image_url: null, is_active: true, created_at: new Date().toISOString() },
+  { id: "demo-prod-3", business_id: "demo-business-id", name: "Rwandan Coffee Beans 500g", category_id: "demo-cat-3", category: "Beverages", barcode: "600123456791", cost_price: 4500, selling_price: 6500, stock_quantity: 18, reorder_level: 4, image_url: null, is_active: true, created_at: new Date().toISOString() },
+  { id: "demo-prod-4", business_id: "demo-business-id", name: "Basmati Rice 5kg", category_id: "demo-cat-4", category: "Grains", barcode: "600123456792", cost_price: 6800, selling_price: 8500, stock_quantity: 25, reorder_level: 6, image_url: null, is_active: true, created_at: new Date().toISOString() },
+  { id: "demo-prod-5", business_id: "demo-business-id", name: "Sunflower Cooking Oil 3L", category_id: "demo-cat-5", category: "Oil", barcode: "600123456793", cost_price: 7500, selling_price: 9200, stock_quantity: 12, reorder_level: 5, image_url: null, is_active: true, created_at: new Date().toISOString() },
+  { id: "demo-prod-6", business_id: "demo-business-id", name: "White Sugar 1kg", category_id: "demo-cat-6", category: "Groceries", barcode: "600123456794", cost_price: 1100, selling_price: 1500, stock_quantity: 60, reorder_level: 15, image_url: null, is_active: true, created_at: new Date().toISOString() },
+  { id: "demo-prod-7", business_id: "demo-business-id", name: "Blueband Butter 250g", category_id: "demo-cat-1", category: "Dairy", barcode: "600123456795", cost_price: 1600, selling_price: 2200, stock_quantity: 22, reorder_level: 8, image_url: null, is_active: true, created_at: new Date().toISOString() },
+  { id: "demo-prod-8", business_id: "demo-business-id", name: "Mineral Water 1.5L Pack", category_id: "demo-cat-3", category: "Beverages", barcode: "600123456796", cost_price: 2600, selling_price: 3500, stock_quantity: 50, reorder_level: 10, image_url: null, is_active: true, created_at: new Date().toISOString() },
+] as unknown as ProductRecord[];
+
+const DEMO_CATEGORIES: Category[] = [
+  { id: "demo-cat-1", business_id: "demo-business-id", name: "Dairy", description: "Fresh milk, yogurt & butter", created_at: new Date().toISOString() },
+  { id: "demo-cat-2", business_id: "demo-business-id", name: "Bakery", description: "Flour, yeast, sugar & baking supplies", created_at: new Date().toISOString() },
+  { id: "demo-cat-3", business_id: "demo-business-id", name: "Beverages", description: "Juices, soft drinks & water", created_at: new Date().toISOString() },
+  { id: "demo-cat-4", business_id: "demo-business-id", name: "Grains", description: "Rice, beans, maize & cereals", created_at: new Date().toISOString() },
+  { id: "demo-cat-5", business_id: "demo-business-id", name: "Oil", description: "Cooking oil and vegetable fats", created_at: new Date().toISOString() },
+  { id: "demo-cat-6", business_id: "demo-business-id", name: "Groceries", description: "General kitchen provisions", created_at: new Date().toISOString() },
+];
+
 export async function listProducts(locationId?: string | null, businessId?: string) {
+  if (localStorage.getItem("is_demo_mode") === "true") {
+    return DEMO_PRODUCT_RECORDS;
+  }
   const isOnline = navigator.onLine;
 
   if (isOnline) {
@@ -155,6 +178,9 @@ export async function listProducts(locationId?: string | null, businessId?: stri
 }
 
 export async function listCategories() {
+  if (localStorage.getItem("is_demo_mode") === "true") {
+    return DEMO_CATEGORIES;
+  }
   const isOnline = navigator.onLine;
 
   if (isOnline) {
