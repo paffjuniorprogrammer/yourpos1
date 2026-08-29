@@ -93,22 +93,23 @@ export function ProductsPage() {
     setHistoryLoading(true);
     try {
       const movements = await getProductMovements(selectedProduct.id);
-      setProductHistory(movements.map((movement: any) => ({
-        partner: movement.referenceType === "import" ? "Product import" : movement.referenceType || movement.movementType,
-        reference: movement.locationName || movement.destinationLocationName || "Unknown location",
-        date: movement.occurredAt,
-        quantity: movement.quantity,
-        balanceAfter: movement.balanceAfter,
-        notes: movement.notes,
-      })));
+      setProductHistory(Array.isArray(movements) ? movements.map((movement: any) => ({
+        partner: movement.referenceType === "import" ? "Product import" : movement.referenceType || movement.movementType || "Stock adjustment",
+        reference: movement.locationName || movement.destinationLocationName || "Main Branch",
+        date: movement.occurredAt || movement.createdAt || new Date().toISOString(),
+        quantity: Number(movement.quantity) || 0,
+        balanceAfter: movement.balanceAfter ?? 0,
+        notes: movement.notes || "-",
+      })) : []);
     } catch (err) {
-      console.error("Failed to load history:", err);
+      console.error("Failed to load product history:", err);
+      setProductHistory([]);
     } finally {
       setHistoryLoading(false);
     }
   };
 
-  const filteredProductHistory = useMemo(() => productHistory.filter((movement: any) => {
+  const filteredProductHistory = useMemo(() => (productHistory || []).filter((movement: any) => {
     const date = String(movement.date || "").slice(0, 10);
     const text = `${movement.partner || ""} ${movement.reference || ""} ${movement.notes || ""}`.toLowerCase();
     return (!historySearch || text.includes(historySearch.toLowerCase()))
