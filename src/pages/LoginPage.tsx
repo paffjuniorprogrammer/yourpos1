@@ -2,13 +2,12 @@ import { type FormEvent, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import {
-  ArrowLeft, LockKeyhole, Rocket, Eye, EyeOff,
-  CheckCircle2, Sparkles, MessageCircle, Phone, Tag
+  ArrowLeft, LockKeyhole, Eye, EyeOff,
+  CheckCircle2, Sparkles, MessageCircle, Phone, Rocket
 } from "lucide-react";
 import { SEO } from "../components/seo/SEO";
 
 const WHATSAPP_NUMBER = "250793063512";
-const SUBSCRIPTION_PRICE = "10,000 FRW";
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -69,8 +68,8 @@ export function LoginPage() {
     }
   }
 
-  const whatsappSubscribeMsg = `Mwiriwe, nshaka kugura ifatabuguzi rya ${SUBSCRIPTION_PRICE} ry'ukwezi kuri UMUCURUZI POS.`;
-  const whatsappUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(whatsappSubscribeMsg)}`;
+  const whatsappHelpMsg = `Murakaza! Nshaka ubufasha kuri UMUCURUZI POS.`;
+  const whatsappUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(whatsappHelpMsg)}`;
 
   return (
     <div className="min-h-screen bg-slate-100/70 px-4 py-6 sm:py-10 flex flex-col justify-center">
@@ -120,49 +119,46 @@ export function LoginPage() {
               </p>
             </div>
 
-            {/* 10,000 FRW / Month Promo Card */}
-            <div className="rounded-3xl border border-emerald-500/30 bg-gradient-to-br from-emerald-950/60 to-slate-900/80 p-5 shadow-xl backdrop-blur-sm">
-              <div className="flex items-center justify-between">
-                <span className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-500/20 border border-emerald-400/40 px-3 py-1 text-[11px] font-black uppercase tracking-wider text-emerald-300">
-                  <Tag size={12} /> Ifatabuguzi Rihendutse
-                </span>
-                <span className="text-xs font-bold text-slate-400">Ukwezi kose</span>
-              </div>
+            {/* Attractive Features Showcase */}
+            <div className="rounded-3xl border border-emerald-500/30 bg-gradient-to-br from-emerald-950/60 to-slate-900/80 p-5 shadow-xl backdrop-blur-sm space-y-3">
+              <p className="text-sm font-bold leading-relaxed text-slate-100">
+                Manage your entire business in one powerful platform. Track sales, inventory, customers, and profits with ease. Increase productivity and grow your business faster.
+              </p>
 
-              <div className="mt-3 flex items-baseline gap-2">
-                <span className="text-3xl font-black text-white">{SUBSCRIPTION_PRICE}</span>
-                <span className="text-xs font-bold text-slate-300">/ Ukwezi gusa</span>
-              </div>
-
-              {/* Attractive Kinyarwanda Bullet Points */}
-              <ul className="mt-4 space-y-2 text-xs font-semibold text-slate-200">
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 size={15} className="text-emerald-400 shrink-0" />
-                  <span>Kugurisha no gucapa inyemezabwishyu (POS &amp; Receipts)</span>
+              {/* Power Features */}
+              <ul className="space-y-2.5 pt-2">
+                <li className="flex items-start gap-2.5">
+                  <CheckCircle2 size={16} className="text-emerald-400 shrink-0 mt-0.5" />
+                  <span className="text-xs font-semibold text-slate-200">Complete Sales & POS Management with real-time receipts</span>
                 </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 size={15} className="text-emerald-400 shrink-0" />
-                  <span>Kumenya ibicuruzwa bisigaye mu bubiko (Stock Management)</span>
+                <li className="flex items-start gap-2.5">
+                  <CheckCircle2 size={16} className="text-emerald-400 shrink-0 mt-0.5" />
+                  <span className="text-xs font-semibold text-slate-200">Smart Stock Management & Inventory Tracking</span>
                 </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 size={15} className="text-emerald-400 shrink-0" />
-                  <span>Raporo z'inyungu winjije buri munsi na buri kwezi</span>
+                <li className="flex items-start gap-2.5">
+                  <CheckCircle2 size={16} className="text-emerald-400 shrink-0 mt-0.5" />
+                  <span className="text-xs font-semibold text-slate-200">Bar & Guesthouse Module for rooms & tables</span>
                 </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 size={15} className="text-emerald-400 shrink-0" />
-                  <span>Gukurikirana amadeni y'abakiriya n'abagemura (Debts)</span>
+                <li className="flex items-start gap-2.5">
+                  <CheckCircle2 size={16} className="text-emerald-400 shrink-0 mt-0.5" />
+                  <span className="text-xs font-semibold text-slate-200">Detailed Reports: Sales, VAT, Debts & Customer History</span>
                 </li>
               </ul>
 
-              {/* Direct WhatsApp Subscription Button */}
-              <a
-                href={whatsappUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-4 flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 hover:bg-emerald-500 px-4 py-3 text-xs font-black uppercase tracking-wider text-white shadow-lg shadow-emerald-900/40 transition-all active:scale-[0.98]"
-              >
-                <MessageCircle size={15} /> Gura Ifatabuguzi kuri WhatsApp
-              </a>
+              {/* Call-to-Action */}
+              <div className="pt-2">
+                <p className="text-[11px] font-bold text-slate-400 mb-2.5">
+                  Get started today. Try the demo or contact us for more.
+                </p>
+                <a
+                  href={whatsappUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 hover:bg-emerald-500 px-4 py-2.5 text-xs font-black uppercase tracking-wider text-white shadow-lg shadow-emerald-900/40 transition-all active:scale-[0.98]"
+                >
+                  <MessageCircle size={14} /> Contact us on WhatsApp
+                </a>
+              </div>
             </div>
           </div>
 

@@ -224,6 +224,7 @@ export async function listSales(params: {
           *,
           customer:customer_id(full_name),
           cashier:cashier_id(full_name),
+          location:locations!sales_location_id_fkey(name),
           sale_returns(id, status)
         `, { count: "exact" });
 

@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import type { BusinessRecord, UserProfile, BusinessStatus } from '../types/database';
+import type { BusinessRecord, UserProfile, BusinessStatus, BusinessType } from '../types/database';
 
 export const superAdminService = {
   // --- Business Management ---
@@ -31,6 +31,7 @@ export const superAdminService = {
     status: BusinessStatus;
     expiryDate: string;
     startDate: string;
+    businessType?: BusinessType;
   }) {
     // We use the RPC to ensure atomicity
     const { data, error } = await supabase.rpc('create_business_with_admin', {
@@ -41,7 +42,8 @@ export const superAdminService = {
         p_plan_id: payload.planId ?? null,
         p_status: payload.status as any,
         p_start_date: payload.startDate,
-        p_end_date: payload.expiryDate
+        p_end_date: payload.expiryDate,
+        p_business_type: payload.businessType || 'retail'
     });
 
     if (error) throw error;

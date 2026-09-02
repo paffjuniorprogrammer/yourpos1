@@ -63,7 +63,7 @@ export function AddRequisitionPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { showToast } = useNotification();
-  const { run } = useAsyncAction();
+  const { run, isSubmitting } = useAsyncAction();
   const DRAFT_KEY = `pos_requisition_draft_${profile?.id || 'guest'}`;
 
   const [form, setForm] = useState<RequisitionForm>(() => {
@@ -244,14 +244,16 @@ export function AddRequisitionPage() {
         }))
       };
 
-      if (id) {
-        await updatePurchaseRequisition(id, payload);
-        showToast("success", "Requisition updated successfully");
-      } else {
-        await createPurchaseRequisition(payload);
-        showToast("success", "Requisition created successfully");
-        localStorage.removeItem(DRAFT_KEY);
-      }
+      await run(async () => {
+        if (id) {
+          await updatePurchaseRequisition(id, payload);
+          showToast("success", "Requisition updated successfully");
+        } else {
+          await createPurchaseRequisition(payload);
+          showToast("success", "Requisition created successfully");
+          localStorage.removeItem(DRAFT_KEY);
+        }
+      });
 
       navigate("/requisitions");
     } catch (error: any) {
@@ -299,10 +301,11 @@ export function AddRequisitionPage() {
           )}
           <button
             onClick={handleSave}
-            className="flex items-center gap-2 rounded-xl bg-brand-600 px-6 py-2 text-sm font-semibold text-white shadow-lg transition hover:bg-brand-700"
+            disabled={isSubmitting}
+            className="flex items-center gap-2 rounded-xl bg-brand-600 px-6 py-2 text-sm font-semibold text-white shadow-lg transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            <Save size={18} />
-            {id ? "Update Requisition" : "Create Requisition"}
+            {isSubmitting ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+            {isSubmitting ? "Saving..." : id ? "Update Requisition" : "Create Requisition"}
           </button>
         </div>
       </div>

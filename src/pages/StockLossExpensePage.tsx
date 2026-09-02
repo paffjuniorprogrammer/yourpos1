@@ -36,7 +36,7 @@ const CATEGORY_CONFIG: Record<LossOrExpenseType, { label: string; badge: string;
 
 export function StockLossExpensePage() {
   const navigate = useNavigate();
-  const { profile, business, activeLocationId, assignedLocations } = useAuth();
+  const { profile, business, activeLocationId, assignedLocations, can } = useAuth();
   const { showToast } = useNotification();
 
   const [activeTab, setActiveTab] = useState<"new" | "history">("new");
@@ -157,6 +157,7 @@ export function StockLossExpensePage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!can("Stock Loss", "add")) { showToast("error", "You do not have permission to record stock losses"); return; }
     if (!selectedLocationId) { showToast("error", "Please select a location"); return; }
     if ((selectedItems || []).length === 0) { showToast("error", "No products in write-off table"); return; }
     const missingNotes = selectedItems.some(i => !i.notes.trim());
@@ -429,7 +430,7 @@ export function StockLossExpensePage() {
                 <div className="overflow-x-auto rounded-2xl border border-slate-200">
                   <table className="w-full border-collapse text-left">
                     <thead>
-                      <tr className="border-b border-slate-200 bg-slate-50 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                      <tr className="border-b border-white/10 bg-gradient-to-r from-slate-900 via-slate-800 to-brand-700 text-[10px] font-black uppercase tracking-widest text-slate-100">
                         <th className="px-4 py-3.5">Product Name</th>
                         <th className="px-4 py-3.5">Category</th>
                         <th className="px-4 py-3.5 text-center">In Stock</th>
@@ -554,7 +555,7 @@ export function StockLossExpensePage() {
                   </div>
                   <button
                     onClick={handleSubmit}
-                    disabled={submitting}
+                    disabled={submitting || !can("Stock Loss", "add")}
                     className="flex shrink-0 items-center gap-2 rounded-2xl bg-rose-600 px-8 py-3.5 text-sm font-black text-white shadow-xl shadow-rose-200 transition hover:bg-rose-700 active:scale-95 disabled:opacity-60"
                   >
                     {submitting ? (
@@ -639,7 +640,7 @@ export function StockLossExpensePage() {
               <div className="overflow-x-auto rounded-2xl border border-slate-200">
                 <table className="w-full border-collapse text-left">
                   <thead>
-                    <tr className="border-b border-slate-200 bg-slate-50 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    <tr className="border-b border-white/10 bg-gradient-to-r from-slate-900 via-slate-800 to-brand-700 text-[10px] font-black uppercase tracking-widest text-slate-100">
                       <th className="px-4 py-3.5">Date &amp; Time</th>
                       <th className="px-4 py-3.5">Who Made It</th>
                       <th className="px-4 py-3.5">Location</th>

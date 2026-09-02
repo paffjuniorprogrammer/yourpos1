@@ -29,12 +29,13 @@ export function DashboardPage() {
   const loadDashboardData = async (force = false) => {
     try {
       if (force) setLoading(true);
+      const bizId = profile?.business_id;
       const [statsData, trendData, transactionsData, customersData, suppliersData, vatData] = await Promise.all([
-        getDashboardStats(force),
-        getSalesTrend(),
-        getRecentTransactions(),
-        getUnpaidCustomers(),
-        getUnpaidSuppliers(),
+        getDashboardStats(force, bizId),
+        getSalesTrend(bizId),
+        getRecentTransactions(bizId),
+        getUnpaidCustomers(bizId),
+        getUnpaidSuppliers(bizId),
         getVatSummary()
       ]);
 

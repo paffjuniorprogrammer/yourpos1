@@ -6,6 +6,10 @@ import { DashboardPage } from "./pages/DashboardPage";
 import { HomePage } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
 import { PosPage } from "./pages/PosPage";
+import { BarPosPage } from "./pages/BarPosPage";
+import { RoomsPage } from "./pages/RoomsPage";
+import { TablesPage } from "./pages/TablesPage";
+import { GuestOrderPage } from "./pages/GuestOrderPage";
 import { ProductsPage } from "./pages/ProductsPage";
 import { PurchasesPage } from "./pages/PurchasesPage";
 import { PurchaseRequisitionPage } from "./pages/PurchaseRequisitionPage";
@@ -45,6 +49,7 @@ export default function App() {
         <Route path="/" element={<HomePage />} />
         <Route path="/home" element={<HomePage />} />
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/guest-order/:kind/:token" element={<GuestOrderPage />} />
         
         {/* Regular POS Tenant Routes */}
         <Route
@@ -72,6 +77,31 @@ export default function App() {
                 </ProtectedRoute>
               }
             />
+            {/* ---- Guest House & Bar Routes ---- */}
+            <Route
+              path="/bar-pos"
+              element={
+                <ProtectedRoute requiredPermission={["Bar POS", "view"]}>
+                  <BarPosPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/rooms"
+              element={
+                <ProtectedRoute requiredPermission={["Rooms", "view"]}>
+                  <RoomsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/tables"
+              element={
+                <ProtectedRoute requiredPermission={["Tables", "view"]}>
+                  <TablesPage />
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="/products"
               element={
@@ -91,7 +121,7 @@ export default function App() {
             <Route
               path="/stock-loss"
               element={
-                <ProtectedRoute requiredPermission={["Sales", "view"]}>
+                <ProtectedRoute requiredPermission={["Stock Loss", "view"]}>
                   <StockLossExpensePage />
                 </ProtectedRoute>
               }

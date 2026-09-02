@@ -10,16 +10,16 @@ import { useNotification } from "../context/NotificationContext";
 import { useRealtimeSync } from "../hooks/useRealtimeSync";
 import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
-import { Eye, X, Printer, Check, Clock, Calendar, TrendingUp, TrendingDown, DollarSign, MapPin, ShoppingBag, Warehouse } from "lucide-react";
-import { getDailyReport, getRecentReturns, getRecentShifts, getReportCards, getFinancialReport, getAggregatedProductsSold, getDebtPaymentsReport, getShiftClosure } from "../services/reportsService";
+import { Eye, X, Printer, Check, Clock, Calendar, TrendingUp, TrendingDown, DollarSign, MapPin, ShoppingBag, Warehouse, BedDouble, ReceiptText, Landmark } from "lucide-react";
+import { getDailyReport, getRecentReturns, getRecentShifts, getReportCards, getFinancialReport, getAggregatedProductsSold, getDebtPaymentsReport, getHospitalityReport, getShiftClosure } from "../services/reportsService";
 import { listLocations } from "../services/settingsService";
-import type { ReportCard, FinancialSummary } from "../services/reportsService";
+import type { ReportCard, FinancialSummary, HospitalitySummary } from "../services/reportsService";
 import type { DayClosureRecord } from "../types/database";
 import { formatCurrency } from "../lib/format";
 
 export function ReportsPage() {
   const { t } = useTranslation();
-  const { profile } = useAuth();
+  const { profile, business } = useAuth();
   const { showToast } = useNotification();
   const [reportCards, setReportCards] = useState<ReportCard[]>([]);
   const [dailyReport, setDailyReport] = useState<any>(null);
@@ -37,6 +37,8 @@ export function ReportsPage() {
   const [aggregatedProducts, setAggregatedProducts] = useState<any[]>([]);
   const [debtPayments, setDebtPayments] = useState<any[]>([]);
   const [financialLoading, setFinancialLoading] = useState(false);
+  const [hospitalitySummary, setHospitalitySummary] = useState<HospitalitySummary | null>(null);
+  const isHospitalityBusiness = (business?.business_type || profile?.business?.business_type) === "guesthouse_bar" || (business?.business_type || profile?.business?.business_type) === "hybrid";
 
   // Shift Detail States
   const [selectedShift, setSelectedShift] = useState<any>(null);
@@ -62,11 +64,12 @@ export function ReportsPage() {
   const loadReports = async (force = false) => {
     try {
       if (force) setLoading(true);
+      const bizId = profile?.business_id;
       const [cardsData, reportData, shiftsData, returnsData] = await Promise.all([
-        getReportCards(force),
-        getDailyReport(force),
-        getRecentShifts(),
-        getRecentReturns()
+        getReportCards(force, bizId),
+        getDailyReport(force, bizId),
+        getRecentShifts(10, bizId),
+        getRecentReturns(10, bizId)
       ]);
   
       setReportCards(cardsData);
@@ -87,14 +90,17 @@ export function ReportsPage() {
   const loadFinancialReport = async () => {
     try {
       setFinancialLoading(true);
-      const [summary, products, debts] = await Promise.all([
-        getFinancialReport(startDate, endDate, selectedLocation || null),
-        getAggregatedProductsSold(startDate, endDate, selectedLocation || null),
-        getDebtPaymentsReport(startDate, endDate, selectedLocation || null)
+      const bizId = profile?.business_id;
+      const [summary, products, debts, hospitality] = await Promise.all([
+        getFinancialReport(startDate, endDate, selectedLocation || null, bizId),
+        getAggregatedProductsSold(startDate, endDate, selectedLocation || null, bizId),
+        getDebtPaymentsReport(startDate, endDate, selectedLocation || null, bizId),
+        isHospitalityBusiness ? getHospitalityReport(startDate, endDate, bizId) : Promise.resolve(null),
       ]);
       setFinancialSummary(summary);
       setAggregatedProducts(products);
       setDebtPayments(debts);
+      setHospitalitySummary(hospitality);
     } catch (error) {
       console.error('Failed to load financial report:', error);
       showToast("error", "Failed to calculate profit data");
@@ -110,7 +116,7 @@ export function ReportsPage() {
       return;
     }
     run(loadReports);
-  }, [run]);
+  }, [run, business?.business_type, profile?.business?.business_type]);
 
   useRealtimeSync({
     onSaleCreated: () => void run(loadReports),
@@ -265,6 +271,29 @@ export function ReportsPage() {
         </div>
       </SectionCard>
 
+      {isHospitalityBusiness && (
+        <SectionCard
+          title="Guesthouse revenue"
+          subtitle="Room charges are accrued to the guest folio. Only reception payments are cash actually collected."
+        >
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {[
+              { label: "Room stays", value: hospitalitySummary?.accommodationRevenue, meta: `${hospitalitySummary?.bookingCount || 0} check-in(s) in this period`, icon: BedDouble, tone: "bg-violet-50 text-violet-700" },
+              { label: "Guest folio charges", value: hospitalitySummary?.folioCharges, meta: `${formatCurrency(hospitalitySummary?.barAndKitchenCharges || 0)} from bar & kitchen`, icon: ReceiptText, tone: "bg-sky-50 text-sky-700" },
+              { label: "Guest revenue accrued", value: hospitalitySummary?.guestRevenue, meta: "Room stays plus folio charges", icon: TrendingUp, tone: "bg-emerald-50 text-emerald-700" },
+              { label: "Room payments collected", value: hospitalitySummary?.paymentsCollected, meta: "Recorded by reception in this period", icon: Landmark, tone: "bg-amber-50 text-amber-700" },
+            ].map((stat) => (
+              <div key={stat.label} className="rounded-[1.5rem] border border-slate-100 bg-white p-5 shadow-sm">
+                <div className={`mb-3 flex h-10 w-10 items-center justify-center rounded-xl ${stat.tone}`}><stat.icon size={19} /></div>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">{stat.label}</p>
+                <p className="mt-1 text-xl font-black text-ink">{formatCurrency(stat.value || 0)}</p>
+                <p className="mt-1 text-[11px] font-medium text-slate-500">{stat.meta}</p>
+              </div>
+            ))}
+          </div>
+        </SectionCard>
+      )}
+
 
       <SectionCard
         title={t('reports.daily.title')}
@@ -398,7 +427,8 @@ export function ReportsPage() {
                         <button 
                           onClick={async () => {
                             try {
-                              await approveReturn(ret.id);
+                              if (!profile?.id) throw new Error("Admin profile is missing");
+                              await approveReturn(ret.id, profile.id);
                               showToast("success", t('reports.returns.success_approved'));
                               loadReports(true);
                             } catch (e: any) {

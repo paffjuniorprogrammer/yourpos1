@@ -165,9 +165,16 @@ export function BusinessesPage() {
                       <div className="h-10 w-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400">
                         <Building2 size={20} />
                       </div>
-                      <span className={`font-black ${isCritical ? 'text-rose-600' : 'text-slate-900'}`}>
-                        {biz.name}
-                      </span>
+                      <div>
+                        <span className={`font-black block ${isCritical ? 'text-rose-600' : 'text-slate-900'}`}>
+                          {biz.name}
+                        </span>
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-500 mt-0.5">
+                          {biz.business_type === 'guesthouse_bar' ? '🏨 Guest House & Bar' :
+                           biz.business_type === 'hybrid' ? '⚡ Hybrid POS' :
+                           '🛒 Supermarket POS'}
+                        </span>
+                      </div>
                     </div>
                   </td>
                   <td className="px-8 py-6">
@@ -271,6 +278,34 @@ export function BusinessesPage() {
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Created</p>
                     <p className="text-sm font-black text-slate-900">{new Date(showDetails.created_at).toLocaleDateString()}</p>
                  </div>
+                 <div className="p-5 col-span-2 rounded-[1.5rem] border border-slate-100 bg-white space-y-2">
+                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">POS System Mode</p>
+                     <div className="grid grid-cols-3 gap-2">
+                       {([
+                         { value: 'retail', emoji: '🛒', label: 'Supermarket' },
+                         { value: 'guesthouse_bar', emoji: '🏨', label: 'Bar & Rooms' },
+                         { value: 'hybrid', emoji: '⚡', label: 'Hybrid' },
+                       ] as const).map(({ value, emoji, label }) => (
+                         <button
+                           key={value}
+                           type="button"
+                           onClick={async () => {
+                             await superAdminService.updateBusiness(showDetails.id, { business_type: value } as any);
+                             setShowDetails({ ...showDetails, business_type: value });
+                             loadData();
+                           }}
+                           className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl border text-xs font-black transition-all ${
+                             showDetails.business_type === value || (!showDetails.business_type && value === 'retail')
+                               ? 'border-slate-950 bg-slate-950 text-white'
+                               : 'border-slate-100 bg-slate-50 text-slate-600 hover:bg-slate-100'
+                           }`}
+                         >
+                           <span>{emoji}</span>
+                           <span>{label}</span>
+                         </button>
+                       ))}
+                     </div>
+                  </div>
                  <div className="p-5 col-span-2 rounded-[1.5rem] border border-slate-100 bg-slate-50 flex items-center justify-between">
                     <div>
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Subscription Days Left</p>
@@ -303,6 +338,7 @@ function RegisterModal({ onClose, plans, onComplete }: any) {
     password: '',
     planId: plans[0]?.id || '',
     status: 'active',
+    businessType: 'retail' as 'retail' | 'guesthouse_bar' | 'hybrid',
     startDate: new Date().toISOString().split('T')[0],
     endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
   });
@@ -325,6 +361,7 @@ function RegisterModal({ onClose, plans, onComplete }: any) {
         adminPassword: formData.password,
         planId: formData.planId || null,
         status: formData.status as any,
+        businessType: formData.businessType,
         expiryDate: new Date(formData.endDate).toISOString(),
         startDate: new Date(formData.startDate).toISOString()
       });
@@ -406,6 +443,33 @@ function RegisterModal({ onClose, plans, onComplete }: any) {
                     <option value="suspended">Suspended</option>
                  </select>
               </div>
+           </div>
+
+           {/* Section 4: POS System Type */}
+           <div className="pt-4 border-t border-slate-100">
+             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">POS System Type</p>
+             <div className="grid grid-cols-3 gap-3">
+               {([
+                 { value: 'retail',        emoji: '🛒', label: 'Supermarket', sub: 'Standard retail POS' },
+                 { value: 'guesthouse_bar',emoji: '🏨', label: 'Guest House & Bar', sub: 'Rooms + Bar POS' },
+                 { value: 'hybrid',        emoji: '⚡', label: 'Hybrid', sub: 'Both systems' },
+               ] as const).map(({ value, emoji, label, sub }) => (
+                 <button
+                   key={value}
+                   type="button"
+                   onClick={() => setFormData({ ...formData, businessType: value })}
+                   className={`flex flex-col items-center gap-2 rounded-2xl border-2 px-3 py-4 text-center transition-all ${
+                     formData.businessType === value
+                       ? 'border-slate-950 bg-slate-950 text-white shadow-lg scale-[1.03]'
+                       : 'border-slate-100 bg-slate-50 text-slate-700 hover:border-slate-300'
+                   }`}
+                 >
+                   <span className="text-2xl">{emoji}</span>
+                   <span className="text-[11px] font-black uppercase tracking-wide leading-tight">{label}</span>
+                   <span className={`text-[9px] leading-tight ${formData.businessType === value ? 'text-slate-300' : 'text-slate-400'}`}>{sub}</span>
+                 </button>
+               ))}
+             </div>
            </div>
 
            <div className="grid grid-cols-2 gap-4">

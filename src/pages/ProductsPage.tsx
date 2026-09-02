@@ -633,23 +633,6 @@ export function ProductsPage() {
                           )) : <p className="py-8 text-center text-sm text-slate-400">No movements match these dates or search.</p>}
                         </div>
                       </section>
-
-                      <section className="hidden">
-                        <div className="space-y-3">
-                          {productHistory?.purchases.length ? productHistory.purchases.map((p: any, i: number) => (
-                            <div key={i} className="flex items-center justify-between rounded-2xl bg-amber-50/30 p-4 border border-amber-100">
-                              <div>
-                                <p className="text-sm font-black text-ink">{p.partner}</p>
-                                <p className="text-[10px] font-bold text-slate-400 uppercase">{p.reference || 'Stock Count'} • {new Date(p.date).toLocaleDateString()}</p>
-                              </div>
-                              <div className="text-right">
-                                <p className="text-sm font-black text-emerald-600">+{p.quantity} pcs</p>
-                                <p className="text-xs font-bold text-slate-500">Stock left: {p.balanceAfter ?? 0} pcs</p>
-                              </div>
-                            </div>
-                          )) : <p className="text-sm text-slate-400 italic">No recent purchases recorded.</p>}
-                        </div>
-                      </section>
                     </>
                   )}
                 </div>

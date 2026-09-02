@@ -19,10 +19,11 @@ export function AppShell() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [reminders, setReminders] = useState<BusinessReminder[]>([]);
   const [remindersOpen, setRemindersOpen] = useState(false);
-  const isPosRoute = location.pathname === "/pos";
+  const isPosRoute = location.pathname === "/pos" || location.pathname === "/bar-pos";
   const currentPage =
     navItems.find((item) => item.path === location.pathname)?.label ?? t('menu.dashboard');
 
+  const businessType = profile?.business?.business_type ?? 'retail';
 
   const changeLanguage = async (lng: string) => {
     i18n.changeLanguage(lng);
@@ -52,6 +53,13 @@ export function AppShell() {
   const visibleNavItems = navItems.filter((item) => {
     if (item.label === "VAT Report" && (settings as any)?.vat_registration_status !== "registered") {
       return false;
+    }
+
+    // Filter by business type
+    if (item.businessTypes && item.businessTypes.length > 0) {
+      if (!item.businessTypes.includes(businessType as any)) {
+        return false;
+      }
     }
 
     if (!authConfigured) return true;

@@ -14,12 +14,16 @@ import {
   CreditCard,
   Clock,
   Shield,
-  Eye
+  Eye,
+  Hotel,
+  Sparkles,
+  ShoppingCart,
+  UtensilsCrossed
 } from "lucide-react";
 import { superAdminService } from "../../services/superAdminService";
 import { LoadingPOS } from "../../components/ui/LoadingPOS";
 import { useNotification } from "../../context/NotificationContext";
-import type { BusinessRecord } from "../../types/database";
+import type { BusinessRecord, BusinessType } from "../../types/database";
 
 export function BusinessesPage() {
   const [businesses, setBusinesses] = useState<any[]>([]);
@@ -27,7 +31,11 @@ export function BusinessesPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [plans, setPlans] = useState<any[]>([]);
-  const [newBiz, setNewBiz] = useState({ name: "", planId: "" });
+  const [newBiz, setNewBiz] = useState<{ name: string; planId: string; businessType: BusinessType }>({ 
+    name: "", 
+    planId: "", 
+    businessType: "retail" 
+  });
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { confirm, showToast } = useNotification();
@@ -80,14 +88,15 @@ export function BusinessesPage() {
         adminEmail: `${newBiz.name.toLowerCase().replace(/\s+/g, '')}@admin.local`,
         adminName: "Admin",
         planId: newBiz.planId,
+        businessType: newBiz.businessType,
         status: "active",
         startDate: new Date().toISOString(),
         expiryDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
       });
       setShowCreateModal(false);
-      setNewBiz({ name: "", planId: plans[0]?.id || "" });
+      setNewBiz({ name: "", planId: plans[0]?.id || "", businessType: "retail" });
       fetchBusinesses();
-      showToast("success", "Business created successfully!");
+      showToast("success", "Business created successfully with selected POS mode!");
     } catch (err: any) {
       console.error("Creation failed:", err);
       showToast("error", err.message || "Failed to create business");
@@ -278,7 +287,22 @@ export function BusinessesPage() {
               </button>
               <div>
                 <h3 className="text-xl font-black text-slate-900 leading-tight">{biz.name}</h3>
-                <p className="text-xs text-slate-400 font-bold tracking-widest uppercase mt-1">{biz.plan?.name || "No Plan"}</p>
+                <div className="flex items-center gap-2 mt-1">
+                  <p className="text-xs text-slate-400 font-bold tracking-widest uppercase">{biz.plan?.name || "No Plan"}</p>
+                  {biz.business_type === 'guesthouse_bar' ? (
+                    <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700">
+                      <Hotel size={10} /> Bar & Rooms
+                    </span>
+                  ) : biz.business_type === 'hybrid' ? (
+                    <span className="inline-flex items-center gap-1 rounded-md bg-purple-50 px-2 py-0.5 text-[10px] font-bold text-purple-700">
+                      <Sparkles size={10} /> Hybrid POS
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 rounded-md bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-700">
+                      <ShoppingCart size={10} /> Retail POS
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -346,26 +370,81 @@ export function BusinessesPage() {
       </div>
 
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 backdrop-blur-sm p-4">
-           <div className="w-full max-w-lg rounded-[2.5rem] bg-white p-10 shadow-2xl animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 backdrop-blur-sm p-4 overflow-y-auto">
+           <div className="w-full max-w-xl rounded-[2.5rem] bg-white p-8 sm:p-10 shadow-2xl animate-in zoom-in-95 duration-200 my-8">
                <h2 className="text-2xl font-black text-slate-900 mb-2">Register New Business</h2>
-               <p className="text-slate-500 mb-8 font-medium">Set up a new tenant on the platform.</p>
+               <p className="text-slate-500 mb-6 font-medium">Set up a new tenant on the platform with their specific POS mode.</p>
                
                <div className="space-y-6">
                  <div>
                    <label className="block text-xs font-black uppercase tracking-[0.2em] text-slate-400 mb-2">Business Name</label>
                    <input 
                      type="text" 
-                     className="w-full rounded-2xl bg-slate-50 border-none p-4 font-semibold outline-none ring-blue-500/20 focus:ring-4" 
-                     placeholder="Eagle Supermarket" 
+                     className="w-full rounded-2xl bg-slate-50 border-none p-4 font-semibold outline-none ring-blue-500/20 focus:ring-4 text-slate-900" 
+                     placeholder="e.g. Hilltop Guesthouse & Bar or City Supermarket" 
                      value={newBiz.name}
                      onChange={(e) => setNewBiz({ ...newBiz, name: e.target.value })}
                    />
                  </div>
+
+                 {/* POS System Selection */}
                  <div>
-                   <label className="block text-xs font-black uppercase tracking-[0.2em] text-slate-400 mb-2">Initial Plan</label>
+                   <label className="block text-xs font-black uppercase tracking-[0.2em] text-slate-400 mb-3">Choose POS System Mode</label>
+                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                     <button
+                       type="button"
+                       onClick={() => setNewBiz({ ...newBiz, businessType: "retail" })}
+                       className={`flex flex-col items-center text-center p-4 rounded-2xl border-2 transition-all ${
+                         newBiz.businessType === "retail"
+                           ? "border-blue-600 bg-blue-50/70 text-blue-900 shadow-md ring-2 ring-blue-500/20"
+                           : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                       }`}
+                     >
+                       <div className={`p-2.5 rounded-xl mb-2 ${newBiz.businessType === "retail" ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-500"}`}>
+                         <ShoppingCart size={20} />
+                       </div>
+                       <span className="text-xs font-black">Supermarket / Retail</span>
+                       <span className="text-[10px] text-slate-400 mt-1">Barcode & Quick Pay</span>
+                     </button>
+
+                     <button
+                       type="button"
+                       onClick={() => setNewBiz({ ...newBiz, businessType: "guesthouse_bar" })}
+                       className={`flex flex-col items-center text-center p-4 rounded-2xl border-2 transition-all ${
+                         newBiz.businessType === "guesthouse_bar"
+                           ? "border-amber-600 bg-amber-50/70 text-amber-900 shadow-md ring-2 ring-amber-500/20"
+                           : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                       }`}
+                     >
+                       <div className={`p-2.5 rounded-xl mb-2 ${newBiz.businessType === "guesthouse_bar" ? "bg-amber-600 text-white" : "bg-slate-100 text-slate-500"}`}>
+                         <Hotel size={20} />
+                       </div>
+                       <span className="text-xs font-black">Guest House & Bar</span>
+                       <span className="text-[10px] text-slate-400 mt-1">Rooms, Tables & Folio</span>
+                     </button>
+
+                     <button
+                       type="button"
+                       onClick={() => setNewBiz({ ...newBiz, businessType: "hybrid" })}
+                       className={`flex flex-col items-center text-center p-4 rounded-2xl border-2 transition-all ${
+                         newBiz.businessType === "hybrid"
+                           ? "border-purple-600 bg-purple-50/70 text-purple-900 shadow-md ring-2 ring-purple-500/20"
+                           : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                       }`}
+                     >
+                       <div className={`p-2.5 rounded-xl mb-2 ${newBiz.businessType === "hybrid" ? "bg-purple-600 text-white" : "bg-slate-100 text-slate-500"}`}>
+                         <Sparkles size={20} />
+                       </div>
+                       <span className="text-xs font-black">Hybrid Mode</span>
+                       <span className="text-[10px] text-slate-400 mt-1">All POS Features</span>
+                     </button>
+                   </div>
+                 </div>
+
+                 <div>
+                   <label className="block text-xs font-black uppercase tracking-[0.2em] text-slate-400 mb-2">Initial Subscription Plan</label>
                    <select 
-                     className="w-full rounded-2xl bg-slate-50 border-none p-4 font-semibold outline-none ring-blue-500/20 focus:ring-4 appearance-none"
+                     className="w-full rounded-2xl bg-slate-50 border-none p-4 font-semibold outline-none ring-blue-500/20 focus:ring-4 appearance-none text-slate-900"
                      value={newBiz.planId}
                      onChange={(e) => setNewBiz({ ...newBiz, planId: e.target.value })}
                    >
@@ -418,10 +497,32 @@ export function BusinessesPage() {
                 <div className="py-12 text-center text-slate-500">Loading details...</div>
               ) : (
                 <>
-                  <div className="grid grid-cols-2 gap-4 mb-6">
+                  <div className="grid grid-cols-3 gap-4 mb-6">
                     <div className="rounded-2xl bg-slate-50 p-4">
                       <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Current Plan</p>
                       <p className="text-lg font-black text-slate-900 mt-1">{selectedBusiness.plan?.name || 'No Plan'}</p>
+                    </div>
+                    <div className="rounded-2xl bg-slate-50 p-4">
+                      <p className="text-xs font-bold uppercase tracking-wider text-slate-400">POS Mode</p>
+                      <select
+                        value={selectedBusiness.business_type || 'retail'}
+                        onChange={async (e) => {
+                          const newType = e.target.value as BusinessType;
+                          try {
+                            await superAdminService.updateBusiness(selectedBusiness.id, { business_type: newType });
+                            setSelectedBusiness({ ...selectedBusiness, business_type: newType });
+                            fetchBusinesses();
+                            showToast("success", `POS mode changed to ${newType}!`);
+                          } catch (err: any) {
+                            showToast("error", err.message || "Failed to update POS mode");
+                          }
+                        }}
+                        className="w-full mt-1 rounded-xl bg-white border border-slate-200 text-xs font-black uppercase text-slate-900 p-1.5 outline-none"
+                      >
+                        <option value="retail">🛒 Retail POS</option>
+                        <option value="guesthouse_bar">🏨 Bar & Rooms</option>
+                        <option value="hybrid">⚡ Hybrid POS</option>
+                      </select>
                     </div>
                     <div className="rounded-2xl bg-slate-50 p-4">
                       <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Expires</p>

@@ -21,6 +21,7 @@ import {
   History,
   RotateCcw,
   ArrowLeftRight,
+  Package,
 } from "lucide-react";
 import { LoadingPOS } from "../components/ui/LoadingPOS";
 import { useNavigate } from "react-router-dom";
@@ -34,6 +35,7 @@ import {
   getShopSettings,
   listPosCustomers,
   listPosProducts,
+  getFrequentlySoldProductCounts,
   checkOpenRegister,
   openRegister,
 } from "../services/posService";
@@ -211,6 +213,7 @@ export function PosPage() {
   const [newCustomerAddress, setNewCustomerAddress] = useState("");
   const [addCustomerSubmitting, setAddCustomerSubmitting] = useState(false);
   const [productPage, setProductPage] = useState(1);
+  const [productSalesRank, setProductSalesRank] = useState<Record<string, number>>({});
   const [orderDiscount, setOrderDiscount] = useState<{ type: 'percentage' | 'fixed', value: number }>({ type: 'percentage', value: 0 });
   const [discountItemId, setDiscountItemId] = useState<string | null>(null);
   const [discountModalOpen, setDiscountModalOpen] = useState(false);
@@ -228,7 +231,9 @@ export function PosPage() {
   const [autoPrint, setAutoPrint] = useState(false);
   const [lastSaleForPrint, setLastSaleForPrint] = useState<any>(null);
   const [shiftClosureForPrint, setShiftClosureForPrint] = useState<any>(null);
-  const PRODUCTS_PER_PAGE = 30;
+  const PRODUCTS_PER_PAGE = 24;
+  const FEATURED_PRODUCT_LIMIT = 12;
+  const lastAutoAddedSearchRef = useRef("");
 
   function selectCustomer(customer: PosCustomerRecord) {
     const customerDiscount = Number(customer.discount_percentage) || 0;
@@ -339,6 +344,12 @@ export function PosPage() {
         // Only need to fetch register status, as products/customers are handled globally!
         const openReg = await checkOpenRegister(profile!.id, activeLocationId!);
 
+        // This is deliberately non-blocking: a POS can open immediately from
+        // its local cache, then update the compact grid with real sales data.
+        void getFrequentlySoldProductCounts(activeLocationId!).then((counts) => {
+          if (active) setProductSalesRank(counts);
+        }).catch(() => undefined);
+
         if (!active) return;
 
         if (openReg) {
@@ -377,8 +388,19 @@ export function PosPage() {
     return list;
   }, [products, query]);
 
-  // Best-seller sort: in-stock products with higher session sales count appear first.
-  // Out-of-stock always goes to the bottom. When searching, results stay in filter order.
+  // The quick dropdown is prefix-based so typing "ama" shows Am… products
+  // immediately, without filling the main product grid with the catalogue.
+  const searchSuggestions = useMemo(() => {
+    const normalized = query.trim().toLowerCase();
+    if (!normalized) return [];
+    return products.filter((product) =>
+      product.name.toLowerCase().startsWith(normalized) ||
+      (product.barcode ?? "").toLowerCase().startsWith(normalized),
+    );
+  }, [products, query]);
+
+  // Frequently sold products are shown by default; the complete catalogue is
+  // available through search so the cashier is never faced with every product.
   const sortedProducts = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     if (normalized) return filteredProducts; // keep search relevance order
@@ -388,18 +410,35 @@ export function PosPage() {
       if (aOut && !bOut) return 1;
       if (!aOut && bOut) return -1;
       // Both in-stock: rank by session sales count desc, then by stock level desc
-      const aSales = salesCountRef.current[a.id] ?? 0;
-      const bSales = salesCountRef.current[b.id] ?? 0;
+      const aSales = (productSalesRank[a.id] ?? 0) + (salesCountRef.current[a.id] ?? 0);
+      const bSales = (productSalesRank[b.id] ?? 0) + (salesCountRef.current[b.id] ?? 0);
       if (bSales !== aSales) return bSales - aSales;
       return b.stock_quantity - a.stock_quantity;
     });
-  }, [filteredProducts, query]);
+  }, [filteredProducts, query, cart, productSalesRank]);
+
+  const searchTerm = query.trim().toLowerCase();
+  const exactBarcodeMatch = useMemo(
+    () => searchTerm
+      ? products.find((product) => (product.barcode ?? "").toLowerCase() === searchTerm) ?? null
+      : null,
+    [products, searchTerm],
+  );
+  const isSearchingProducts = searchTerm.length >= 3 || Boolean(exactBarcodeMatch);
+  const productsForGrid = useMemo(
+    () => isSearchingProducts ? sortedProducts : sortedProducts.slice(0, FEATURED_PRODUCT_LIMIT),
+    [isSearchingProducts, sortedProducts],
+  );
 
   const pagedProducts = useMemo(() => {
     const start = (productPage - 1) * PRODUCTS_PER_PAGE;
-    return sortedProducts.slice(start, start + PRODUCTS_PER_PAGE);
-  }, [sortedProducts, productPage, PRODUCTS_PER_PAGE]);
-  const totalProductPages = Math.max(1, Math.ceil(filteredProducts.length / PRODUCTS_PER_PAGE));
+    return productsForGrid.slice(start, start + PRODUCTS_PER_PAGE);
+  }, [productsForGrid, productPage, PRODUCTS_PER_PAGE]);
+  const totalProductPages = Math.max(1, Math.ceil(productsForGrid.length / PRODUCTS_PER_PAGE));
+
+  useEffect(() => {
+    setProductPage(1);
+  }, [isSearchingProducts, searchTerm]);
 
   const filteredCustomers = useMemo(() => {
     const normalized = customerQuery.trim().toLowerCase();
@@ -558,6 +597,27 @@ export function PosPage() {
     searchRef.current?.focus();
   }
 
+  // A unique search result is safe to add automatically after three letters.
+  // For several matches the cashier sees the matching cards and chooses one.
+  useEffect(() => {
+    if (!searchTerm) {
+      lastAutoAddedSearchRef.current = "";
+      return;
+    }
+
+    const nameMatches = products.filter((product) =>
+      product.name.toLowerCase().includes(searchTerm) ||
+      (product.category_name ?? "").toLowerCase().includes(searchTerm),
+    );
+    const productToAdd = exactBarcodeMatch || (searchTerm.length >= 3 && nameMatches.length === 1 ? nameMatches[0] : null);
+    const requestKey = `${searchTerm}:${productToAdd?.id ?? ""}`;
+
+    if (productToAdd && lastAutoAddedSearchRef.current !== requestKey) {
+      lastAutoAddedSearchRef.current = requestKey;
+      addToCart(productToAdd.id);
+    }
+  }, [exactBarcodeMatch, products, searchTerm]);
+
 
   function onSearchKeyDown(event: KeyboardEvent<HTMLInputElement>) {
     if (event.key === "Enter") {
@@ -575,6 +635,8 @@ export function PosPage() {
 
       if (barcodeMatch) {
         event.currentTarget.value = "";
+        if (lastAutoAddedSearchRef.current === `${inputValue}:${barcodeMatch.id}`) return;
+        lastAutoAddedSearchRef.current = `${inputValue}:${barcodeMatch.id}`;
         addToCart(barcodeMatch.id);
         return;
       }
@@ -585,21 +647,14 @@ export function PosPage() {
 
       if (nameMatches.length === 1) {
         event.currentTarget.value = "";
+        if (lastAutoAddedSearchRef.current === `${inputValue}:${nameMatches[0].id}`) return;
+        lastAutoAddedSearchRef.current = `${inputValue}:${nameMatches[0].id}`;
         addToCart(nameMatches[0].id);
         return;
       }
 
-      // If we fallthrough but still have filtered matches via React state or direct match
-      const fallbackMatches = products.filter(
-        (product) =>
-          product.name.toLowerCase().includes(inputValue) ||
-          (product.barcode ?? "").toLowerCase().includes(inputValue),
-      );
-
-      if (fallbackMatches.length > 0) {
-        event.currentTarget.value = "";
-        addToCart(fallbackMatches[0].id);
-      }
+      // More than one result remains visible for the cashier to select. Never
+      // add the first result by accident.
     }
   }
 
@@ -1084,8 +1139,8 @@ export function PosPage() {
   }
 
   return (
-    <div className="h-screen overflow-hidden bg-slate-100 px-2 py-1 text-ink sm:px-3 lg:px-4">
-      <div className="mx-auto flex h-full max-w-[1700px] flex-col">
+    <div className="min-h-[100dvh] bg-slate-100 px-2 py-1 text-ink sm:px-3 xl:h-screen xl:overflow-hidden xl:px-4">
+      <div className="mx-auto flex min-h-[100dvh] max-w-[1700px] flex-col xl:h-full">
         <div className="mb-0.5 rounded-[16px] bg-white px-2 py-0.5 shadow-soft">
           <div className="flex min-h-10 items-center gap-2 flex-wrap lg:flex-nowrap">
             <div className="flex gap-2 items-center">
@@ -1202,8 +1257,8 @@ export function PosPage() {
           </div>
         </div>
 
-        <div className="grid flex-1 gap-1 xl:grid-cols-[0.92fr_1.08fr]" style={{ minHeight: 0, height: 'calc(100vh - 46px)' }}>
-          <section className="flex min-h-0 flex-col gap-1">
+        <div className="grid flex-1 gap-1 xl:h-[calc(100vh-46px)] xl:min-h-0 xl:grid-cols-[0.92fr_1.08fr]" style={{ minHeight: 0 }}>
+          <section className="flex min-h-[50dvh] flex-col gap-1 xl:min-h-0">
             {pageError ? (
               <div className="rounded-[18px] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
                 {pageError}
@@ -1222,9 +1277,9 @@ export function PosPage() {
                     className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm outline-none focus:border-brand-300"
                     placeholder={t('pos.search_placeholder')}
                   />
-                  {!!query && filteredProducts.length > 0 ? (
+                  {searchTerm.length > 0 && searchSuggestions.length > 0 ? (
                     <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-20 rounded-2xl border border-slate-800 bg-slate-950 p-2 shadow-soft">
-                      {filteredProducts.slice(0, 4).map((product) => (
+                      {searchSuggestions.slice(0, 6).map((product) => (
                         <button
                           key={product.id}
                           onClick={() => addToCart(product.id)}
@@ -1259,12 +1314,19 @@ export function PosPage() {
             <div className="min-h-0 flex-1 overflow-hidden rounded-[22px] bg-white p-3 shadow-soft flex flex-col">
               <div className="mb-2 flex items-center justify-between gap-2">
                 <div>
-                  <h2 className="text-sm font-bold">{t('pos.product_grid')}</h2>
+                  <h2 className="text-sm font-bold">{isSearchingProducts ? "Matching products" : "Frequently sold products"}</h2>
                   <p className="text-xs text-slate-400">
+                    {loading
+                      ? t('common.syncing')
+                      : isSearchingProducts
+                        ? `${productsForGrid.length} match${productsForGrid.length === 1 ? "" : "es"} - click to add`
+                        : `Showing the ${FEATURED_PRODUCT_LIMIT} most frequently sold items`}
+                  </p>
+                  <p className="hidden">
                     {loading ? t('common.syncing') : `${filteredProducts.length} products — Click to add`}
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
+                {totalProductPages > 1 && <div className="flex items-center gap-2">
                   <button
                     onClick={() => setProductPage(p => Math.max(1, p - 1))}
                     disabled={productPage <= 1}
@@ -1280,15 +1342,15 @@ export function PosPage() {
                   >
                     <Plus size={12} />
                   </button>
-                </div>
+                </div>}
               </div>
 
-              <div className="grid gap-2.5 overflow-y-auto pr-1 flex-1" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', alignContent: 'start' }}>
+              <div className="grid auto-rows-[202px] gap-2.5 overflow-y-auto pr-1 flex-1" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(148px, 1fr))', alignContent: 'start' }}>
                 {pagedProducts.map((product) => (
                   <button
                     key={product.id}
                     onClick={() => addToCart(product.id)}
-                    className={`flex flex-col overflow-hidden rounded-[1.25rem] border bg-white p-2 text-left transition duration-200 hover:shadow-lg active:scale-95 ${
+                    className={`flex h-full flex-col overflow-hidden rounded-[1.25rem] border bg-white p-2 text-left transition duration-200 hover:shadow-lg active:scale-95 ${
                       product.stock_quantity <= 0
                         ? 'border-slate-100 opacity-60'
                         : product.stock_quantity <= product.reorder_level
@@ -1297,17 +1359,19 @@ export function PosPage() {
                     }`}
                   >
                     {product.image_url ? (
-                      <div className="mb-2 h-[88px] w-full shrink-0 overflow-hidden rounded-xl bg-slate-50">
+                      <div className="mb-2 h-16 w-full shrink-0 overflow-hidden rounded-xl bg-slate-50">
                         <img src={product.image_url} alt={product.name} className="h-full w-full object-cover" />
                       </div>
                     ) : (
-                      <div className="mb-2 flex h-[88px] w-full shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-slate-100 to-slate-50 text-slate-300">
-                        <span className="text-[9px] font-bold uppercase tracking-widest opacity-50">{t('pos.ui.no_image')}</span>
+                      <div className="mb-2 flex h-16 w-full shrink-0 items-center justify-center rounded-xl border border-brand-100 bg-gradient-to-br from-brand-50 via-slate-50 to-white text-brand-500">
+                        <Package size={27} strokeWidth={1.75} aria-label={t('pos.ui.no_image')} />
                       </div>
                     )}
                     <div className="flex w-full flex-1 flex-col justify-between px-1 pb-0.5">
                       <div>
                         <p className="line-clamp-2 text-[13px] font-black leading-tight text-ink">{product.name}</p>
+                        <p className="mt-1 truncate text-[10px] font-semibold text-slate-400">{product.category_name || "Uncategorised"}</p>
+                        <p className="truncate font-mono text-[9px] text-slate-400">{product.barcode || "No barcode"}</p>
                         {Number(product.bulk_quantity) > 1 && Number(product.bulk_price) > 0 && Number(product.bulk_price) < Number(product.bulk_quantity) * Number(product.selling_price) && (
                           <div className="mt-1 inline-flex items-center gap-1 rounded bg-emerald-50 px-1.5 py-0.5 text-[9px] font-black text-emerald-700">
                             <span>📦 Box ({product.bulk_quantity}):</span>
@@ -1336,7 +1400,7 @@ export function PosPage() {
 
           </section>
 
-          <aside className="flex flex-col overflow-hidden rounded-[22px] bg-slate-950 p-2 text-white shadow-soft" style={{ minHeight: 0 }}>
+          <aside className="flex min-h-[50dvh] flex-col overflow-hidden rounded-[22px] bg-slate-950 p-2 text-white shadow-soft xl:min-h-0">
             <div className="flex min-h-0 flex-1 flex-col space-y-3">
               <div className="w-full rounded-3xl border border-slate-800 bg-slate-900 p-2.5">
                 <div className="relative">

@@ -162,7 +162,7 @@ function calculateVatPosition(outputVat: number, inputVat: number) {
   };
 }
 
-export async function getVatSummary(targetDate = new Date()): Promise<VatSummary> {
+export async function getVatSummary(targetDate = new Date(), businessId?: string): Promise<VatSummary> {
   if (localStorage.getItem("is_demo_mode") === "true") {
     const period = getCurrentVatPeriod(targetDate, "monthly");
     return {
@@ -192,7 +192,21 @@ export async function getVatSummary(targetDate = new Date()): Promise<VatSummary
     };
   }
   const client = await ensureSupabaseConfigured();
-  const { data: settings } = await client.from("shop_settings").select("*").maybeSingle();
+
+  let bizId = businessId;
+  if (!bizId) {
+    try {
+      const cached = localStorage.getItem("cached_user_profile");
+      if (cached) {
+        bizId = JSON.parse(cached)?.business_id;
+      }
+    } catch {}
+  }
+
+  let settingsQuery = client.from("shop_settings").select("*");
+  if (bizId) settingsQuery = settingsQuery.eq("business_id", bizId);
+  const { data: settings } = await settingsQuery.maybeSingle();
+
   const businessInfo = getVatSettings(settings as any);
   const period = getCurrentVatPeriod(targetDate, businessInfo.taxPeriod);
   const disabled = businessInfo.registrationStatus !== "registered";
@@ -216,17 +230,26 @@ export async function getVatSummary(targetDate = new Date()): Promise<VatSummary
     };
   }
 
+  let salesQ = client
+    .from("sales")
+    .select("subtotal,tax_amount,total_amount,amount_before_vat,output_vat")
+    .gte("created_at", toIsoStart(period.start))
+    .lte("created_at", toIsoEnd(period.end));
+
+  let purchasesQ = client
+    .from("purchases")
+    .select("total_cost,amount_before_vat,input_vat")
+    .gte("purchase_date", toIsoStart(period.start))
+    .lte("purchase_date", toIsoEnd(period.end));
+
+  if (bizId) {
+    salesQ = salesQ.eq("business_id", bizId);
+    purchasesQ = purchasesQ.eq("business_id", bizId);
+  }
+
   const [{ data: sales, error: salesError }, { data: purchases, error: purchasesError }] = await Promise.all([
-    client
-      .from("sales")
-      .select("subtotal,tax_amount,total_amount,amount_before_vat,output_vat")
-      .gte("created_at", toIsoStart(period.start))
-      .lte("created_at", toIsoEnd(period.end)),
-    client
-      .from("purchases")
-      .select("total_cost,amount_before_vat,input_vat")
-      .gte("purchase_date", toIsoStart(period.start))
-      .lte("purchase_date", toIsoEnd(period.end)),
+    salesQ,
+    purchasesQ,
   ]);
 
   if (salesError) throw salesError;

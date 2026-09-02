@@ -300,107 +300,17 @@ export async function recordStockLossOrExpense(params: {
 
   const client = await ensureSupabaseConfigured();
 
-  // 1. Get product details (cost price)
-  const { data: prod } = await client
-    .from("products")
-    .select("id, name, cost_price, selling_price")
-    .eq("id", params.productId)
-    .maybeSingle();
-
-  const costPrice = Number(prod?.cost_price || prod?.selling_price || 0);
-  const totalLoss = params.quantity * costPrice;
-
-  // 2. Get current stock at target location
-  const { data: stockRow } = await client
-    .from("product_stocks")
-    .select("quantity")
-    .eq("product_id", params.productId)
-    .eq("location_id", params.locationId)
-    .maybeSingle();
-
-  const currentQty = stockRow ? Number(stockRow.quantity) : 0;
-  const newQty = Math.max(0, currentQty - params.quantity);
-
-  // 3. Insert Master Stock Count audit record
-  const { data: master, error: masterErr } = await client
-    .from("stock_counts")
-    .insert({
-      business_id: params.businessId,
-      stock_name: `Write-Off (${params.category})`,
-      location_id: params.locationId,
-      created_by: params.createdBy,
-      notes: params.notes,
-      total_loss_value: totalLoss,
-    })
-    .select("id")
-    .single();
-
-  if (masterErr) throw masterErr;
-  const countId = master.id;
-
-  // 4. Insert Stock Count Item
-  await client.from("stock_count_items").insert({
-    business_id: params.businessId,
-    stock_count_id: countId,
-    product_id: params.productId,
-    system_quantity: currentQty,
-    adjustment_mode: "subtract",
-    adjustment_reason: params.category,
-    counted_quantity: params.quantity,
-    final_quantity: newQty,
+  const { data, error } = await client.rpc("record_stock_write_off", {
+    p_location_id: params.locationId,
+    p_business_id: params.businessId,
+    p_created_by: params.createdBy,
+    p_product_id: params.productId,
+    p_quantity: params.quantity,
+    p_category: params.category,
+    p_notes: params.notes,
   });
-
-  // 5. Update Location Stock
-  await client
-    .from("product_stocks")
-    .upsert({
-      business_id: params.businessId,
-      product_id: params.productId,
-      location_id: params.locationId,
-      quantity: newQty,
-    }, { onConflict: "product_id,location_id" });
-
-  // 6. Update Global Product Stock
-  const { data: totalStock } = await client
-    .from("product_stocks")
-    .select("quantity")
-    .eq("product_id", params.productId);
-
-  const newGlobalTotal = (totalStock || []).reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
-  await client
-    .from("products")
-    .update({ stock_quantity: newGlobalTotal })
-    .eq("id", params.productId);
-
-  // 7. Insert Stock Movement
-  try {
-    await client.from("stock_movements").insert({
-      business_id: params.businessId,
-      product_id: params.productId,
-      user_id: params.createdBy,
-      movement_type: params.category,
-      quantity: -params.quantity,
-      location_id: params.locationId,
-      reference_type: "stock_count",
-      reference_id: countId,
-      notes: params.notes || `Stock write-off: ${params.category}`,
-    });
-  } catch (mErr) {
-    console.warn("Could not record movement_type as category, inserting standard adjustment:", mErr);
-    await client.from("stock_movements").insert({
-      business_id: params.businessId,
-      product_id: params.productId,
-      user_id: params.createdBy,
-      movement_type: "out",
-      quantity: -params.quantity,
-      location_id: params.locationId,
-      reference_type: "stock_count",
-      reference_id: countId,
-      notes: `Write-off (${params.category}): ${params.notes}`,
-    });
-  }
-
-  return countId;
+  if (error) throw error;
+  return data;
 }
 
 const DEMO_LOSS_RECORDS: StockLossRecord[] = [
@@ -459,61 +369,8 @@ export async function listStockLossesAndExpenses(): Promise<StockLossRecord[]> {
 
   const recordsMap = new Map<string, StockLossRecord>();
 
-  // 1. Query stock_movements
-  try {
-    const { data: movements } = await client
-      .from("stock_movements")
-      .select(`
-        id,
-        created_at,
-        user_id,
-        product_id,
-        quantity,
-        location_id,
-        movement_type,
-        notes,
-        reference_id,
-        products(name, cost_price, selling_price),
-        locations(name),
-        users(full_name)
-      `)
-      .in("movement_type", ["expired", "damage", "damaged", "expense", "wastage", "write-off", "loss"])
-      .order("created_at", { ascending: false })
-      .limit(200);
-
-    for (const m of (movements || []) as any[]) {
-      const prod = Array.isArray(m.products) ? m.products[0] : m.products;
-      const loc  = Array.isArray(m.locations) ? m.locations[0] : m.locations;
-      const usr  = Array.isArray(m.users)  ? m.users[0]  : m.users;
-      const qty  = Math.abs(Number(m.quantity) || 0);
-      const unitCost = Number(prod?.cost_price || prod?.selling_price || 0);
-      const rawType = String(m.movement_type || "expense").toLowerCase();
-      const category: LossOrExpenseType =
-        rawType === "expired" ? "expired"
-        : rawType === "damage" || rawType === "damaged" || rawType === "wastage" || rawType === "loss" ? "damage"
-        : "expense";
-
-      recordsMap.set(m.id, {
-        id: m.id,
-        createdAt: m.created_at ? new Date(m.created_at).toLocaleString() : "N/A",
-        createdBy: usr?.full_name || "Unknown",
-        createdById: m.user_id || "",
-        locationId: m.location_id || "",
-        locationName: loc?.name || "Unknown Location",
-        productId: m.product_id || "",
-        productName: prod?.name || "Unknown Product",
-        category,
-        quantity: qty,
-        unitCost,
-        totalLossAmount: qty * unitCost,
-        notes: m.notes || "-",
-      });
-    }
-  } catch (movErr) {
-    console.warn("Failed querying stock_movements for losses:", movErr);
-  }
-
-  // 2. Query stock_counts & stock_count_items
+  // Stock counts are the canonical write-off audit record. Do not also show the
+  // linked stock movement, otherwise every loss appears twice in history.
   try {
     const { data: counts } = await client
       .from("stock_counts")
@@ -559,8 +416,7 @@ export async function listStockLossesAndExpenses(): Promise<StockLossRecord[]> {
           : "damage";
 
         const recId = sub.id || item.id;
-        if (!recordsMap.has(recId)) {
-          recordsMap.set(recId, {
+        recordsMap.set(recId, {
             id: recId,
             createdAt: item.created_at ? new Date(item.created_at).toLocaleString() : "N/A",
             createdBy: usr?.full_name || "Unknown",
@@ -572,10 +428,9 @@ export async function listStockLossesAndExpenses(): Promise<StockLossRecord[]> {
             category,
             quantity: qty,
             unitCost,
-            totalLossAmount: Number(item.total_loss_value) > 0 ? Number(item.total_loss_value) : qty * unitCost,
+            totalLossAmount: Number(item.total_loss_value) || qty * unitCost,
             notes: item.notes || "-",
-          });
-        }
+        });
       }
     }
   } catch (countErr) {

@@ -13,6 +13,10 @@ import {
   Users,
   ArrowLeftRight,
   PackageX,
+  Hotel,
+  BedDouble,
+  UtensilsCrossed,
+  Wine,
 } from "lucide-react";
 
 export type NavItem = {
@@ -20,6 +24,8 @@ export type NavItem = {
   path: string;
   icon: LucideIcon;
   roles?: AppRole[];
+  /** If set, only show for these business types. If omitted, always show. */
+  businessTypes?: Array<"retail" | "guesthouse_bar" | "hybrid">;
 };
 
 export type AppRole = "admin" | "manager" | "cashier";
@@ -36,7 +42,36 @@ export type Product = {
 
 export const navItems: NavItem[] = [
   { label: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
-  { label: "POS", path: "/pos", icon: ShoppingCart },
+
+  // --- Retail / Supermarket ---
+  {
+    label: "POS",
+    path: "/pos",
+    icon: ShoppingCart,
+    businessTypes: ["retail", "hybrid"],
+  },
+
+  // --- Guest House & Bar ---
+  {
+    label: "Bar POS",
+    path: "/bar-pos",
+    icon: Wine,
+    businessTypes: ["guesthouse_bar", "hybrid"],
+  },
+  {
+    label: "Rooms",
+    path: "/rooms",
+    icon: BedDouble,
+    businessTypes: ["guesthouse_bar", "hybrid"],
+  },
+  {
+    label: "Tables",
+    path: "/tables",
+    icon: UtensilsCrossed,
+    businessTypes: ["guesthouse_bar", "hybrid"],
+  },
+
+  // --- Shared ---
   { label: "Products", path: "/products", icon: Boxes, roles: ["admin", "manager", "cashier"] },
   { label: "Sales", path: "/sales", icon: ReceiptText },
   {

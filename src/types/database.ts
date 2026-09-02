@@ -1,5 +1,6 @@
-export type AppRole = "admin" | "manager" | "cashier" | "super_admin";
-export type PaymentMethod = "cash" | "momo" | "card" | "bank" | "credit";
+export type AppRole = "admin" | "manager" | "cashier" | "super_admin" | "receptionist" | "waiter" | "storekeeper";
+export type BusinessType = "retail" | "guesthouse_bar" | "hybrid";
+export type PaymentMethod = "cash" | "momo" | "card" | "bank" | "credit" | "room_folio";
 export type PaymentStatus = "paid" | "unpaid" | "partial";
 export type TransferStatus = "pending" | "in_transit" | "completed";
 export type AdjustmentMode = "add" | "subtract";
@@ -12,6 +13,8 @@ export type BusinessRecord = {
   subscription_start_date: string | null;
   subscription_end_date: string | null;
   status: BusinessStatus;
+  business_type?: BusinessType;
+  enabled_modules?: Record<string, boolean>;
   default_profit_percentage?: number;
   created_at: string;
 };
@@ -281,4 +284,133 @@ export type SupplierFormValues = {
   phone: string;
   email: string;
   address: string;
+};
+
+export type RoomStatus = 'available' | 'occupied' | 'reserved' | 'cleaning' | 'maintenance';
+export type BookingStatus = 'reserved' | 'checked_in' | 'checked_out' | 'cancelled';
+
+export type RoomRecord = {
+  id: string;
+  business_id: string;
+  room_number: string;
+  room_type: string;
+  price_per_night: number;
+  capacity: number;
+  status: RoomStatus;
+  floor?: string | null;
+  notes?: string | null;
+  qr_token?: string;
+  created_at: string;
+  updated_at: string;
+  active_booking?: RoomBookingRecord | null;
+};
+
+export type RoomBookingRecord = {
+  id: string;
+  business_id: string;
+  room_id: string;
+  guest_name: string;
+  guest_phone: string | null;
+  guest_nationality: string | null;
+  guest_id_passport: string | null;
+  number_of_guests: number;
+  check_in: string;
+  check_out: string | null;
+  expected_checkout: string | null;
+  status: BookingStatus;
+  room_rate: number;
+  advance_paid: number;
+  payment_status: PaymentStatus;
+  notes?: string | null;
+  created_by?: string | null;
+  created_at: string;
+  updated_at: string;
+  room?: RoomRecord;
+  charges?: RoomChargeRecord[];
+  total_charges?: number;
+  total_payments?: number;
+  balance_remaining?: number;
+};
+
+export type RoomChargeRecord = {
+  id: string;
+  business_id: string;
+  booking_id: string;
+  sale_id?: string | null;
+  service_type: 'bar' | 'food' | 'laundry' | 'room_service' | 'other';
+  description: string;
+  amount: number;
+  quantity: number;
+  created_by?: string | null;
+  created_at: string;
+};
+
+export type RoomPaymentRecord = {
+  id: string;
+  booking_id: string;
+  amount: number;
+  payment_method: Exclude<PaymentMethod, 'room_folio' | 'credit'>;
+  received_by?: string | null;
+  received_at: string;
+};
+
+export type DiningTableRecord = {
+  id: string;
+  business_id: string;
+  table_number: string;
+  capacity: number;
+  status: 'available' | 'occupied' | 'reserved';
+  active_order_id?: string | null;
+  is_active: boolean;
+  qr_token?: string;
+  created_at: string;
+};
+
+export type ActiveTabRecord = {
+  id: string;
+  business_id: string;
+  table_id?: string | null;
+  booking_id?: string | null;
+  customer_id?: string | null;
+  tab_name: string;
+  cart_items: any[];
+  subtotal: number;
+  tax: number;
+  discount: number;
+  total: number;
+  status: 'open' | 'sent_to_kitchen' | 'closed' | 'cancelled';
+  created_by?: string | null;
+  created_at: string;
+  updated_at: string;
+  table?: DiningTableRecord;
+  booking?: RoomBookingRecord;
+};
+
+export type PrinterConfigRecord = {
+  id: string;
+  business_id: string;
+  name: string;
+  printer_type: 'bar' | 'kitchen' | 'reception' | 'custom';
+  target_categories: string[];
+  connection_type: 'browser_print' | 'network_ip' | 'bluetooth';
+  ip_address?: string | null;
+  paper_width: '80mm' | '58mm' | 'a4';
+  is_active: boolean;
+  created_at: string;
+};
+
+export type HospitalityDayClosureRecord = {
+  id: string;
+  business_id: string;
+  closure_date: string;
+  closed_by?: string | null;
+  total_sales: number;
+  cash_received: number;
+  momo_received: number;
+  card_received: number;
+  room_revenue: number;
+  total_expenses: number;
+  net_profit: number;
+  notes?: string | null;
+  created_at: string;
 };

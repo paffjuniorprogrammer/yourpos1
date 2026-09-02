@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
-import { ArrowLeftRight, CreditCard, DollarSign, Eye, FileText, Minus, Pencil, Plus, Printer, Search, Trash2, X, PackageX } from "lucide-react";
+import { ArrowLeftRight, CreditCard, DollarSign, Eye, FileText, MapPin, Minus, Pencil, Plus, Printer, Search, Trash2, X, PackageX } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useNotification } from "../context/NotificationContext";
 import { SectionCard } from "../components/ui/SectionCard";
@@ -26,6 +26,7 @@ import { formatCurrency } from "../lib/format";
 type SaleWithDetails = SaleRecord & {
   customer_name?: string;
   cashier_name?: string;
+  location_name?: string;
 };
 
 type PrintMode = "receipt" | "invoice";
@@ -93,11 +94,22 @@ export function SalesPage() {
         date: dateFilter
       });
       
-      const enrichedSales: SaleWithDetails[] = salesData.map((sale) => ({
-        ...sale,
-        customer_name: (sale as any).customer?.full_name || t('sales.walk_in_customer'),
-        cashier_name: (sale as any).cashier?.full_name || t('sales.unknown_cashier'),
-      }));
+      const enrichedSales: SaleWithDetails[] = salesData.map((sale) => {
+        // If a named customer is linked, show that.
+        // If not, the bar POS saves context into `notes` (e.g. "Table 3", "Room 6 (John)", etc.)
+        // Fall back to walk-in label only if neither is available.
+        const rawNotes = (sale as any).notes as string | undefined;
+        const contextLabel = (sale as any).customer?.full_name
+          || (rawNotes && rawNotes.trim() !== "" ? rawNotes : null)
+          || t('sales.walk_in_customer');
+
+        return {
+          ...sale,
+          customer_name: contextLabel,
+          cashier_name: (sale as any).cashier?.full_name || t('sales.unknown_cashier'),
+          location_name: (sale as any).location?.name || "Unassigned location",
+        };
+      });
       setSales(enrichedSales);
       setTotalCount(count);
     } catch (err) {
@@ -384,6 +396,7 @@ export function SalesPage() {
                     t('sales.table.amount'),
                     t('sales.table.status'),
                     t('sales.table.cashier'),
+                    "Location",
                     t('sales.table.date'),
                     t('common.actions')
                   ].map((col) => (
@@ -396,7 +409,7 @@ export function SalesPage() {
                 {/* Loading overlay when refreshing */}
                 {loading && sales.length > 0 && (
                   <tr className="absolute inset-0 z-10 flex items-center justify-center bg-white/40 backdrop-blur-[1px]">
-                    <td colSpan={7} className="h-full w-full flex items-center justify-center py-20">
+                    <td colSpan={8} className="h-full w-full flex items-center justify-center py-20">
                        <div className="flex flex-col items-center gap-3">
                           <div className="h-10 w-10 animate-spin rounded-full border-4 border-brand-100 border-t-brand-600"></div>
                           <p className="text-xs font-bold uppercase tracking-widest text-brand-700">{t('common.processing')}</p>
@@ -407,7 +420,7 @@ export function SalesPage() {
 
                 {loading && sales.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-5 py-20 text-center text-slate-500">
+                    <td colSpan={8} className="px-5 py-20 text-center text-slate-500">
                       <div className="flex flex-col items-center gap-4">
                         <div className="h-12 w-12 animate-spin rounded-full border-4 border-brand-100 border-t-brand-600"></div>
                         <p className="font-semibold">{t('common.loading')}</p>
@@ -431,6 +444,11 @@ export function SalesPage() {
                       </td>
 
                       <td className="border-b border-slate-100 px-5 py-4 text-slate-600">{sale.cashier_name}</td>
+                      <td className="border-b border-slate-100 px-5 py-4 text-slate-600">
+                        <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-700">
+                          <MapPin size={12} /> {sale.location_name}
+                        </span>
+                      </td>
                       <td className="border-b border-slate-100 px-5 py-4 text-slate-600">{new Date(sale.created_at).toLocaleDateString()}</td>
                       <td className="border-b border-slate-100 px-5 py-4">
                         <div className="flex items-center gap-1">
@@ -575,15 +593,15 @@ export function SalesPage() {
       {/* ── RETURN / REFUND MODAL ── */}
       {showReturnModal && selectedSale && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/45 px-4 backdrop-blur-md" onClick={() => setShowReturnModal(false)}>
-          <div className="w-full max-w-lg overflow-hidden rounded-[2.5rem] bg-white shadow-2xl animate-scale-in" onClick={(e) => e.stopPropagation()}>
-            <div className="bg-amber-500 p-8 text-white">
+          <div className="w-full max-w-lg overflow-hidden rounded-3xl bg-white shadow-2xl animate-scale-in" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-brand-600 p-5 sm:p-6 text-white">
               <div className="flex items-start justify-between">
                 <div>
                   <div className="flex items-center gap-2 text-white/80">
                     <ArrowLeftRight size={16} />
                     <span className="text-[10px] font-bold uppercase tracking-widest">{t('sales.returns.title')}</span>
                   </div>
-                  <h2 className="mt-2 text-3xl font-black">{selectedSale.sale_number}</h2>
+                  <h2 className="mt-1 text-xl font-black sm:text-2xl">{selectedSale.sale_number}</h2>
                 </div>
                 <button onClick={() => setShowReturnModal(false)} className="rounded-full bg-white/20 p-2 text-white hover:bg-white/30 transition">
                   <X size={20} />
@@ -591,26 +609,26 @@ export function SalesPage() {
               </div>
             </div>
 
-            <div className="max-h-[60vh] overflow-y-auto p-8 space-y-6">
+            <div className="max-h-[60vh] overflow-y-auto space-y-4 p-4 sm:p-6">
               <div>
                 <p className="mb-4 text-[10px] font-bold uppercase tracking-widest text-slate-400">{t('sales.returns.select_items')}</p>
                 <div className="space-y-3">
                   {returnItems.map((item, idx) => (
-                    <div key={idx} className="flex flex-col gap-4 rounded-3xl border border-slate-100 bg-slate-50 p-5 transition hover:border-amber-200">
+                    <div key={idx} className="flex flex-col gap-3 rounded-2xl border border-slate-100 bg-slate-50 p-4 transition hover:border-brand-200">
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
                           <p className="font-bold text-ink">{item.product_name}</p>
                           <p className="text-xs text-slate-400">{formatCurrency(item.unit_price)} / unit</p>
                         </div>
                         <div className="text-right">
-                          <p className="text-xs font-bold text-amber-600">{formatCurrency(item.unit_price * item.quantity)}</p>
+                          <p className="text-xs font-bold text-brand-600">{formatCurrency(item.unit_price * item.quantity)}</p>
                         </div>
                       </div>
                       
                       <div className="flex items-center justify-between gap-4 border-t border-slate-200/50 pt-4">
                         <label className="flex items-center gap-2 text-xs font-bold text-slate-500 cursor-pointer group">
                           <div className={`flex h-5 w-5 items-center justify-center rounded-md border-2 transition ${
-                            item.restock ? "border-amber-500 bg-amber-500 text-white" : "border-slate-300 bg-white group-hover:border-amber-300"
+                            item.restock ? "border-brand-600 bg-brand-600 text-white" : "border-slate-300 bg-white group-hover:border-brand-300"
                           }`}>
                             {item.restock && <Plus size={12} strokeWidth={3} />}
                           </div>
@@ -648,7 +666,7 @@ export function SalesPage() {
                  <div className="flex items-center justify-between">
                     <div>
                       <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/40">{t('sales.returns.total_refund')}</p>
-                      <p className="mt-1 text-3xl font-black text-amber-400">
+                      <p className="mt-1 text-2xl font-black text-brand-300 sm:text-3xl">
                         {formatCurrency(returnItems.reduce((s, i) => s + i.unit_price * i.quantity, 0))}
                       </p>
                     </div>
@@ -661,7 +679,7 @@ export function SalesPage() {
               <div className="grid gap-4 sm:grid-cols-2">
                  <div>
                     <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 block mb-2 px-1">{t('sales.returns.refund_method')}</label>
-                    <select value={returnRefundMethod} onChange={(e) => setReturnRefundMethod(e.target.value)} className="w-full rounded-2xl bg-slate-50 p-4 font-bold outline-none border border-slate-100 transition focus:border-amber-300">
+                    <select value={returnRefundMethod} onChange={(e) => setReturnRefundMethod(e.target.value)} className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm font-bold outline-none transition focus:border-brand-500">
                       <option value="cash">{t('sales.returns.methods.cash')}</option>
                       <option value="momo">{t('sales.returns.methods.momo')}</option>
                       <option value="bank">{t('sales.returns.methods.bank')}</option>
@@ -670,7 +688,7 @@ export function SalesPage() {
                  </div>
                  <div>
                     <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 block mb-2 px-1">{t('sales.returns.reasons.label')}</label>
-                    <select value={returnReason} onChange={(e) => setReturnReason(e.target.value)} className="w-full rounded-2xl bg-slate-50 p-4 font-bold outline-none border border-slate-100 transition focus:border-amber-300">
+                    <select value={returnReason} onChange={(e) => setReturnReason(e.target.value)} className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm font-bold outline-none transition focus:border-brand-500">
                       <option value="">{t('sales.returns.reasons.select')}</option>
                       <option value="damaged">{t('sales.returns.reasons.damaged')}</option>
                       <option value="wrong_item">{t('sales.returns.reasons.wrong_item')}</option>
@@ -687,13 +705,13 @@ export function SalesPage() {
                   value={returnNotes} 
                   onChange={(e) => setReturnNotes(e.target.value)} 
                   rows={2} 
-                  className="w-full rounded-2xl bg-slate-50 p-4 text-sm font-medium outline-none border border-slate-100 transition focus:border-amber-300 resize-none" 
+                  className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm font-medium outline-none transition focus:border-brand-500"
                   placeholder={t('sales.returns.notes_placeholder')} 
                 />
               </div>
             </div>
 
-            <div className="p-8 border-t border-slate-100 flex gap-4">
+            <div className="flex gap-3 border-t border-slate-100 p-4 sm:p-6">
               <button 
                 onClick={() => setShowReturnModal(false)}
                 className="flex-1 rounded-2xl py-4 font-bold text-slate-400 hover:bg-slate-50 transition"
@@ -703,7 +721,7 @@ export function SalesPage() {
               <button 
                 onClick={handleProcessReturn}
                 disabled={processingReturn || returnItems.reduce((s,i) => s + i.quantity, 0) === 0}
-                className="flex-[2] rounded-2xl bg-amber-500 py-4 font-bold text-white shadow-xl shadow-amber-200/50 hover:bg-amber-600 disabled:opacity-20 transition active:scale-95"
+                className="flex-[2] rounded-xl bg-brand-600 py-3 text-sm font-bold text-white shadow-lg shadow-brand-200/50 transition hover:bg-brand-700 active:scale-95 disabled:opacity-50"
               >
                 {processingReturn ? t('common.loading') : t('sales.details.return_refund')}
               </button>

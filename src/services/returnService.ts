@@ -38,20 +38,13 @@ export async function processReturn(input: {
   return data as string; // return_id
 }
 
-export async function approveReturn(returnId: string) {
+export async function approveReturn(returnId: string, approvedBy: string) {
   const client = await ensureSupabaseConfigured();
-  const { error } = await client.rpc("apply_return_restock", {
-    p_return_id: returnId
+  const { error } = await client.rpc("approve_sale_return", {
+    p_return_id: returnId,
+    p_approved_by: approvedBy,
   });
   if (error) throw error;
-
-  // Update status
-  const { error: updateError } = await client
-    .from("sale_returns")
-    .update({ status: "completed" })
-    .eq("id", returnId);
-  
-  if (updateError) throw updateError;
 }
 
 export async function listReturns() {

@@ -85,8 +85,8 @@ export async function listPosProducts(locationId?: string | null, limit = 500) {
       
       // Use a lean select to speed up transfer, conditionally including product_stocks
       const selectQuery = locationId 
-        ? `id, business_id, name, barcode, selling_price, stock_quantity, reorder_level, image_url, bulk_quantity, bulk_price, product_stocks(quantity, location_id)`
-        : `id, business_id, name, barcode, selling_price, stock_quantity, reorder_level, image_url, bulk_quantity, bulk_price`;
+        ? `id, business_id, name, barcode, selling_price, stock_quantity, reorder_level, image_url, bulk_quantity, bulk_price, categories(name), product_stocks(quantity, location_id)`
+        : `id, business_id, name, barcode, selling_price, stock_quantity, reorder_level, image_url, bulk_quantity, bulk_price, categories(name)`;
 
       const { data, error } = await withFastCacheTimeout(client
         .from("products")
@@ -118,10 +118,16 @@ export async function listPosProducts(locationId?: string | null, limit = 500) {
             return {
               ...product,
               stock_quantity: branchStock,
+              category_name: product.categories?.name ?? null,
+              categories: undefined,
               product_stocks: undefined
             };
           }) as any[] as PosProductRecord[]
-        : (data || []) as any[] as PosProductRecord[];
+        : (data || []).map((product: any) => ({
+          ...product,
+          category_name: product.categories?.name ?? null,
+          categories: undefined,
+        })) as PosProductRecord[];
 
       await db.cached_products.bulkPut(result.map((product: any) => ({
         id: product.id,
@@ -139,6 +145,28 @@ export async function listPosProducts(locationId?: string | null, limit = 500) {
 
   const cached = await db.cached_products.toArray();
   return cached.map((record) => record.data).filter((product) => product.is_active !== false) as PosProductRecord[];
+}
+
+/** Product quantities sold in the last 90 days, used for the compact POS grid. */
+export async function getFrequentlySoldProductCounts(locationId?: string | null): Promise<Record<string, number>> {
+  if (localStorage.getItem("is_demo_mode") === "true") return {};
+  const client = await ensureSupabaseConfigured();
+  const fromDate = new Date();
+  fromDate.setDate(fromDate.getDate() - 90);
+
+  let query = client
+    .from("sale_items")
+    .select("product_id, quantity, sales!inner(location_id, created_at)")
+    .gte("sales.created_at", fromDate.toISOString())
+    .limit(5000);
+  if (locationId) query = query.eq("sales.location_id", locationId);
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data || []).reduce<Record<string, number>>((counts, item: any) => {
+    counts[item.product_id] = (counts[item.product_id] || 0) + Number(item.quantity || 0);
+    return counts;
+  }, {});
 }
 
 const DEMO_CUSTOMERS: PosCustomerRecord[] = [
