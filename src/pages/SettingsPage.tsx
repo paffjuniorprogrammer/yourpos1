@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { AppRole, LocationRecord } from "../types/database";
-import { Trash2, Building2, Pencil, Plus, Search, ShieldCheck, WalletCards, X, MapPin, Edit, Code2, Key, Globe } from "lucide-react";
+import { Trash2, Building2, Pencil, Plus, Search, ShieldCheck, WalletCards, X, MapPin, Edit, Code2, Key, Globe, Printer, Utensils, Wine, CheckCircle2, Sliders } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useNotification } from "../context/NotificationContext";
 import {
@@ -27,6 +27,9 @@ import { useRealtimeSync } from "../hooks/useRealtimeSync";
 import { useTranslation } from "react-i18next";
 import i18n from "../i18n";
 import { formatCurrency } from "../lib/format";
+import { printerService, type HospitalityPrinterSettings, DEFAULT_PRINTER_SETTINGS } from "../services/printerService";
+import { KitchenOrderTicket } from "../components/print/KitchenOrderTicket";
+import { BarReceipt } from "../components/print/BarReceipt";
 
 type StaffPermission = {
   module: string;
@@ -74,7 +77,7 @@ type BusinessSettings = {
   taxPeriod: "monthly" | "quarterly";
 };
 
-type SettingsSection = "staff" | "business" | "tax" | "finance" | "locations" | "api" | "preferences";
+type SettingsSection = "staff" | "business" | "tax" | "finance" | "locations" | "api" | "preferences" | "printers";
 
 const moduleTemplates = [
   { module: "Dashboard", view: true, add: false, edit: false, remove: false },
@@ -173,6 +176,42 @@ export function SettingsPage() {
   const [newKeyName, setNewKeyName] = useState("");
   const [generatedKey, setGeneratedKey] = useState<string | null>(null);
   const [loadingApiKeys, setLoadingApiKeys] = useState(false);
+
+  // Printer settings state
+  const [printerSettings, setPrinterSettings] = useState<HospitalityPrinterSettings>(() =>
+    printerService.getSettings(profile?.business_id || "")
+  );
+  const [savingPrinters, setSavingPrinters] = useState(false);
+  const [newFoodCategory, setNewFoodCategory] = useState("");
+  const [newDrinkCategory, setNewDrinkCategory] = useState("");
+  const [testPrintJob, setTestPrintJob] = useState<"kitchen" | "bar" | null>(null);
+
+  useEffect(() => {
+    if (profile?.business_id) {
+      printerService.loadSettingsAsync(profile.business_id).then(setPrinterSettings);
+    }
+  }, [profile?.business_id]);
+
+  const handleSavePrinterSettings = async () => {
+    if (!profile?.business_id) return;
+    setSavingPrinters(true);
+    try {
+      await printerService.saveSettings(profile.business_id, printerSettings);
+      showToast("success", "Printer & station routing settings saved successfully!");
+    } catch (err: any) {
+      showToast("error", err.message || "Failed to save printer settings");
+    } finally {
+      setSavingPrinters(false);
+    }
+  };
+
+  const handleTestPrint = (job: "kitchen" | "bar") => {
+    setTestPrintJob(job);
+    setTimeout(() => {
+      window.print();
+      setTimeout(() => setTestPrintJob(null), 500);
+    }, 250);
+  };
 
   const handleSaveLanguage = async () => {
     if (!profile?.id) return;
@@ -659,11 +698,12 @@ export function SettingsPage() {
       </div>
 
       <div className="rounded-3xl bg-white p-3 shadow-soft">
-        <div className="grid gap-2 md:grid-cols-3">
+        <div className="grid gap-2 grid-cols-2 md:grid-cols-4">
           {[
             { id: "preferences", label: t('settings.personal.title'), icon: Globe },
             { id: "staff", label: t('settings.nav.staff'), icon: ShieldCheck },
             { id: "business", label: t('settings.nav.business'), icon: Building2 },
+            { id: "printers", label: "Printers & Stations", icon: Printer },
             { id: "tax", label: "Tax Settings", icon: WalletCards },
             { id: "finance", label: t('settings.nav.finance'), icon: WalletCards },
             { id: "locations", label: t('settings.nav.locations'), icon: MapPin },
@@ -1144,11 +1184,15 @@ export function SettingsPage() {
                     onClick={() => {
                       if (!newKeyName.trim()) return;
                       void (async () => {
-                        const { fullKey, ...record } = await generateApiKey(newKeyName);
-                        setGeneratedKey(fullKey);
-                        setApiKeys(prev => [record, ...prev]);
-                        setNewKeyName("");
-                        showToast("success", "API Key Generated!");
+                        try {
+                          const { fullKey, ...record } = await generateApiKey(newKeyName);
+                          setGeneratedKey(fullKey);
+                          setApiKeys(prev => [record, ...prev]);
+                          setNewKeyName("");
+                          showToast("success", "API Key Generated!");
+                        } catch (error: any) {
+                          showToast("error", error?.message || "API key table is not available. Apply the latest Supabase migration.");
+                        }
                       })();
                     }}
                     className="w-full rounded-2xl bg-brand-500 py-3 text-sm font-bold text-white shadow-soft transition hover:bg-brand-600"
@@ -1341,6 +1385,506 @@ export function SettingsPage() {
           </div>
         </SectionCard>
       ) : null}
+
+      {activeSection === "printers" ? (
+        <SectionCard
+          title="Hospitality Printer Routing (Bar & Kitchen)"
+          subtitle="Configure automated ticket routing: Food orders print to the Kitchen, and Drinks / Full bills print to the Bar"
+        >
+          <div className="space-y-6">
+            <div className="grid gap-6 lg:grid-cols-2">
+              {/* KITCHEN PRINTER STATION */}
+              <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-xs flex flex-col justify-between">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-50 text-amber-600">
+                        <Utensils size={22} />
+                      </div>
+                      <div>
+                        <h3 className="text-base font-black text-slate-900">Kitchen Food Station</h3>
+                        <p className="text-xs text-slate-500">Chef preparation ticket (Food only)</p>
+                      </div>
+                    </div>
+                    <span
+                      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${
+                        printerSettings.kitchen.enabled
+                          ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                          : "bg-slate-100 text-slate-500"
+                      }`}
+                    >
+                      <span
+                        className={`h-2 w-2 rounded-full ${
+                          printerSettings.kitchen.enabled ? "bg-emerald-500" : "bg-slate-400"
+                        }`}
+                      />
+                      {printerSettings.kitchen.enabled ? "Active" : "Disabled"}
+                    </span>
+                  </div>
+
+                  {/* Toggle: Enabled */}
+                  <label className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 cursor-pointer hover:bg-slate-100/80 transition">
+                    <div>
+                      <p className="text-xs font-bold text-slate-800">Enable Kitchen Printer</p>
+                      <p className="text-[11px] text-slate-500">Allow generating Kitchen Order Tickets (KOT)</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={printerSettings.kitchen.enabled}
+                      onChange={(e) =>
+                        setPrinterSettings((prev) => ({
+                          ...prev,
+                          kitchen: { ...prev.kitchen, enabled: e.target.checked },
+                        }))
+                      }
+                      className="h-5 w-5 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                    />
+                  </label>
+
+                  {/* Toggle: Auto-Print */}
+                  <label className="flex items-center justify-between p-3 rounded-2xl bg-amber-50/50 border border-amber-100 cursor-pointer hover:bg-amber-50 transition">
+                    <div>
+                      <p className="text-xs font-black text-amber-900">Auto-Print on Checkout / Order</p>
+                      <p className="text-[11px] text-amber-700">
+                        Automatically sends ticket to kitchen when cashier sells food
+                      </p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={printerSettings.kitchen.auto_print}
+                      onChange={(e) =>
+                        setPrinterSettings((prev) => ({
+                          ...prev,
+                          kitchen: { ...prev.kitchen, auto_print: e.target.checked },
+                        }))
+                      }
+                      className="h-5 w-5 rounded border-amber-300 text-amber-600 focus:ring-amber-500"
+                    />
+                  </label>
+
+                  {/* Paper Width */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">Paper Width</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {(["80mm", "58mm"] as const).map((width) => (
+                        <button
+                          key={width}
+                          type="button"
+                          onClick={() =>
+                            setPrinterSettings((prev) => ({
+                              ...prev,
+                              kitchen: { ...prev.kitchen, paper_width: width },
+                            }))
+                          }
+                          className={`py-2 px-3 rounded-xl text-xs font-bold border transition ${
+                            printerSettings.kitchen.paper_width === width
+                              ? "border-brand-500 bg-brand-50 text-brand-700"
+                              : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                          }`}
+                        >
+                          {width} {width === "80mm" ? "(Standard POS)" : "(Compact)"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Categories for Kitchen */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                      Food Categories Routed to Kitchen ({printerSettings.kitchen.categories.length})
+                    </label>
+                    <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto p-2 bg-slate-50 rounded-xl border border-slate-200">
+                      {printerSettings.kitchen.categories.map((cat) => (
+                        <span
+                          key={cat}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-xs font-bold text-slate-700 shadow-xs"
+                        >
+                          {cat}
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setPrinterSettings((prev) => ({
+                                ...prev,
+                                kitchen: {
+                                  ...prev.kitchen,
+                                  categories: prev.kitchen.categories.filter((c) => c !== cat),
+                                },
+                              }))
+                            }
+                            className="text-slate-400 hover:text-rose-600 ml-0.5"
+                          >
+                            <X size={12} />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                    <div className="flex gap-2 mt-2">
+                      <input
+                        type="text"
+                        placeholder="Add category (e.g. Seafood, Burger)..."
+                        value={newFoodCategory}
+                        onChange={(e) => setNewFoodCategory(e.target.value)}
+                        className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs outline-none focus:border-brand-300"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (
+                            newFoodCategory.trim() &&
+                            !printerSettings.kitchen.categories.includes(newFoodCategory.trim())
+                          ) {
+                            setPrinterSettings((prev) => ({
+                              ...prev,
+                              kitchen: {
+                                ...prev.kitchen,
+                                categories: [...prev.kitchen.categories, newFoodCategory.trim()],
+                              },
+                            }));
+                            setNewFoodCategory("");
+                          }
+                        }}
+                        className="rounded-xl bg-slate-900 px-3 py-1.5 text-xs font-bold text-white hover:bg-black transition"
+                      >
+                        Add
+                      </button>
+                    </div>
+                  </div>
+
+                  <p className="text-[11px] text-slate-500 italic bg-amber-50/50 p-2.5 rounded-xl border border-amber-100">
+                    💡 <strong>Kitchen tickets strictly show food items</strong> with table/room number, order timestamp, and clear quantities for the chef. Prices are not shown on chef tickets.
+                  </p>
+                </div>
+
+                <div className="pt-4 border-t border-slate-100 mt-4">
+                  <button
+                    type="button"
+                    onClick={() => handleTestPrint("kitchen")}
+                    className="w-full flex items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-50/70 py-2.5 text-xs font-bold text-amber-900 hover:bg-amber-100 transition"
+                  >
+                    <Printer size={15} /> Test Print Kitchen Ticket (Food Only)
+                  </button>
+                </div>
+              </div>
+
+              {/* BAR & BEVERAGE STATION */}
+              <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-xs flex flex-col justify-between">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600">
+                        <Wine size={22} />
+                      </div>
+                      <div>
+                        <h3 className="text-base font-black text-slate-900">Bar Station</h3>
+                        <p className="text-xs text-slate-500">Drinks ticket or Full customer bill</p>
+                      </div>
+                    </div>
+                    <span
+                      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${
+                        printerSettings.bar.enabled
+                          ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                          : "bg-slate-100 text-slate-500"
+                      }`}
+                    >
+                      <span
+                        className={`h-2 w-2 rounded-full ${
+                          printerSettings.bar.enabled ? "bg-emerald-500" : "bg-slate-400"
+                        }`}
+                      />
+                      {printerSettings.bar.enabled ? "Active" : "Disabled"}
+                    </span>
+                  </div>
+
+                  {/* Toggle: Enabled */}
+                  <label className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 cursor-pointer hover:bg-slate-100/80 transition">
+                    <div>
+                      <p className="text-xs font-bold text-slate-800">Enable Bar Printer</p>
+                      <p className="text-[11px] text-slate-500">Allow receipt & drinks printing at the bar</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={printerSettings.bar.enabled}
+                      onChange={(e) =>
+                        setPrinterSettings((prev) => ({
+                          ...prev,
+                          bar: { ...prev.bar, enabled: e.target.checked },
+                        }))
+                      }
+                      className="h-5 w-5 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                    />
+                  </label>
+
+                  {/* Toggle: Auto-Print */}
+                  <label className="flex items-center justify-between p-3 rounded-2xl bg-indigo-50/50 border border-indigo-100 cursor-pointer hover:bg-indigo-50 transition">
+                    <div>
+                      <p className="text-xs font-black text-indigo-900">Auto-Print on Checkout</p>
+                      <p className="text-[11px] text-indigo-700">
+                        Automatically prints bar receipt when payment is finalized
+                      </p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={printerSettings.bar.auto_print}
+                      onChange={(e) =>
+                        setPrinterSettings((prev) => ({
+                          ...prev,
+                          bar: { ...prev.bar, auto_print: e.target.checked },
+                        }))
+                      }
+                      className="h-5 w-5 rounded border-indigo-300 text-indigo-600 focus:ring-indigo-500"
+                    />
+                  </label>
+
+                  {/* Print Mode Selector */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                      Bar Receipt Print Mode
+                    </label>
+                    <div className="space-y-2">
+                      <label
+                        className={`flex items-start gap-3 p-3 rounded-2xl border cursor-pointer transition ${
+                          printerSettings.bar.print_mode === "full"
+                            ? "border-brand-500 bg-brand-50/50"
+                            : "border-slate-200 bg-white hover:bg-slate-50"
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="bar_print_mode"
+                          checked={printerSettings.bar.print_mode === "full"}
+                          onChange={() =>
+                            setPrinterSettings((prev) => ({
+                              ...prev,
+                              bar: { ...prev.bar, print_mode: "full" },
+                            }))
+                          }
+                          className="mt-0.5 text-brand-600 focus:ring-brand-500"
+                        />
+                        <div>
+                          <p className="text-xs font-black text-slate-900">
+                            Combined Full Receipt (Bar + Kitchen)
+                          </p>
+                          <p className="text-[11px] text-slate-500">
+                            Customer receipt listing both drinks and kitchen food with prices, totals, and payment details.
+                          </p>
+                        </div>
+                      </label>
+
+                      <label
+                        className={`flex items-start gap-3 p-3 rounded-2xl border cursor-pointer transition ${
+                          printerSettings.bar.print_mode === "drinks_only"
+                            ? "border-brand-500 bg-brand-50/50"
+                            : "border-slate-200 bg-white hover:bg-slate-50"
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="bar_print_mode"
+                          checked={printerSettings.bar.print_mode === "drinks_only"}
+                          onChange={() =>
+                            setPrinterSettings((prev) => ({
+                              ...prev,
+                              bar: { ...prev.bar, print_mode: "drinks_only" },
+                            }))
+                          }
+                          className="mt-0.5 text-brand-600 focus:ring-brand-500"
+                        />
+                        <div>
+                          <p className="text-xs font-black text-slate-900">
+                            Drinks Only Preparation Ticket
+                          </p>
+                          <p className="text-[11px] text-slate-500">
+                            Prints only beverage/bar items for the bartender without kitchen meals.
+                          </p>
+                        </div>
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Paper Width */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">Paper Width</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {(["80mm", "58mm"] as const).map((width) => (
+                        <button
+                          key={width}
+                          type="button"
+                          onClick={() =>
+                            setPrinterSettings((prev) => ({
+                              ...prev,
+                              bar: { ...prev.bar, paper_width: width },
+                            }))
+                          }
+                          className={`py-2 px-3 rounded-xl text-xs font-bold border transition ${
+                            printerSettings.bar.paper_width === width
+                              ? "border-brand-500 bg-brand-50 text-brand-700"
+                              : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                          }`}
+                        >
+                          {width} {width === "80mm" ? "(Standard POS)" : "(Compact)"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Categories for Bar */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                      Drink Categories Routed to Bar ({printerSettings.bar.categories.length})
+                    </label>
+                    <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto p-2 bg-slate-50 rounded-xl border border-slate-200">
+                      {printerSettings.bar.categories.map((cat) => (
+                        <span
+                          key={cat}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-xs font-bold text-slate-700 shadow-xs"
+                        >
+                          {cat}
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setPrinterSettings((prev) => ({
+                                ...prev,
+                                bar: {
+                                  ...prev.bar,
+                                  categories: prev.bar.categories.filter((c) => c !== cat),
+                                },
+                              }))
+                            }
+                            className="text-slate-400 hover:text-rose-600 ml-0.5"
+                          >
+                            <X size={12} />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                    <div className="flex gap-2 mt-2">
+                      <input
+                        type="text"
+                        placeholder="Add drink category (e.g. Gin, Mocktail)..."
+                        value={newDrinkCategory}
+                        onChange={(e) => setNewDrinkCategory(e.target.value)}
+                        className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs outline-none focus:border-brand-300"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (
+                            newDrinkCategory.trim() &&
+                            !printerSettings.bar.categories.includes(newDrinkCategory.trim())
+                          ) {
+                            setPrinterSettings((prev) => ({
+                              ...prev,
+                              bar: {
+                                ...prev.bar,
+                                categories: [...prev.bar.categories, newDrinkCategory.trim()],
+                              },
+                            }));
+                            setNewDrinkCategory("");
+                          }
+                        }}
+                        className="rounded-xl bg-slate-900 px-3 py-1.5 text-xs font-bold text-white hover:bg-black transition"
+                      >
+                        Add
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t border-slate-100 mt-4">
+                  <button
+                    type="button"
+                    onClick={() => handleTestPrint("bar")}
+                    className="w-full flex items-center justify-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50/70 py-2.5 text-xs font-bold text-indigo-900 hover:bg-indigo-100 transition"
+                  >
+                    <Printer size={15} /> Test Print Bar Receipt
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Save Button */}
+            <div className="flex justify-end pt-4 border-t border-slate-200">
+              <button
+                type="button"
+                onClick={handleSavePrinterSettings}
+                disabled={savingPrinters}
+                className="flex items-center gap-2 rounded-2xl bg-brand-600 px-6 py-3 text-sm font-black text-white shadow-soft hover:bg-brand-700 transition disabled:opacity-50"
+              >
+                <CheckCircle2 size={18} />
+                <span>{savingPrinters ? "Saving Configurations..." : "Save Printer Settings"}</span>
+              </button>
+            </div>
+          </div>
+        </SectionCard>
+      ) : null}
+
+      {/* Hidden Print Testing Portals */}
+      <style>{`
+        @media print {
+          body * { visibility: hidden !important; }
+          #kitchen-ticket-print, #kitchen-ticket-print * { visibility: visible !important; }
+          #bar-receipt-print, #bar-receipt-print * { visibility: visible !important; }
+          #bar-ticket-print, #bar-ticket-print * { visibility: visible !important; }
+          #kitchen-ticket-print, #bar-receipt-print, #bar-ticket-print {
+            position: fixed !important;
+            left: 0 !important;
+            top: 0 !important;
+            margin: 0 !important;
+          }
+          @page { size: auto; margin: 0; }
+        }
+      `}</style>
+      {testPrintJob === "kitchen" && (
+        <div className="print-doc">
+          <KitchenOrderTicket
+            ticketNumber="KOT-TEST"
+            destination="Table 04"
+            cashierName={profile?.full_name || "Cashier"}
+            createdAt={new Date().toISOString()}
+            paperWidth={printerSettings.kitchen.paper_width}
+            items={[
+              { name: "Grilled Beef Steak with Chips", quantity: 2, notes: "Medium well" },
+              { name: "Chicken Brochette", quantity: 3, notes: "Spicy" },
+            ]}
+          />
+        </div>
+      )}
+      {testPrintJob === "bar" && (
+        <div className="print-doc">
+          <BarReceipt
+            mode={printerSettings.bar.print_mode}
+            saleNumber="BAR-TEST-01"
+            destination="Table 04"
+            createdAt={new Date().toISOString()}
+            cashierName={profile?.full_name || "Cashier"}
+            paperWidth={printerSettings.bar.paper_width}
+            items={
+              printerSettings.bar.print_mode === "drinks_only"
+                ? [
+                    { name: "Skol Lager 500ml", quantity: 2, unit_price: 1500, line_total: 3000 },
+                    { name: "Fresh Passion Juice", quantity: 1, unit_price: 2000, line_total: 2000 },
+                  ]
+                : [
+                    { name: "Skol Lager 500ml", quantity: 2, unit_price: 1500, line_total: 3000 },
+                    { name: "Fresh Passion Juice", quantity: 1, unit_price: 2000, line_total: 2000 },
+                    { name: "Grilled Beef Steak with Chips", quantity: 2, unit_price: 7000, line_total: 14000 },
+                  ]
+            }
+            subtotal={19000}
+            taxAmount={0}
+            discountAmount={0}
+            totalAmount={19000}
+            paymentMethod="Cash"
+            amountPaid={20000}
+            change={1000}
+            settings={{
+              shop_name: businessSettings.name,
+              address: businessSettings.address,
+              contact_phone: businessSettings.contact,
+            } as any}
+          />
+        </div>
+      )}
 
       {staffModalOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4 py-6 backdrop-blur-sm" onClick={() => setStaffModalOpen(false)}>

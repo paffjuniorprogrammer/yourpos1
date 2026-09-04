@@ -21,25 +21,25 @@ export function Toaster() {
   if (toasts.length === 0) return null;
 
   return (
-    <div className="fixed bottom-6 right-6 z-[9999] flex flex-col gap-3">
+    <div className="fixed top-5 right-5 z-[9999] flex flex-col items-end gap-2.5 pointer-events-none">
       {toasts.map((toast) => (
         <div
           key={toast.id}
-          className={`flex w-full max-w-sm animate-in slide-in-from-right-10 fade-in duration-300 items-start gap-4 rounded-2xl border p-4 shadow-xl backdrop-blur-sm ${toastStyles[toast.type]}`}
+          className={`pointer-events-auto flex w-full max-w-sm animate-in slide-in-from-right-6 fade-in duration-200 items-start gap-3 rounded-2xl border p-3.5 shadow-2xl backdrop-blur-md ${toastStyles[toast.type]}`}
         >
           <div className="flex-shrink-0 mt-0.5">
             {toastIcons[toast.type]}
           </div>
-          <div className="flex-1">
-            <p className="text-sm font-semibold leading-relaxed">
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-bold leading-relaxed">
               {toast.message}
             </p>
           </div>
           <button
             onClick={() => hideToast(toast.id)}
-            className="flex-shrink-0 rounded-lg p-1 transition hover:bg-black/5"
+            className="flex-shrink-0 rounded-lg p-1 transition hover:bg-black/10"
           >
-            <X size={16} />
+            <X size={14} />
           </button>
         </div>
       ))}

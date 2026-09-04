@@ -558,22 +558,22 @@ export function HomePage() {
             <div className="grid gap-12 lg:grid-cols-2 lg:items-center">
               <div>
                 <span className="inline-flex items-center gap-2 rounded-full bg-emerald-500/20 border border-emerald-400/30 px-4 py-2 text-xs font-black uppercase tracking-widest text-emerald-300">
-                  <Star size={12} className="text-amber-400" /> Ifatabuguzi ry'Ukwezi: 10,000 FRW
+                  <Star size={12} className="text-amber-400" /> Ifatabuguzi: kuva kuri 15,000 FRW / kwezi
                 </span>
                 <h2 className="mt-6 text-3xl font-black sm:text-4xl">
-                  Cunga Ubucuruzi Bwawe <br />Ku Mafanga 10,000 FRW Gusa Ku Kwezi.
+                  Cunga Ubucuruzi Bwawe <br />Hitamo gahunda ijyanye n'ubucuruzi bwawe.
                 </h2>
                 <p className="mt-5 text-base leading-8 text-slate-300">
                   Koresha UMUCURUZI POS ucunge ibicuruzwa, ugurishe vuba, ucape inyemezabwishyu (Receipts), umenye inyungu winjije buri munsi, kandi ukurikirane amadeni y'abakiriya ahantu hamwe.
                 </p>
                 <div className="mt-8 flex flex-wrap items-center gap-4">
                   <a
-                    href={`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent("Mwiriwe, nshaka kugura ifatabuguzi rya 10,000 FRW ry'ukwezi kuri UMUCURUZI POS.")}`}
+                    href={`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent("Mwiriwe, nshaka kumenya gahunda z'ifatabuguzi kuri UMUCURUZI POS.")}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-2 rounded-2xl bg-emerald-600 hover:bg-emerald-500 px-6 py-4 text-sm font-black text-white shadow-lg shadow-emerald-900/40 transition-all active:scale-95"
                   >
-                    <MessageCircle size={18} /> Gura Ifatabuguzi (10,000 FRW)
+                    <MessageCircle size={18} /> Reba gahunda z'ifatabuguzi
                   </a>
                   <button
                     onClick={() => {
@@ -589,7 +589,7 @@ export function HomePage() {
               <div className="grid gap-4 sm:grid-cols-2">
                 {[
                   { icon: ShieldCheck, title: "Sisitemu Yizewe", text: "Ibicuruzwa n'amakuru byawe birinzwe 100% nta kibazo." },
-                  { icon: CreditCard, title: "10,000 FRW / Ukwezi", text: "Igiciro cyoroheye buri mucuruzi wese nta yandi mafaranga y'inyongera." },
+                  { icon: CreditCard, title: "15,000–100,000+ FRW / Ukwezi", text: "Basic, Business, Professional na Enterprise plans." },
                   { icon: Users, title: "Abacungamari n'Abagurisha", text: "Buri mukozi agira konti ye imwemerera gukora akazi ke neza." },
                   { icon: Zap, title: "Amashami Menshi (Multi-Branch)", text: "Cunga amaduka yawe yose ahantu hamwe kuri telefoni cyangwa mudasobwa." },
                 ].map((item) => (

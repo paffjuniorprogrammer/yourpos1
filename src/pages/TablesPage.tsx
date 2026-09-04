@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Plus, X, Users, Edit2, CheckCircle2, ToggleLeft, ToggleRight, QrCode, Copy, Printer, BedDouble } from "lucide-react";
+import { Plus, X, Users, Edit2, CheckCircle2, ToggleLeft, ToggleRight, QrCode, Copy, Printer, BedDouble, Trash2, Search, Check } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useNotification } from "../context/NotificationContext";
 import { tableService } from "../services/tableService";
@@ -24,10 +24,15 @@ export function TablesPage() {
   const [rooms, setRooms] = useState<RoomRecord[]>([]);
   const [pendingQrOrders, setPendingQrOrders] = useState(0);
   const [menuProducts, setMenuProducts] = useState<QrMenuControlProduct[]>([]);
+  const [menuSearch, setMenuSearch] = useState("");
   const [loading, setLoading] = useState(true);
 
   // Modals
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showEditTableModal, setShowEditTableModal] = useState(false);
+  const [editingTable, setEditingTable] = useState<DiningTableRecord | null>(null);
+  const [editTableForm, setEditTableForm] = useState({ table_number: "", capacity: 4 });
+  const [editTableLoading, setEditTableLoading] = useState(false);
   const [selectedTab, setSelectedTab] = useState<ActiveTabRecord | null>(null);
   const [showTabModal, setShowTabModal] = useState(false);
   const [qrTarget, setQrTarget] = useState<{ kind: "table" | "room"; label: string; token?: string } | null>(null);
@@ -80,7 +85,7 @@ export function TablesPage() {
   };
 
   const handleRemoveTable = async (table: DiningTableRecord) => {
-    const ok = await confirm("Remove Table", `Remove ${table.table_number}? This will deactivate it.`);
+    const ok = await confirm("Remove Table", `Remove Table ${table.table_number}? This will deactivate it.`);
     if (!ok) return;
     try {
       await tableService.deleteTable(table.id);
@@ -88,6 +93,34 @@ export function TablesPage() {
       loadData();
     } catch (err: any) {
       showToast("error", err.message || "Failed to remove table");
+    }
+  };
+
+  const openEditTable = (table: DiningTableRecord) => {
+    setEditingTable(table);
+    setEditTableForm({ table_number: table.table_number, capacity: table.capacity || 4 });
+    setShowEditTableModal(true);
+  };
+
+  const handleUpdateTable = async () => {
+    if (!editingTable || !editTableForm.table_number.trim()) {
+      showToast("error", "Table number/name is required");
+      return;
+    }
+    setEditTableLoading(true);
+    try {
+      await tableService.updateTable(editingTable.id, {
+        table_number: editTableForm.table_number.trim(),
+        capacity: editTableForm.capacity || 4,
+      });
+      showToast("success", `Table ${editTableForm.table_number} updated`);
+      setShowEditTableModal(false);
+      setEditingTable(null);
+      loadData();
+    } catch (err: any) {
+      showToast("error", err.message || "Failed to update table");
+    } finally {
+      setEditTableLoading(false);
     }
   };
 
@@ -192,23 +225,43 @@ export function TablesPage() {
                     Open Tab: {formatCurrency(activeTab.total)}
                   </button>
                 )}
-
-                <div className="space-y-1.5">
+                            <div className="space-y-2 pt-2 border-t border-slate-100">
                   <select
                     value={table.status}
                     onChange={(e) => handleStatusChange(table, e.target.value as any)}
-                    className="w-full rounded-xl bg-slate-50 border border-slate-200 text-[10px] font-bold text-slate-600 p-1.5 outline-none appearance-none"
+                    className="w-full rounded-xl bg-slate-50 border border-slate-200 text-[11px] font-bold text-slate-700 py-1.5 px-2 outline-none cursor-pointer hover:bg-slate-100 transition"
                   >
-                    <option value="available">Available</option>
-                    <option value="occupied">Occupied</option>
-                    <option value="reserved">Reserved</option>
+                    <option value="available">Status: Available</option>
+                    <option value="occupied">Status: Occupied</option>
+                    <option value="reserved">Status: Reserved</option>
                   </select>
-                  <button onClick={() => handleRemoveTable(table)} className="w-full rounded-xl bg-slate-50 border border-slate-200 py-1.5 text-[10px] font-bold text-slate-500 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 transition">
-                    Remove
-                  </button>
-                  <button onClick={() => setQrTarget({ kind: "table", label: `Table ${table.table_number}`, token: table.qr_token })} className="flex w-full items-center justify-center gap-1 rounded-xl bg-indigo-50 border border-indigo-100 py-1.5 text-[10px] font-bold text-indigo-700 hover:bg-indigo-100 transition">
-                    <QrCode size={12} /> Customer QR
-                  </button>
+
+                  <div className="grid grid-cols-3 gap-1.5">
+                    <button
+                      onClick={() => setQrTarget({ kind: "table", label: `Table ${table.table_number}`, token: table.qr_token || table.id })}
+                      className="flex items-center justify-center gap-1 rounded-xl bg-indigo-50 border border-indigo-200 py-2 text-[11px] font-bold text-indigo-700 hover:bg-indigo-100 transition shadow-2xs"
+                      title="Customer QR Code"
+                    >
+                      <QrCode size={13} />
+                      <span>QR</span>
+                    </button>
+                    <button
+                      onClick={() => openEditTable(table)}
+                      className="flex items-center justify-center gap-1 rounded-xl border border-slate-200 bg-white py-2 text-[11px] font-bold text-slate-600 hover:text-brand-600 hover:bg-slate-50 transition shadow-2xs"
+                      title="Edit Table"
+                    >
+                      <Edit2 size={13} />
+                      <span>Edit</span>
+                    </button>
+                    <button
+                      onClick={() => handleRemoveTable(table)}
+                      className="flex items-center justify-center gap-1 rounded-xl border border-slate-200 bg-white py-2 text-[11px] font-bold text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition shadow-2xs"
+                      title="Delete Table"
+                    >
+                      <Trash2 size={13} />
+                      <span>Delete</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             );
@@ -225,8 +278,8 @@ export function TablesPage() {
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {rooms.map((room) => (
               <div key={room.id} className="flex items-center justify-between rounded-2xl border border-slate-100 bg-slate-50 p-3">
-                <div><p className="font-black text-slate-800">Room {room.room_number}</p><p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">{room.room_type}</p></div>
-                <button onClick={() => setQrTarget({ kind: "room", label: `Room ${room.room_number}`, token: room.qr_token })} className="rounded-xl bg-white p-2 text-violet-700 shadow-sm hover:bg-violet-50" title="Open room QR"><QrCode size={18} /></button>
+                <div><p className="font-black text-slate-800">Room {room.room_number}</p><p className="text-xs text-slate-400">{room.room_type}</p></div>
+                <button onClick={() => setQrTarget({ kind: "room", label: `Room ${room.room_number}`, token: room.qr_token || room.id })} className="rounded-xl bg-white p-2 text-violet-700 shadow-sm hover:bg-violet-50" title="Open room QR"><QrCode size={18} /></button>
               </div>
             ))}
           </div>
@@ -255,11 +308,90 @@ export function TablesPage() {
         </div>
       )}
 
+      {/* ========== CUSTOMER MENU CONTROL MODAL ========== */}
       {showMenuControl && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
           <div className="flex max-h-[85vh] w-full max-w-2xl flex-col rounded-3xl bg-white p-6 shadow-2xl">
-            <div className="mb-4 flex items-center justify-between"><div><h2 className="text-xl font-black text-slate-900">Control customer QR menu</h2><p className="text-sm text-slate-500">Enable products customers can see and order. Prices use the main product catalogue.</p></div><button onClick={() => setShowMenuControl(false)} className="rounded-full bg-slate-100 p-2 text-slate-600"><X size={18}/></button></div>
-            <div className="overflow-y-auto rounded-2xl border border-slate-100"><table className="w-full text-left text-sm"><thead className="sticky top-0 bg-slate-50 text-[10px] font-black uppercase tracking-wider text-slate-400"><tr><th className="px-4 py-3">Product</th><th className="px-4 py-3">Category</th><th className="px-4 py-3 text-right">Price</th><th className="px-4 py-3 text-right">QR menu</th></tr></thead><tbody className="divide-y divide-slate-100">{menuProducts.map((product) => <tr key={product.id}><td className="px-4 py-3 font-bold text-slate-800">{product.name}</td><td className="px-4 py-3 text-xs text-slate-500">{product.category}</td><td className="px-4 py-3 text-right font-bold text-slate-700">{formatCurrency(product.price)}</td><td className="px-4 py-3 text-right"><button onClick={() => void toggleMenuProduct(product)} className={`rounded-xl px-3 py-1.5 text-xs font-black ${product.enabled ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>{product.enabled ? "Visible" : "Hidden"}</button></td></tr>)}{!menuProducts.length && <tr><td colSpan={4} className="px-4 py-10 text-center text-slate-400">No active products found.</td></tr>}</tbody></table></div>
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-black text-slate-900">Control Customer QR Menu</h2>
+                <p className="text-xs font-semibold text-slate-500">
+                  Select which catalog products are active on the guest QR menu.
+                </p>
+              </div>
+              <button
+                onClick={() => setShowMenuControl(false)}
+                className="rounded-full bg-slate-100 p-2 text-slate-600 hover:bg-slate-200"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Filter and Stats Toolbar */}
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2.5">
+              <div className="relative flex-1 min-w-[200px]">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Filter menu products..."
+                  className="w-full rounded-xl bg-slate-50 border border-slate-200 pl-8 pr-3 py-1.5 text-xs font-semibold text-slate-800 outline-none focus:border-brand-500 focus:bg-white"
+                  value={menuSearch}
+                  onChange={(e) => setMenuSearch(e.target.value)}
+                />
+              </div>
+
+              <span className="text-[11px] font-bold text-slate-500 bg-slate-100 px-3 py-1.5 rounded-xl">
+                {menuProducts.filter((p) => p.enabled).length} of {menuProducts.length} Active on QR Menu
+              </span>
+            </div>
+
+            <div className="overflow-y-auto rounded-2xl border border-slate-100">
+              <table className="w-full text-left text-sm">
+                <thead className="sticky top-0 bg-slate-50 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                  <tr>
+                    <th className="px-4 py-3">Product</th>
+                    <th className="px-4 py-3">Category</th>
+                    <th className="px-4 py-3 text-right">Price</th>
+                    <th className="px-4 py-3 text-right">QR Menu Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {menuProducts
+                    .filter((p) => {
+                      const q = menuSearch.toLowerCase();
+                      return !q || p.name.toLowerCase().includes(q) || (p.category && p.category.toLowerCase().includes(q));
+                    })
+                    .map((product) => (
+                      <tr key={product.id} className="hover:bg-slate-50/60 transition">
+                        <td className="px-4 py-3 font-bold text-slate-800">{product.name}</td>
+                        <td className="px-4 py-3 text-xs text-slate-500">{product.category}</td>
+                        <td className="px-4 py-3 text-right font-bold text-slate-700">
+                          {formatCurrency(product.price)}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <button
+                            onClick={() => void toggleMenuProduct(product)}
+                            className={`rounded-xl px-3 py-1.5 text-xs font-black transition ${
+                              product.enabled
+                                ? "bg-emerald-100 text-emerald-800 hover:bg-emerald-200"
+                                : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+                            }`}
+                          >
+                            {product.enabled ? "✓ Visible" : "Hidden"}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  {!menuProducts.length && (
+                    <tr>
+                      <td colSpan={4} className="px-4 py-10 text-center text-slate-400">
+                        No active catalog products found.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
@@ -294,6 +426,79 @@ export function TablesPage() {
                 className="flex-1 flex items-center justify-center gap-2 rounded-2xl bg-slate-950 py-3 font-bold text-white hover:bg-slate-800 transition disabled:opacity-50">
                 {addLoading ? <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" /> : <Plus size={16} />}
                 Add Table
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========== EDIT TABLE MODAL ========== */}
+      {showEditTableModal && editingTable && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 backdrop-blur-sm p-4">
+          <div className="w-full max-w-sm rounded-3xl bg-white p-7 shadow-2xl animate-in zoom-in-95">
+            <div className="flex items-center justify-between mb-5">
+              <div>
+                <h2 className="text-xl font-black text-slate-900">Edit Table</h2>
+                <p className="text-xs font-semibold text-slate-400">Update table label and seating</p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowEditTableModal(false);
+                  setEditingTable(null);
+                }}
+                className="rounded-full bg-slate-100 p-2 text-slate-600 hover:bg-slate-200"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">
+                  Table Number / Name *
+                </label>
+                <input
+                  type="text"
+                  className="w-full rounded-xl bg-slate-50 border border-slate-200 p-3 text-sm font-bold outline-none focus:border-brand-500 focus:bg-white text-slate-900"
+                  value={editTableForm.table_number}
+                  onChange={(e) => setEditTableForm({ ...editTableForm, table_number: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">
+                  Seating Capacity
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  className="w-full rounded-xl bg-slate-50 border border-slate-200 p-3 text-sm font-bold outline-none focus:border-brand-500 focus:bg-white text-slate-900"
+                  value={editTableForm.capacity}
+                  onChange={(e) =>
+                    setEditTableForm({ ...editTableForm, capacity: parseInt(e.target.value) || 1 })
+                  }
+                />
+              </div>
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => {
+                  setShowEditTableModal(false);
+                  setEditingTable(null);
+                }}
+                className="flex-1 rounded-2xl bg-slate-100 py-3 text-xs font-bold text-slate-600 hover:bg-slate-200 transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleUpdateTable}
+                disabled={editTableLoading || !editTableForm.table_number.trim()}
+                className="flex-1 flex items-center justify-center gap-2 rounded-2xl bg-brand-600 py-3 text-xs font-black text-white hover:bg-brand-700 transition disabled:opacity-50 shadow-soft"
+              >
+                {editTableLoading ? (
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                ) : (
+                  <Check size={16} />
+                )}
+                Save Changes
               </button>
             </div>
           </div>

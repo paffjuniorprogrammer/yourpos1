@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { LoadingPOS } from "../components/ui/LoadingPOS";
 import { Navigate } from "react-router-dom";
 import { SectionCard } from "../components/ui/SectionCard";
@@ -13,6 +14,7 @@ import { useTranslation } from "react-i18next";
 import { SubscriptionStatusBanner } from "../components/ui/SubscriptionStatusBanner";
 
 export function DashboardPage() {
+  const navigate = useNavigate();
   const { t } = useTranslation();
   const { can, profile, hasRole } = useAuth();
   const [stats, setStats] = useState<DashboardStat[]>([]);
@@ -241,7 +243,7 @@ export function DashboardPage() {
           subtitle={t('dashboard.recent_subtitle')}
         >
           <div className="space-y-4">
-            {recentTransactions.length > 0 ? recentTransactions.map((transaction) => (
+            {recentTransactions.length > 0 ? recentTransactions.slice(0, 3).map((transaction) => (
 
               <div
                 key={transaction.id}
@@ -263,6 +265,7 @@ export function DashboardPage() {
               <p className="py-10 text-center text-sm text-slate-400">{t('dashboard.no_recent')}</p>
             )}
           </div>
+          <button onClick={() => navigate("/sales")} className="mt-4 w-full rounded-xl border border-brand-100 py-2 text-xs font-bold text-brand-600 hover:bg-brand-50">View all sales</button>
         </SectionCard>
       </div>
 
@@ -272,7 +275,7 @@ export function DashboardPage() {
           subtitle="Customers with outstanding sales balances"
         >
           <div className="space-y-4">
-            {unpaidCustomers.length > 0 ? unpaidCustomers.map((item) => (
+            {unpaidCustomers.length > 0 ? unpaidCustomers.slice(0, 3).map((item) => (
               <div key={item.id} className="flex items-center justify-between rounded-2xl bg-amber-50 p-4 border border-amber-100">
                 <div>
                   <p className="font-semibold text-amber-900">{item.name}</p>
@@ -284,6 +287,7 @@ export function DashboardPage() {
               <p className="py-6 text-center text-sm text-slate-400">No outstanding customer debt</p>
             )}
           </div>
+          <button onClick={() => navigate("/customers")} className="mt-4 w-full rounded-xl border border-amber-100 py-2 text-xs font-bold text-amber-700 hover:bg-amber-50">View all customers</button>
         </SectionCard>
 
         <SectionCard
@@ -291,7 +295,7 @@ export function DashboardPage() {
           subtitle="Outstanding balances owed to suppliers"
         >
           <div className="space-y-4">
-            {unpaidSuppliers.length > 0 ? unpaidSuppliers.map((item) => (
+            {unpaidSuppliers.length > 0 ? unpaidSuppliers.slice(0, 3).map((item) => (
               <div key={item.id} className="flex items-center justify-between rounded-2xl bg-rose-50 p-4 border border-rose-100">
                 <div>
                   <p className="font-semibold text-rose-900">{item.name}</p>
@@ -303,6 +307,7 @@ export function DashboardPage() {
               <p className="py-6 text-center text-sm text-slate-400">No outstanding supplier debts</p>
             )}
           </div>
+          <button onClick={() => navigate("/suppliers")} className="mt-4 w-full rounded-xl border border-rose-100 py-2 text-xs font-bold text-rose-700 hover:bg-rose-50">View all suppliers</button>
         </SectionCard>
       </div>
 

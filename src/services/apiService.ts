@@ -33,7 +33,8 @@ export async function generateApiKey(name: string) {
   
   // We hash the key before saving (using a simple mock hash here, 
   // in production use a proper cryptographic hash like SHA-256).
-  const keyHash = fullKey; // Placeholder for real hashing
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(fullKey));
+  const keyHash = Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
 
   const { data, error } = await client
     .from("api_keys")

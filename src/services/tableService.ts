@@ -71,6 +71,15 @@ export const tableService = {
     if (error) throw error;
   },
 
+  async updateTable(tableId: string, updates: { table_number?: string; capacity?: number; status?: 'available' | 'occupied' | 'reserved' }): Promise<void> {
+    const { error } = await supabase
+      .from("dining_tables")
+      .update(updates)
+      .eq("id", tableId);
+
+    if (error) throw error;
+  },
+
   async deleteTable(tableId: string): Promise<void> {
     const { error } = await supabase
       .from("dining_tables")

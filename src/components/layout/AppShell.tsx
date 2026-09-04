@@ -1,6 +1,6 @@
 import { Bell, LogOut, Search, Menu, X, Languages } from "lucide-react";
 import { useEffect, useState } from "react";
-import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { navItems } from "../../data/mockData";
 import { useAuth } from "../../context/AuthContext";
 import { useNotification } from "../../context/NotificationContext";
@@ -14,6 +14,7 @@ import { DemoModeBanner } from "../ui/DemoModeBanner";
 export function AppShell() {
   const { i18n, t } = useTranslation();
   const location = useLocation();
+  const navigate = useNavigate();
   const { authConfigured, hasRole, logout, profile, can, session } = useAuth();
   const { showToast } = useNotification();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -24,6 +25,25 @@ export function AppShell() {
     navItems.find((item) => item.path === location.pathname)?.label ?? t('menu.dashboard');
 
   const businessType = profile?.business?.business_type ?? 'retail';
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.matches("input, textarea, select, [contenteditable='true']")) return;
+      const shortcuts: Record<string, string> = {
+        d: "/dashboard", s: "/sales", p: "/products", b: "/bar-pos",
+        r: "/rooms", t: "/tables", u: "/purchases", c: "/customers",
+        v: "/suppliers", k: "/stock", q: "/requisitions", e: "/reports",
+      };
+      const destination = shortcuts[event.key.toLowerCase()];
+      if (destination) {
+        event.preventDefault();
+        navigate(destination);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [navigate]);
 
   const changeLanguage = async (lng: string) => {
     i18n.changeLanguage(lng);
@@ -72,7 +92,14 @@ export function AppShell() {
     return can(item.label, "view");
   });
 
-  const navLabel = (label: string) => label === "VAT Report" ? "VAT Report" : t(`menu.${label.toLowerCase()}`);
+  const navLabel = (label: string) => {
+    if (label === "VAT Report") return "VAT Report";
+    const lower = label.toLowerCase();
+    if (lower === "bar pos" || lower === "bar_pos") return t("menu.bar_pos", "Bar POS");
+    if (lower === "rooms" || lower === "romm") return t("menu.rooms", "Rooms");
+    if (lower === "tables") return t("menu.tables", "Tables");
+    return t(`menu.${lower}`, label);
+  };
 
   useEffect(() => {
     if (!authConfigured || !profile || isPosRoute || profile.role === "super_admin") {
@@ -226,59 +253,110 @@ export function AppShell() {
         </div>
       )}
       <div className="mx-auto flex min-h-screen max-w-[1600px]">
-        <aside className="hidden w-72 flex-col border-r border-white/70 bg-slate-950 px-6 py-8 text-white lg:flex">
-          <div className="rounded-3xl bg-gradient-to-br from-brand-500 via-brand-600 to-sky-400 p-5 shadow-soft">
-            <div className="flex items-center gap-3">
-              {settings?.logo_url ? (
-                <img src={settings.logo_url} alt="Logo" className="h-10 w-10 rounded-xl object-contain bg-white/10" />
-              ) : (
-                <div className="h-10 w-10 rounded-xl bg-white/20 flex items-center justify-center font-bold text-white">
-                  {settings?.shop_name?.charAt(0) || "B"}
-                </div>
-              )}
-              <p className="text-xs uppercase tracking-[0.35em] text-blue-100">
-                {settings?.shop_name || "POS SYSTEM"}
-              </p>
+        <aside className="hidden w-60 flex-col border-r border-white/10 bg-slate-950 px-3 py-4 text-white lg:flex sticky top-0 h-screen overflow-hidden shrink-0 z-20">
+          <div className="shrink-0 rounded-2xl bg-gradient-to-br from-brand-500 via-brand-600 to-sky-400 p-4 shadow-soft">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5 min-w-0">
+                {settings?.logo_url ? (
+                  <img src={settings.logo_url} alt="Logo" className="h-8 w-8 rounded-lg object-contain bg-white/10 shrink-0" />
+                ) : (
+                  <div className="h-8 w-8 rounded-lg bg-white/20 flex items-center justify-center font-bold text-white text-xs shrink-0">
+                    {settings?.shop_name?.charAt(0) || "B"}
+                  </div>
+                )}
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-blue-100 truncate">
+                  {settings?.shop_name || "POS SYSTEM"}
+                </p>
+              </div>
+
+              {/* Reminders Bell in Sidebar */}
+              <div className="relative shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setRemindersOpen((open) => !open)}
+                  className="relative rounded-xl bg-white/15 p-2 text-white transition hover:bg-white/25"
+                  title="Business reminders"
+                >
+                  <Bell size={15} />
+                  {reminders.length > 0 && (
+                    <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-0.5 text-[9px] font-black text-white">
+                      {reminders.length}
+                    </span>
+                  )}
+                </button>
+
+                {remindersOpen && (
+                  <div className="fixed left-72 top-6 z-50 w-[min(360px,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl text-slate-900">
+                    <div className="border-b border-slate-100 px-4 py-3 flex items-center justify-between">
+                      <p className="text-xs font-black uppercase tracking-widest text-slate-500">Reminders</p>
+                      <button onClick={() => setRemindersOpen(false)} className="text-slate-400 hover:text-slate-600">
+                        <X size={15} />
+                      </button>
+                    </div>
+                    <div className="max-h-80 overflow-y-auto">
+                      {reminders.length > 0 ? (
+                        reminders.map((reminder) => (
+                          <div key={reminder.id} className="border-b border-slate-100 px-4 py-3 last:border-b-0">
+                            <p
+                              className={`text-xs font-black ${
+                                reminder.severity === "error"
+                                  ? "text-rose-700"
+                                  : reminder.severity === "warning"
+                                  ? "text-amber-700"
+                                  : "text-sky-700"
+                              }`}
+                            >
+                              {reminder.title}
+                            </p>
+                            <p className="mt-1 text-[11px] leading-relaxed text-slate-600">{reminder.message}</p>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="px-4 py-8 text-center text-xs font-medium text-slate-400">No reminders right now.</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
-            <h2 className="mt-4 text-xl font-bold line-clamp-2">
+            <h2 className="mt-2 text-sm font-bold line-clamp-1">
               {settings?.shop_name || "UMUCURUZI POS"}
             </h2>
-            <p className="mt-2 text-xs text-blue-50/70">
+            <p className="text-[10px] text-blue-50/70 truncate">
               {settings?.address || "Fast checkout and oversight."}
             </p>
           </div>
 
-          <nav className="mt-8 space-y-2">
+          <nav className="mt-4 flex-1 space-y-1 overflow-y-auto pr-1.5 custom-scrollbar">
             {visibleNavItems.map(({ label, path, icon: Icon }) => (
               <NavLink
                 key={path}
                 to={path}
                 className={({ isActive }) =>
-                  `flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-medium transition ${
+                  `flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-xs font-bold transition ${
                     isActive
                       ? "bg-white text-slate-950 shadow-soft"
                       : "text-slate-300 hover:bg-white/10 hover:text-white"
                   }`
                 }
               >
-                <Icon size={18} />
-                {navLabel(label)}
+                <Icon size={16} />
+                <span>{navLabel(label)}</span>
               </NavLink>
-
             ))}
           </nav>
 
-          <div className="mt-auto rounded-3xl border border-white/10 bg-white/5 p-5">
-            <div className="mb-6">
-              <div className="flex items-center gap-2 mb-3 text-slate-400">
-                <Languages size={14} />
-                <span className="text-[10px] font-bold uppercase tracking-widest">{t('menu.language')}</span>
+          <div className="shrink-0 mt-3 rounded-2xl border border-white/10 bg-white/5 p-3.5">
+            <div className="mb-3">
+              <div className="flex items-center gap-2 mb-2 text-slate-400">
+                <Languages size={13} />
+                <span className="text-[9px] font-bold uppercase tracking-widest">{t('menu.language')}</span>
               </div>
 
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-3 gap-1.5">
                 <button
                   onClick={() => changeLanguage('en')}
-                  className={`rounded-xl py-2 text-[10px] font-black uppercase tracking-widest transition ${
+                  className={`rounded-lg py-1 text-[9px] font-black uppercase tracking-widest transition ${
                     i18n.language === 'en' ? 'bg-white text-slate-950' : 'bg-white/5 text-slate-400 hover:bg-white/10'
                   }`}
                 >
@@ -286,7 +364,7 @@ export function AppShell() {
                 </button>
                 <button
                   onClick={() => changeLanguage('rw')}
-                  className={`rounded-xl py-2 text-[10px] font-black uppercase tracking-widest transition ${
+                  className={`rounded-lg py-1 text-[9px] font-black uppercase tracking-widest transition ${
                     i18n.language === 'rw' ? 'bg-white text-slate-950' : 'bg-white/5 text-slate-400 hover:bg-white/10'
                   }`}
                 >
@@ -294,7 +372,7 @@ export function AppShell() {
                 </button>
                 <button
                   onClick={() => changeLanguage('fr')}
-                  className={`rounded-xl py-2 text-[10px] font-black uppercase tracking-widest transition ${
+                  className={`rounded-lg py-1 text-[9px] font-black uppercase tracking-widest transition ${
                     i18n.language === 'fr' ? 'bg-white text-slate-950' : 'bg-white/5 text-slate-400 hover:bg-white/10'
                   }`}
                 >
@@ -303,78 +381,31 @@ export function AppShell() {
               </div>
             </div>
 
-            <p className="text-sm font-semibold">{t('menu.role')}</p>
+            <p className="text-xs font-semibold">{t('menu.role')}</p>
 
-            <p className="mt-2 text-2xl font-bold uppercase tracking-tight">
+            <p className="mt-1 text-sm font-bold uppercase tracking-tight">
               {profile?.role 
                 ? profile.role
                 : session 
                   ? t('menu.profile_missing') 
                   : t('menu.demo_mode')}
             </p>
-            <p className="mt-2 text-sm text-slate-300">
+            <p className="mt-0.5 text-xs text-slate-400 truncate">
               {profile?.full_name ?? (session ? session.user.email : t('menu.connect_auth'))}
             </p>
             {authConfigured ? (
               <button
                 onClick={() => void logout()}
-                 className="mt-4 flex items-center gap-2 rounded-2xl border border-white/10 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
+                className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-xl border border-white/10 py-2 text-xs font-semibold text-white transition hover:bg-white/10"
               >
-                <LogOut size={16} />
-                {t('menu.sign_out')}
+                <LogOut size={14} />
+                <span>{t('menu.sign_out')}</span>
               </button>
-
             ) : null}
           </div>
         </aside>
 
-        <main className="flex-1 px-4 py-4 sm:px-6 lg:px-8 lg:py-8">
-          <div className="mb-5 flex items-center justify-between gap-4">
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">{currentPage}</p>
-            </div>
-
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setRemindersOpen((open) => !open)}
-                className="relative rounded-2xl border border-slate-200 bg-white p-3 text-slate-600 shadow-soft transition hover:bg-slate-50"
-                title="Business reminders"
-              >
-                <Bell size={18} />
-                {reminders.length > 0 && (
-                  <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-black text-white">
-                    {reminders.length}
-                  </span>
-                )}
-              </button>
-
-              {remindersOpen && (
-                <div className="absolute right-0 top-14 z-50 w-[min(360px,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
-                  <div className="border-b border-slate-100 px-4 py-3">
-                    <p className="text-xs font-black uppercase tracking-widest text-slate-500">Reminders</p>
-                  </div>
-                  <div className="max-h-80 overflow-y-auto">
-                    {reminders.length > 0 ? reminders.map((reminder) => (
-                      <div key={reminder.id} className="border-b border-slate-100 px-4 py-3 last:border-b-0">
-                        <p className={`text-sm font-black ${
-                          reminder.severity === "error" ? "text-rose-700" :
-                          reminder.severity === "warning" ? "text-amber-700" :
-                          "text-sky-700"
-                        }`}>
-                          {reminder.title}
-                        </p>
-                        <p className="mt-1 text-xs leading-relaxed text-slate-600">{reminder.message}</p>
-                      </div>
-                    )) : (
-                      <p className="px-4 py-8 text-center text-sm font-medium text-slate-400">No reminders right now.</p>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
+        <main className="flex-1 px-4 py-3 sm:px-6 lg:px-8 lg:py-5">
           <Outlet />
         </main>
       </div>

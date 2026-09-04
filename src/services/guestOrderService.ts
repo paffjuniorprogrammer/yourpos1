@@ -2,7 +2,19 @@ import { supabase } from "../lib/supabase";
 
 export type GuestMenuProduct = { id: string; name: string; price: number; category: string; image_url?: string | null; in_stock: number };
 export type GuestMenu = { business_id: string; business_name: string; target: { kind: "table" | "room"; label: string }; products: GuestMenuProduct[] };
-export type GuestOrder = { id: string; guest_name: string; guest_phone?: string | null; table_id?: string | null; room_id?: string | null; items: Array<{ product_id: string; name: string; quantity: number; unit_price?: number; line_total?: number }>; total: number; created_at: string; status: "pending" | "accepted" | "rejected" };
+export type GuestOrder = {
+  id: string;
+  guest_name: string;
+  guest_phone?: string | null;
+  table_id?: string | null;
+  room_id?: string | null;
+  table?: { table_number: string } | null;
+  room?: { room_number: string } | null;
+  items: Array<{ product_id: string; name: string; quantity: number; unit_price?: number; line_total?: number }>;
+  total: number;
+  created_at: string;
+  status: "pending" | "accepted" | "rejected";
+};
 export type QrMenuControlProduct = { id: string; name: string; category: string; price: number; enabled: boolean };
 
 export const guestOrderService = {
@@ -17,7 +29,32 @@ export const guestOrderService = {
     return data as string;
   },
   async listPending(businessId: string): Promise<GuestOrder[]> {
-    const { data, error } = await supabase.from("guest_orders").select("*").eq("business_id", businessId).eq("status", "pending").order("created_at", { ascending: false });
+    try {
+      const { data, error } = await supabase
+        .from("guest_orders")
+        .select(`
+          *,
+          table:dining_tables(table_number),
+          room:rooms(room_number)
+        `)
+        .eq("business_id", businessId)
+        .eq("status", "pending")
+        .order("created_at", { ascending: false });
+
+      if (!error && data) {
+        return data as GuestOrder[];
+      }
+    } catch (e) {
+      console.warn("Joined guest orders fetch failed, trying basic select:", e);
+    }
+
+    const { data, error } = await supabase
+      .from("guest_orders")
+      .select("*")
+      .eq("business_id", businessId)
+      .eq("status", "pending")
+      .order("created_at", { ascending: false });
+
     if (error) throw error;
     return (data || []) as GuestOrder[];
   },

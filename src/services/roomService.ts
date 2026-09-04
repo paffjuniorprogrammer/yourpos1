@@ -15,7 +15,7 @@ function withFolioTotals(booking: any): RoomBookingRecord {
 
 const FOLIO_SELECT = `
   *,
-  room:rooms(room_number, room_type, price_per_night),
+  room:rooms(id, room_number, room_type, price_per_night, status),
   charges:room_charges(id, service_type, description, amount, quantity, created_at, created_by, users:created_by(full_name)),
   payments:room_payments(id, amount, payment_method, received_by, received_at, users:received_by(full_name))
 `;
@@ -246,6 +246,22 @@ export const roomService = {
       .from("rooms")
       .update({ status: "cleaning", updated_at: new Date().toISOString() })
       .eq("id", roomId);
+  },
+
+  async recordPayment(
+    bookingId: string,
+    amount: number,
+    paymentMethod: "cash" | "momo" | "card" | "bank",
+    receivedBy?: string
+  ): Promise<void> {
+    if (amount <= 0) throw new Error("Payment amount must be greater than 0");
+    const { error } = await supabase.from("room_payments").insert({
+      booking_id: bookingId,
+      amount,
+      payment_method: paymentMethod,
+      received_by: receivedBy || null,
+    });
+    if (error) throw error;
   },
 
   async getRoomDashboardKPIs(businessId: string) {

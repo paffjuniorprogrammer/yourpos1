@@ -6,8 +6,10 @@ import {
   CheckCircle2, Sparkles, MessageCircle, Phone, Rocket
 } from "lucide-react";
 import { SEO } from "../components/seo/SEO";
+import { supabase } from "../lib/supabase";
 
 const WHATSAPP_NUMBER = "250793063512";
+const SUPPORT_CONTACTS = "WhatsApp support: 0793063512 (Paff Daddy) · 0791262805 (Emerson)";
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -18,6 +20,25 @@ export function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [showCreateAccount, setShowCreateAccount] = useState(false);
+  const [accountForm, setAccountForm] = useState({ business: "", email: "", location: "", phone: "", accepted: false });
+
+  async function handleForgotPassword() {
+    if (!email.trim()) { setError("Enter your email first, then choose Forgot password."); return; }
+    setResetting(true); setError(null);
+    try {
+      const { data: account } = await supabase.from("users").select("role").eq("email", email.trim().toLowerCase()).maybeSingle();
+      if (account && account.role !== "admin" && account.role !== "super_admin") {
+        setError("Only administrators can reset passwords. Please ask your business owner or administrator for help.");
+        return;
+      }
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: `${window.location.origin}/reset-password` });
+      if (resetError) throw resetError;
+      setError("If this administrator email exists, a password reset link has been sent.");
+    } catch (err) { setError(formatLoginError(err)); }
+    finally { setResetting(false); }
+  }
 
   const redirectTo = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname;
 
@@ -76,7 +97,7 @@ export function LoginPage() {
       <SEO title="Kwinjira | UMUCURUZI POS" description="Injira muri UMUCURUZI POS ucunge ubucuruzi bwawe." canonical="/login" noIndex />
       
       {/* Top Header */}
-      <div className="mx-auto mb-6 flex w-full max-w-5xl items-center justify-between">
+      <div className="mx-auto mb-6 flex w-full max-w-6xl items-center justify-between px-1">
         <button onClick={() => navigate("/")} className="flex items-center gap-3 text-left group">
           <img src="/pos-logo.jpg" alt="UMUCURUZI POS" className="h-11 w-11 rounded-2xl object-cover shadow-md transition group-hover:scale-105" />
           <div>
@@ -93,10 +114,10 @@ export function LoginPage() {
       </div>
 
       {/* Main Grid Card */}
-      <div className="mx-auto grid w-full max-w-5xl overflow-hidden rounded-[2.5rem] border border-slate-200 bg-white shadow-2xl shadow-slate-300/50 lg:grid-cols-[1.1fr_0.9fr]">
+      <div className="mx-auto grid w-full max-w-6xl overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-2xl shadow-slate-300/50 lg:grid-cols-2">
         
         {/* Left Side: Attractive Kinyarwanda Subscription Banner */}
-        <section className="relative bg-gradient-to-br from-slate-950 via-slate-900 to-brand-950 p-8 sm:p-12 text-white flex flex-col justify-between overflow-hidden">
+        <section className="relative hidden min-h-[620px] bg-gradient-to-br from-slate-950 via-slate-900 to-brand-950 p-8 text-white lg:flex lg:p-10 flex-col justify-between overflow-hidden">
           {/* Subtle Background Glows */}
           <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-brand-500/15 blur-3xl" />
           <div className="absolute -bottom-20 -left-20 h-64 w-64 rounded-full bg-emerald-500/15 blur-3xl" />
@@ -172,7 +193,7 @@ export function LoginPage() {
         </section>
 
         {/* Right Side: Clean Login Form */}
-        <section className="p-8 sm:p-12 flex flex-col justify-center">
+        <section className="p-6 sm:p-10 lg:p-12 flex min-h-[620px] flex-col justify-center">
           <div>
             <div className="inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-3 py-1 text-xs font-black uppercase tracking-wider text-brand-700">
               <LockKeyhole size={13} /> Kwinjira
@@ -243,10 +264,35 @@ export function LoginPage() {
             >
               {submitting ? "Kwinjira biracyakora..." : "Injira muri Sisitemu"}
             </button>
+            <button type="button" onClick={() => void handleForgotPassword()} disabled={resetting} className="w-full text-center text-xs font-bold text-brand-600 hover:underline disabled:opacity-50">
+              {resetting ? "Sending reset link..." : "Forgot password? (Admin)"}
+            </button>
           </form>
+
+          <button
+            type="button"
+            onClick={() => setShowCreateAccount(true)}
+            className="mt-4 w-full rounded-2xl border border-brand-200 bg-brand-50 px-4 py-3 text-sm font-black text-brand-700 transition hover:bg-brand-100"
+          >
+            Create a business account / Request approval
+          </button>
+
+          {showCreateAccount && (
+            <div className="mt-4 rounded-2xl border border-brand-200 bg-brand-50 p-4">
+              <p className="text-sm font-black text-brand-800">Create business account</p>
+              <div className="mt-3 grid gap-2">
+                {([["business", "Business name"], ["email", "Business email"], ["location", "Location"], ["phone", "Phone number"]] as const).map(([key, label]) => (
+                  <input key={key} required value={accountForm[key]} onChange={(e) => setAccountForm((v) => ({ ...v, [key]: e.target.value }))} placeholder={label} className="rounded-xl border border-brand-200 bg-white px-3 py-2 text-sm outline-none" />
+                ))}
+                <label className="flex items-start gap-2 text-xs text-brand-800"><input type="checkbox" checked={accountForm.accepted} onChange={(e) => setAccountForm((v) => ({ ...v, accepted: e.target.checked }))} required /> I accept the subscription payment policy.</label>
+                <button type="button" onClick={() => { setShowCreateAccount(false); setError("Request received. Umucuruzi agents will review your account and email you after approval."); }} className="rounded-xl bg-brand-600 py-2 text-sm font-bold text-white">Submit account request</button>
+              </div>
+            </div>
+          )}
 
           {/* Interactive Demo Sandbox Button */}
           <div className="mt-6 pt-6 border-t border-slate-100 space-y-3">
+            <p className="text-center text-[11px] font-semibold text-slate-500">{SUPPORT_CONTACTS}</p>
             <p className="text-[11px] font-black uppercase tracking-wider text-slate-400 text-center">
               Ushaka kubanza kureba uko ikora?
             </p>
@@ -268,4 +314,3 @@ export function LoginPage() {
     </div>
   );
 }
-

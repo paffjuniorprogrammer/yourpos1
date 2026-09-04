@@ -945,8 +945,7 @@ export function PosPage() {
       setCloseDayOpen(false);
       setRegisterOpen(false);
       setActiveShift(null);
-      await logout();
-      navigate("/login", { replace: true });
+      navigate("/dashboard", { replace: true });
     } catch (err) {
       console.error("Failed to close day:", err);
       const msg = getErrorMessage(err);
@@ -1909,32 +1908,32 @@ export function PosPage() {
 
              <div className="mt-8 space-y-3">
                <div className="grid grid-cols-2 gap-3">
-                  <div className="rounded-3xl bg-slate-50 p-5">
+                  <div className="rounded-3xl bg-slate-50 p-3">
                     <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">{t('pos.ui.cash_sales')}</p>
                     <p className="mt-1 text-lg font-black text-ink">{rwf(closeDaySummary.cash_amount)}</p>
                   </div>
-                  <div className="rounded-3xl bg-slate-50 p-5">
+                  <div className="rounded-3xl bg-slate-50 p-3">
                     <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">{t('pos.ui.momo_sales')}</p>
                     <p className="mt-1 text-lg font-black text-ink">{rwf(closeDaySummary.momo_amount)}</p>
                   </div>
-                  <div className="rounded-3xl bg-slate-50 p-5">
+                  <div className="rounded-3xl bg-slate-50 p-3">
                     <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">{t('pos.ui.bank_sales')}</p>
                     <p className="mt-1 text-lg font-black text-ink">{rwf(closeDaySummary.bank_amount)}</p>
                   </div>
-                  <div className="rounded-3xl bg-slate-50 p-5">
+                  <div className="rounded-3xl bg-slate-50 p-3">
                     <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">{t('pos.ui.card_sales')}</p>
                     <p className="mt-1 text-lg font-black text-ink">{rwf(closeDaySummary.card_amount)}</p>
                   </div>
-                  <div className="rounded-3xl bg-rose-50 p-5">
+                  <div className="rounded-3xl bg-rose-50 p-3">
                     <p className="text-[10px] font-bold uppercase tracking-widest text-rose-500">Outstanding Credit</p>
                     <p className="mt-1 text-lg font-black text-rose-600">{rwf(closeDaySummary.credit_amount)}</p>
                   </div>
-                  <div className="rounded-3xl bg-emerald-50 p-5">
+                  <div className="rounded-3xl bg-emerald-50 p-3">
                     <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-600">Credit Collected Today</p>
                     <p className="mt-1 text-lg font-black text-emerald-700">{rwf(closeDaySummary.credit_collected_amount)}</p>
                   </div>
                </div>
-               <div className="rounded-[2rem] bg-slate-950 p-6 text-white shadow-xl">
+               <div className="rounded-[2rem] bg-slate-950 p-4 text-white shadow-xl">
                   <div className="flex justify-between items-center">
                     <div>
                       <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 opacity-60">Collected Today</p>

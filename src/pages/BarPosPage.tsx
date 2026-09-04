@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import {
   Search, Plus, Minus, Trash2, Receipt, LogOut, LayoutDashboard,
-  Calculator, Clock3, X, ShoppingCart, BedDouble, UtensilsCrossed,
+  Calculator, Clock3, X, ShoppingCart, BedDouble, Utensils,
   Printer, ChevronDown, Percent, User, CreditCard, Smartphone, Wallet,
-  History, CheckCircle2, AlertTriangle, RefreshCw, Delete, Bell,
+  History, CheckCircle2, AlertTriangle, RefreshCw, Bell, Table2,
+  Beer, Wine, CupSoda, Coffee, Package, Check, ArrowLeft,
+  DollarSign, FileText, Lock
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
@@ -19,6 +21,12 @@ import { createPortal } from "react-dom";
 import type { PosCustomerRecord, PaymentMethod, ShopSettingsRecord, ProductRecord } from "../types/database";
 import type { RoomBookingRecord, DiningTableRecord, ActiveTabRecord, HospitalityDayClosureRecord } from "../types/database";
 
+import { supabase } from "../lib/supabase";
+
+import { printerService, type HospitalityPrinterSettings, DEFAULT_PRINTER_SETTINGS } from "../services/printerService";
+import { KitchenOrderTicket } from "../components/print/KitchenOrderTicket";
+import { BarReceipt } from "../components/print/BarReceipt";
+
 type CartItem = {
   product_id: string;
   name: string;
@@ -32,7 +40,121 @@ type CartItem = {
 
 type ActivePaymentMethod = "cash" | "momo" | "card" | "room_folio";
 
+type CompletedSaleReceipt = {
+  saleNumber: string;
+  destination: string;
+  createdAt: string;
+  cashierName: string;
+  customerName?: string;
+  allItems: CartItem[];
+  foodItems: CartItem[];
+  drinkItems: CartItem[];
+  subtotal: number;
+  taxAmount: number;
+  discountAmount: number;
+  totalAmount: number;
+  paymentMethod: string;
+  amountPaid: number;
+  change: number;
+};
+
 const DRAFT_STORAGE_PREFIX = "bar_pos_draft_";
+
+// Synthesizes a crisp, pleasant POS blip when adding an item to the cart
+function playAddToCartSound() {
+  try {
+    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContextClass) return;
+    const ctx = new AudioContextClass();
+    if (ctx.state === "suspended") {
+      void ctx.resume();
+    }
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.type = "sine";
+    // Crisp blip: 560Hz -> 920Hz in 90ms
+    osc.frequency.setValueAtTime(560, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(920, ctx.currentTime + 0.08);
+
+    gain.gain.setValueAtTime(0.35, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.12);
+
+    setTimeout(() => {
+      try {
+        void ctx.close();
+      } catch {}
+    }, 250);
+  } catch {}
+}
+
+// High-volume, 3-second attention-grabbing alert chime for incoming orders
+function playIncomingOrderAlert() {
+  try {
+    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContextClass) return;
+    const ctx = new AudioContextClass();
+    if (ctx.state === "suspended") {
+      void ctx.resume();
+    }
+
+    // Loud repeating service bell chime across 3.0 seconds
+    // 4 bursts at 0s, 0.75s, 1.5s, 2.25s
+    const bursts = [0, 0.75, 1.5, 2.25];
+    bursts.forEach((offset) => {
+      const startTime = ctx.currentTime + offset;
+
+      // Resonant harmonic bell pair: 880Hz (A5) + 1318.5Hz (E6)
+      [880, 1318.5].forEach((freq) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        osc.type = "triangle";
+        osc.frequency.setValueAtTime(freq, startTime);
+
+        // High volume
+        gain.gain.setValueAtTime(0.85, startTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.65);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(startTime);
+        osc.stop(startTime + 0.65);
+      });
+    });
+
+    setTimeout(() => {
+      try {
+        void ctx.close();
+      } catch {}
+    }, 3300);
+  } catch (err) {
+    console.warn("Audio alert error:", err);
+  }
+}
+
+function getCategoryIcon(cat?: string | null) {
+  const c = (cat || "").toLowerCase();
+  if (c.includes("beer")) return <Beer className="h-6 w-6 text-brand-600" />;
+  if (c.includes("wine") || c.includes("spirit") || c.includes("liquor") || c.includes("whisky") || c.includes("vodka")) {
+    return <Wine className="h-6 w-6 text-brand-600" />;
+  }
+  if (c.includes("drink") || c.includes("water") || c.includes("juice") || c.includes("soda") || c.includes("soft")) {
+    return <CupSoda className="h-6 w-6 text-brand-600" />;
+  }
+  if (c.includes("coffee") || c.includes("tea")) return <Coffee className="h-6 w-6 text-brand-600" />;
+  if (c.includes("food") || c.includes("kitchen") || c.includes("snack") || c.includes("chicken") || c.includes("meal")) {
+    return <Utensils className="h-6 w-6 text-brand-600" />;
+  }
+  return <Package className="h-6 w-6 text-slate-400" />;
+}
 
 export function BarPosPage() {
   const navigate = useNavigate();
@@ -85,8 +207,9 @@ export function BarPosPage() {
   const [showGuestOrders, setShowGuestOrders] = useState(false);
   const [reviewingGuestOrder, setReviewingGuestOrder] = useState<string | null>(null);
   const previousPendingQrCount = useRef(0);
+  const isInitialQrLoad = useRef(true);
 
-  // Restore unsaved cart from local storage on first load (power cut / wifi resilience)
+  // Restore unsaved cart from local storage on first load
   useEffect(() => {
     if (!businessId) return;
     try {
@@ -137,7 +260,7 @@ export function BarPosPage() {
       setShowOpenRegister(!register);
     } catch (err: any) {
       console.error("Failed to load bar POS data:", err);
-      showToast("error", "Failed to load bar inventory and data");
+      showToast("error", "Failed to load bar inventory and station data");
     } finally {
       setLoading(false);
     }
@@ -149,41 +272,87 @@ export function BarPosPage() {
 
   const loadPendingGuestOrders = useCallback(async () => {
     if (!businessId) return;
-    try { setPendingGuestOrders(await guestOrderService.listPending(businessId)); } catch { /* menu inbox may be unavailable until migration is applied */ }
-  }, [businessId]);
+    try {
+      const orders = await guestOrderService.listPending(businessId);
+      if (isInitialQrLoad.current) {
+        isInitialQrLoad.current = false;
+        previousPendingQrCount.current = orders.length;
+      } else if (orders.length > previousPendingQrCount.current) {
+        playIncomingOrderAlert();
+        showToast("info", "🔔 New QR order received from customer! Please check incoming orders.");
+        previousPendingQrCount.current = orders.length;
+      } else {
+        previousPendingQrCount.current = orders.length;
+      }
+      setPendingGuestOrders(orders);
+    } catch {}
+  }, [businessId, showToast]);
 
   useEffect(() => {
     void loadPendingGuestOrders();
-    const interval = window.setInterval(() => void loadPendingGuestOrders(), 12000);
-    return () => window.clearInterval(interval);
-  }, [loadPendingGuestOrders]);
+    const interval = window.setInterval(() => void loadPendingGuestOrders(), 5000);
 
-  useEffect(() => {
-    if (pendingGuestOrders.length > previousPendingQrCount.current) {
-      try {
-        const AudioContextClass = (window.AudioContext || (window as any).webkitAudioContext);
-        const audio = new AudioContextClass();
-        const oscillator = audio.createOscillator();
-        const gain = audio.createGain();
-        oscillator.frequency.value = 880;
-        gain.gain.setValueAtTime(0.08, audio.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + 0.35);
-        oscillator.connect(gain); gain.connect(audio.destination); oscillator.start(); oscillator.stop(audio.currentTime + 0.35);
-      } catch { /* Browser may require a cashier interaction before audio is allowed. */ }
-    }
-    previousPendingQrCount.current = pendingGuestOrders.length;
-  }, [pendingGuestOrders.length]);
+    const channel = supabase
+      .channel(`bar_pos_guest_orders_${businessId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "guest_orders",
+        },
+        () => {
+          void loadPendingGuestOrders();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      window.clearInterval(interval);
+      void supabase.removeChannel(channel);
+    };
+  }, [loadPendingGuestOrders, businessId]);
 
   const reviewGuestOrder = async (order: GuestOrder, accepted: boolean) => {
     if (!profile?.id) return;
     setReviewingGuestOrder(order.id);
     try {
       await guestOrderService.review(order.id, profile.id, accepted);
-      setPendingGuestOrders((orders) => orders.filter((item) => item.id !== order.id));
+      setPendingGuestOrders((orders) => {
+        const remaining = orders.filter((item) => item.id !== order.id);
+        previousPendingQrCount.current = remaining.length;
+        return remaining;
+      });
       showToast("success", accepted ? "Customer order accepted as a held tab." : "Customer order rejected.");
-      if (accepted) { await loadData(); setShowTabsModal(true); }
-    } catch (error: any) { showToast("error", error.message || "Could not review customer order"); }
-    finally { setReviewingGuestOrder(null); }
+      if (accepted) {
+        await loadData();
+        setShowTabsModal(true);
+      }
+    } catch (error: any) {
+      showToast("error", error.message || "Could not review customer order");
+    } finally {
+      setReviewingGuestOrder(null);
+    }
+  };
+
+  const getOrderTargetBadge = (order: GuestOrder) => {
+    if (order.table?.table_number) {
+      return { type: "table" as const, label: `Table ${order.table.table_number}` };
+    }
+    if (order.room?.room_number) {
+      return { type: "room" as const, label: `Room ${order.room.room_number}` };
+    }
+    if (order.table_id) {
+      const t = tables.find((x) => x.id === order.table_id);
+      if (t) return { type: "table" as const, label: `Table ${t.table_number}` };
+    }
+    if (order.room_id) {
+      const b = activeBookings.find((x) => x.room_id === order.room_id);
+      if (b && (b as any).rooms?.room_number) {
+        return { type: "room" as const, label: `Room ${(b as any).rooms.room_number}` };
+      }
+    }
+    return null;
   };
 
   // Categories extracted dynamically from products + standard bar categories
@@ -217,7 +386,42 @@ export function BarPosPage() {
   const discountAmount = Math.round((subtotal * discount) / 100);
   const total = subtotal + taxAmount - discountAmount;
 
+  // Deduplicated active room bookings: strictly 1 guest per occupied room (the latest active booking)
+  const validActiveRoomBookings = useMemo(() => {
+    const roomMap = new Map<string, RoomBookingRecord>();
+    for (const b of activeBookings) {
+      // Room must exist and be occupied or reserved
+      const roomStatus = (b as any).room?.status;
+      if (roomStatus === "available" || roomStatus === "cleaning" || roomStatus === "maintenance") {
+        continue;
+      }
+      if (b.status !== "checked_in" && b.status !== "reserved") {
+        continue;
+      }
+      const roomId = b.room_id || (b as any).room?.id;
+      if (!roomId) continue;
+      // Since listActiveBookings is ordered by check_in DESC, first one encountered is the latest
+      if (!roomMap.has(roomId)) {
+        roomMap.set(roomId, b);
+      }
+    }
+    return Array.from(roomMap.values());
+  }, [activeBookings]);
+
+  // Real-time available stock calculator for a product taking current cart into account
+  const getAvailableStock = useCallback(
+    (product: ProductRecord) => {
+      const cartItem = cart.find((i) => i.product_id === product.id);
+      const cartQty = cartItem ? cartItem.quantity : 0;
+      const baseStock = product.stock_quantity ?? 0;
+      return baseStock - cartQty;
+    },
+    [cart]
+  );
+
   const addToCart = (product: ProductRecord) => {
+    playAddToCartSound();
+    // Allows selling even if inventory is 0 or negative
     setCart((prev) => {
       const existing = prev.find((i) => i.product_id === product.id);
       if (existing) {
@@ -244,6 +448,9 @@ export function BarPosPage() {
   };
 
   const updateQty = (productId: string, delta: number) => {
+    if (delta > 0) {
+      playAddToCartSound();
+    }
     setCart((prev) =>
       prev
         .map((i) =>
@@ -276,7 +483,7 @@ export function BarPosPage() {
     if (cart.length === 0) return;
 
     if (!selectedTable && !selectedRoom && !selectedCustomer) {
-      showToast("error", "⚠️ Please select a Table, Room, or Customer before holding the order!");
+      showToast("error", "Please select a Table, Room, or Customer before holding the order.");
       return;
     }
 
@@ -290,7 +497,6 @@ export function BarPosPage() {
 
     const localTabId = resumedTabId || `local-tab-${Date.now()}`;
 
-    // Optimistic UI: instantly add/update the tab in local state (no reload, no spinner)
     const optimisticTab: ActiveTabRecord = {
       id: localTabId,
       business_id: businessId,
@@ -312,14 +518,13 @@ export function BarPosPage() {
     };
 
     if (resumedTabId) {
-      setOpenTabs((prev) => prev.map((t) => t.id === resumedTabId ? optimisticTab : t));
+      setOpenTabs((prev) => prev.map((t) => (t.id === resumedTabId ? optimisticTab : t)));
     } else {
       setOpenTabs((prev) => [optimisticTab, ...prev]);
     }
 
-    showToast("success", `Order held as "${tabName}" 📌`);
+    showToast("success", `Order placed on hold: "${tabName}"`);
 
-    // Capture current cart/context before clearing
     const snapCart = [...cart];
     const snapSubtotal = subtotal;
     const snapTax = taxAmount;
@@ -332,30 +537,30 @@ export function BarPosPage() {
 
     clearCart();
 
-    // Background sync - non-blocking, fire and forget
-    tableService.saveOrHoldTab({
-      id: snapResId || undefined,
-      business_id: businessId,
-      table_id: snapTable?.id || null,
-      booking_id: snapRoom?.id || null,
-      customer_id: snapCustomer?.id || null,
-      tab_name: tabName,
-      cart_items: snapCart,
-      subtotal: snapSubtotal,
-      tax: snapTax,
-      discount: snapDiscount,
-      total: snapTotal,
-      created_by: profile?.id,
-    }).then((savedTab) => {
-      setOpenTabs((prev) => prev.map((t) =>
-        t.id === localTabId ? { ...optimisticTab, id: savedTab.id } : t
-      ));
-      if (snapTable) {
-        tableService.updateTableStatus(snapTable.id, "occupied").catch(() => {});
-      }
-    }).catch(() => {
-      // Tab still lives in localStorage - safe
-    });
+    tableService
+      .saveOrHoldTab({
+        id: snapResId || undefined,
+        business_id: businessId,
+        table_id: snapTable?.id || null,
+        booking_id: snapRoom?.id || null,
+        customer_id: snapCustomer?.id || null,
+        tab_name: tabName,
+        cart_items: snapCart,
+        subtotal: snapSubtotal,
+        tax: snapTax,
+        discount: snapDiscount,
+        total: snapTotal,
+        created_by: profile?.id,
+      })
+      .then((savedTab) => {
+        setOpenTabs((prev) =>
+          prev.map((t) => (t.id === localTabId ? { ...optimisticTab, id: savedTab.id } : t))
+        );
+        if (snapTable) {
+          tableService.updateTableStatus(snapTable.id, "occupied").catch(() => {});
+        }
+      })
+      .catch(() => {});
   };
 
   // Resume a held tab
@@ -370,24 +575,37 @@ export function BarPosPage() {
     showToast("success", `Resumed order: ${tab.tab_name}`);
   };
 
-  // Pay Now - Completes and records sale
+  // Pay Now
   const handlePayNow = async () => {
     if (cart.length === 0) return;
     if (paymentMethod !== "room_folio" && (!amountPaid || parseFloat(amountPaid) < total)) {
-      showToast("error", "Amount paid must be ≥ total");
+      showToast("error", "Amount paid must be greater than or equal to total amount.");
       return;
     }
-    if (paymentMethod === "room_folio" && !selectedRoom) {
-      showToast("error", "Please select an active guest room to charge to folio");
-      return;
+
+    // STRICT GUARD: Cashier cannot sell/charge to an empty or non-occupied room!
+    if (paymentMethod === "room_folio") {
+      if (!selectedRoom) {
+        showToast("error", "Cannot charge to room: Please select an active guest room folio.");
+        return;
+      }
+      const roomStatus = (selectedRoom as any).room?.status;
+      if (roomStatus === "available" || roomStatus === "cleaning" || roomStatus === "maintenance") {
+        showToast(
+          "error",
+          `Charging forbidden: Room ${(selectedRoom as any).room?.room_number || ""} is currently ${roomStatus}. Cashiers cannot sell to an empty room!`
+        );
+        return;
+      }
+      if (selectedRoom.status !== "checked_in" && selectedRoom.status !== "reserved") {
+        showToast("error", "This room booking is no longer active. Charge aborted.");
+        return;
+      }
     }
     setProcessing(true);
     try {
-      // A room-folio order consumes stock now, but it is not cash received by
-      // the bar cashier. Record it as credit until reception settles the folio.
       const isRoomFolio = paymentMethod === "room_folio";
 
-      // Build clear context notes for the Sales table
       const saleNotes = selectedTable
         ? `Table ${selectedTable.table_number}`
         : selectedRoom
@@ -408,7 +626,7 @@ export function BarPosPage() {
           line_total: i.line_total,
         })),
         payments: isRoomFolio ? [] : [{ payment_method: paymentMethod as PaymentMethod, amount: total }],
-        payment_method: isRoomFolio ? "credit" : paymentMethod as PaymentMethod,
+        payment_method: isRoomFolio ? "credit" : (paymentMethod as PaymentMethod),
         payment_status: isRoomFolio ? "unpaid" : "paid",
         subtotal,
         tax_amount: taxAmount,
@@ -418,15 +636,6 @@ export function BarPosPage() {
         notes: saleNotes,
       });
 
-      console.log("✅ SALE CREATED successfully!");
-      console.log(`   💼 Sale ID: ${(sale as any)?.id || "unknown"}`);
-      console.log(`   💰 Amount: ${total} RWF`);
-      console.log(`   💳 Method: ${paymentMethod}`);
-      console.log(`   📝 Notes: ${saleNotes}`);
-      console.log(`   🏢 Business: ${businessId}`);
-
-      // Post every room-folio item to the guest bill. The room charge keeps the
-      // accepting cashier (created_by), while the cash is collected later by reception.
       if (isRoomFolio && selectedRoom) {
         for (const item of cart) {
           const svcType = ["Food", "Snacks"].includes(item.category_name || "") ? "food" : "bar";
@@ -443,20 +652,18 @@ export function BarPosPage() {
         }
       }
 
-      // Close the held tab if this was a resumed tab
       if (resumedTabId) {
-        // Immediately remove it from UI state — no reload needed
         setOpenTabs((prev) => prev.filter((t) => t.id !== resumedTabId));
         tableService.closeTab(resumedTabId, selectedTable?.id).catch(() => {});
       } else if (selectedTable) {
         tableService.updateTableStatus(selectedTable.id, "available").catch(() => {});
       }
 
-      showToast("success", `Sale recorded! [${saleNotes}] Total: ${formatCurrency(total)} 🎉`);
+      showToast("success", `Sale completed. [${saleNotes}] Total: ${formatCurrency(total)}`);
       setShowPayModal(false);
       clearCart();
     } catch (err: any) {
-      showToast("error", err.message || "Sale failed");
+      showToast("error", err.message || "Failed to process sale");
     } finally {
       setProcessing(false);
     }
@@ -500,43 +707,68 @@ export function BarPosPage() {
     setCalcResetOnNext(false);
   };
 
-  // Open Close Day Modal
+  // Open Close Day Modal — Strictly blocked if any held tabs are unsettled
   const handleOpenCloseDay = async () => {
-    if (!activeRegister) { setShowOpenRegister(true); return; }
+    if (!activeRegister) {
+      setShowOpenRegister(true);
+      return;
+    }
+    if (openTabs && openTabs.length > 0) {
+      showToast(
+        "error",
+        `Shift closure blocked: You have ${openTabs.length} open held tab(s) not yet settled. Settle or cancel all held tabs before closing the day.`
+      );
+      setShowTabsModal(true);
+      return;
+    }
     try {
       const summary = await dayCloseService.getDailySummary(businessId);
       setDailySummary(summary);
       setShowCloseDayModal(true);
     } catch (err) {
-      showToast("error", "Failed to load shift summary");
+      showToast("error", "Failed to load register shift summary");
     }
   };
 
   const handleOpenRegister = async () => {
     if (!profile?.id || !businessId) return;
+    const cashVal = parseFloat(openingCash);
+    if (openingCash.trim() === "" || isNaN(cashVal) || cashVal < 0) {
+      showToast("error", "Please provide a valid starting cash float (0 or greater).");
+      return;
+    }
     setOpeningRegister(true);
     try {
       const register = await dayCloseService.openRegister({
         business_id: businessId,
         user_id: profile.id,
         location_id: profile.location_id,
-        opening_cash: Number(openingCash || 0),
+        opening_cash: cashVal,
       });
       setActiveRegister(register);
       setOpeningCash("");
       setShowOpenRegister(false);
-      showToast("success", "Bar register opened. QR customers can now send orders.");
+      showToast("success", "Cash register opened for this shift.");
     } catch (error: any) {
-      showToast("error", error.message || "Could not open the bar register");
-    } finally { setOpeningRegister(false); }
+      showToast("error", error.message || "Could not open register");
+    } finally {
+      setOpeningRegister(false);
+    }
   };
 
   // Finalize Close Day
   const handleFinalizeCloseDay = async () => {
     if (!dailySummary) return;
+    if (openTabs && openTabs.length > 0) {
+      showToast(
+        "error",
+        `Cannot close shift: You have ${openTabs.length} open held tab(s). Settle all active tabs first.`
+      );
+      return;
+    }
     const ok = await confirm(
-      "Confirm Day Closure",
-      "Are you sure you want to finalize today's Bar & Kitchen sales and close the register? (Room payments are tracked separately)"
+      "Confirm Shift Closure",
+      "Are you sure you want to finalize this register shift and reconcile today's sales?"
     );
     if (!ok) return;
 
@@ -553,7 +785,7 @@ export function BarPosPage() {
         cash_received: dailySummary.cashReceived,
         momo_received: dailySummary.momoReceived,
         card_received: dailySummary.cardReceived,
-        room_revenue: 0, // NOT INCLUDED - rooms are separate system
+        room_revenue: 0,
         total_expenses: dailySummary.totalExpenses,
         net_profit: dailySummary.netProfit,
         notes: closureNotes,
@@ -561,715 +793,1047 @@ export function BarPosPage() {
 
       setClosedSummaryRecord(saved);
       setActiveRegister(null);
-      showToast("success", "Day closed successfully! Bar & Kitchen reconciliation complete 📊");
+      showToast("success", "Register shift closed and reconciled. Returning to dashboard...");
+      setTimeout(() => {
+        navigate("/dashboard");
+      }, 1500);
     } catch (err: any) {
-      showToast("error", err.message || "Failed to close day");
+      showToast("error", err.message || "Failed to close register shift");
     } finally {
       setClosingDayLoading(false);
     }
   };
 
+  const setQuickTender = (val: number) => {
+    setAmountPaid(val.toString());
+  };
+
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-slate-950">
-        <div className="text-center text-white">
-          <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-4 border-amber-500 border-t-transparent" />
-          <p className="font-bold text-lg">Loading Bar & Guest POS...</p>
-          <p className="text-xs text-slate-400 mt-1">Connecting to products, stock and rooms</p>
+      <div className="flex h-screen items-center justify-center bg-slate-50">
+        <div className="text-center text-slate-800">
+          <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-4 border-brand-600 border-t-transparent" />
+          <p className="font-bold text-base text-slate-800">Loading Station & Catalog...</p>
+          <p className="text-xs text-slate-500 mt-1">Connecting to products, tables and room folios</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-950 text-white select-none">
-      {/* ========== LEFT: PRODUCTS (50%) ========== */}
-      <div className="flex w-1/2 flex-col border-r border-white/10">
-        {/* Top bar */}
-        <div className="flex items-center justify-between border-b border-white/10 px-4 py-3 bg-slate-900/60">
-          <div className="flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-gradient-to-tr from-amber-600 to-amber-400 text-slate-950 font-black text-base shadow-lg shadow-amber-500/20">
-              🍻
-            </div>
-            <div>
-              <span className="font-black text-sm block leading-tight">{settings?.shop_name || "Bar POS"}</span>
-              <span className="text-[10px] text-amber-400 font-bold uppercase tracking-wider">Hospitality Mode</span>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => { setShowGuestOrders(true); void loadPendingGuestOrders(); }}
-              className="relative flex h-8 items-center justify-center rounded-xl bg-sky-500/20 px-2 text-sky-300 hover:bg-sky-500 hover:text-slate-950 transition"
-              title="Customer QR orders"
-            >
-              <Bell size={16} />
-              {pendingGuestOrders.length > 0 && <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-black text-white">{pendingGuestOrders.length}</span>}
-            </button>
-            <button
-              onClick={handleOpenCloseDay}
-              disabled={!activeRegister}
-              className="flex items-center gap-1.5 rounded-xl bg-amber-500/20 px-3 py-1.5 text-xs font-bold text-amber-300 border border-amber-500/30 hover:bg-amber-500 hover:text-slate-950 transition"
-              title="Closing Day / Shift Settlement"
-            >
-              <Receipt size={14} />
-              <span>Close Day</span>
-            </button>
-            <button
-              onClick={() => setShowCalc(true)}
-              className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/10 text-slate-300 hover:bg-white/20 transition"
-              title="Calculator"
-            >
-              <Calculator size={16} />
-            </button>
-            <button
-              onClick={() => loadData()}
-              className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/10 text-slate-300 hover:bg-white/20 transition"
-              title="Refresh Products"
-            >
-              <RefreshCw size={15} />
-            </button>
+    <div className="flex h-screen overflow-hidden bg-slate-100 text-slate-900 select-none font-sans">
+      {/* ========== LEFT: PRODUCTS (60%) ========== */}
+      <div className="flex w-[55%] flex-col border-r border-slate-200 bg-slate-100">
+        {/* Top bar — System Brand Blue */}
+        <header className="flex items-center justify-between px-5 py-3 bg-brand-600 text-white shadow-sm">
+          <div className="flex items-center gap-3">
             <button
               onClick={() => navigate("/dashboard")}
-              className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/10 text-slate-300 hover:bg-white/20 transition"
-              title="Dashboard"
+              className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-700 hover:bg-brand-800 text-white transition border border-brand-500/40"
+              title="Return to Dashboard"
             >
-              <LayoutDashboard size={16} />
+              <ArrowLeft size={18} />
             </button>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-black text-sm text-white tracking-tight">
+                  {settings?.shop_name || "Bar & Beverage Station"}
+                </span>
+                {activeRegister ? (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-white/15 text-white border border-white/20">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-300 animate-pulse"></span>
+                    Register Open
+                  </span>
+                ) : (
+                  <button
+                    onClick={() => setShowOpenRegister(true)}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-400 text-slate-950 hover:bg-amber-300 transition"
+                  >
+                    <Lock size={11} />
+                    Open Register
+                  </button>
+                )}
+              </div>
+              <p className="text-[11px] text-brand-100 font-medium">
+                Cashier: {profile?.full_name || profile?.email || "Staff"}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                setShowGuestOrders(true);
+                void loadPendingGuestOrders();
+              }}
+              className="relative flex h-9 items-center gap-1.5 rounded-lg bg-brand-700 hover:bg-brand-800 px-3 text-xs font-bold text-white transition border border-brand-500/30"
+              title="Customer QR orders"
+            >
+              <Bell size={15} />
+              <span>Orders</span>
+              {pendingGuestOrders.length > 0 && (
+                <span className="ml-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-black text-white">
+                  {pendingGuestOrders.length}
+                </span>
+              )}
+            </button>
+
+            <button
+              onClick={handleOpenCloseDay}
+              className="flex h-9 items-center gap-1.5 rounded-lg bg-brand-700 hover:bg-brand-800 px-3 text-xs font-bold text-white transition border border-brand-500/30"
+              title="Close shift and balance register"
+            >
+              <Receipt size={15} />
+              <span>Shift Closure</span>
+            </button>
+
+            <button
+              onClick={() => setShowCalc(true)}
+              className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-700 hover:bg-brand-800 text-white transition border border-brand-500/30"
+              title="Calculator"
+            >
+              <Calculator size={15} />
+            </button>
+
+            <button
+              onClick={() => loadData()}
+              className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-700 hover:bg-brand-800 text-white transition border border-brand-500/30"
+              title="Refresh catalog"
+            >
+              <RefreshCw size={14} />
+            </button>
+
             <button
               onClick={() => logout()}
-              className="flex h-8 w-8 items-center justify-center rounded-xl bg-rose-500/20 text-rose-400 hover:bg-rose-500 hover:text-white transition"
-              title="Log Out"
+              className="flex h-9 w-9 items-center justify-center rounded-lg bg-rose-600 hover:bg-rose-700 text-white transition border border-rose-500"
+              title="Sign Out"
             >
-              <LogOut size={16} />
+              <LogOut size={15} />
             </button>
           </div>
-        </div>
+        </header>
 
-        {/* Search */}
-        <div className="px-4 py-3 border-b border-white/10 bg-slate-900/30">
+        {/* Search Bar */}
+        <div className="px-5 py-3 border-b border-slate-200 bg-white">
           <div className="relative">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
             <input
               type="text"
-              placeholder="Search drinks, food, chicken, barcode..."
-              className="w-full rounded-2xl bg-white/10 pl-10 pr-4 py-2.5 text-sm text-white placeholder-slate-400 outline-none focus:ring-2 focus:ring-amber-500/50 transition font-medium"
+              placeholder="Search drinks, dishes, brands, barcode..."
+              className="w-full rounded-lg border border-slate-200 bg-slate-50 pl-10 pr-4 py-2 text-sm text-slate-900 placeholder-slate-400 outline-none focus:border-brand-500 focus:bg-white focus:ring-2 focus:ring-brand-100 transition font-medium"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
         </div>
 
-        {/* Category filters */}
-        <div className="flex gap-2 overflow-x-auto px-4 py-3 border-b border-white/10 bg-slate-900/20 scrollbar-none">
-          {categories.map((cat) => (
-            <button
-              key={cat}
-              onClick={() => setSelectedCategory(cat)}
-              className={`whitespace-nowrap rounded-xl px-3.5 py-1.5 text-xs font-black uppercase tracking-wider transition ${
-                selectedCategory.toLowerCase() === cat.toLowerCase()
-                  ? "bg-amber-500 text-slate-950 shadow-md shadow-amber-500/30 scale-105"
-                  : "bg-white/10 text-slate-300 hover:bg-white/20"
-              }`}
-            >
-              {cat}
-            </button>
-          ))}
+        {/* Category Filters */}
+        <div className="flex gap-1.5 overflow-x-auto px-5 py-2.5 border-b border-slate-200 bg-white/80 scrollbar-none">
+          {categories.map((cat) => {
+            const isActive = selectedCategory.toLowerCase() === cat.toLowerCase();
+            return (
+              <button
+                key={cat}
+                onClick={() => setSelectedCategory(cat)}
+                className={`whitespace-nowrap rounded-md px-3.5 py-1.5 text-xs font-bold transition ${
+                  isActive
+                    ? "bg-brand-600 text-white shadow-sm"
+                    : "bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200"
+                }`}
+              >
+                {cat}
+              </button>
+            );
+          })}
         </div>
 
-        {/* Product grid */}
-        <div className="flex-1 overflow-y-auto p-4">
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
+        {/* Product Grid — Comfortable, Wider Cards with Real-Time Stock (Allows Negative Selling) */}
+        <div className="flex-1 overflow-y-auto p-4 bg-slate-100/70">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4">
             {filteredProducts.map((product) => {
-              const stock = product.stock_quantity ?? 0;
-              const isLow = stock > 0 && stock <= (product.reorder_level || 5);
-              const isOut = stock <= 0;
+              const availableStock = getAvailableStock(product);
+              const isLow = availableStock > 0 && availableStock <= (product.reorder_level || 5);
+              const cartItem = cart.find((i) => i.product_id === product.id);
 
               return (
                 <button
                   key={product.id}
                   onClick={() => addToCart(product)}
-                  className="group flex flex-col overflow-hidden rounded-2xl bg-white/5 border border-white/10 text-left hover:bg-white/10 hover:border-amber-500/50 hover:shadow-lg transition-all active:scale-95"
+                  className={`group relative flex flex-col text-left rounded-xl border bg-white transition-all active:scale-[0.97] overflow-hidden shadow-xs hover:shadow-md ${
+                    cartItem
+                      ? "border-brand-500 ring-1 ring-brand-400"
+                      : "border-slate-200 hover:border-brand-400"
+                  }`}
                 >
+                  {/* Badge: Cart Quantity */}
+                  {cartItem && cartItem.quantity > 0 && (
+                    <span className="absolute top-1.5 right-1.5 z-10 flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-600 px-1 text-[10px] font-black text-white shadow-xs">
+                      {cartItem.quantity}
+                    </span>
+                  )}
+
                   {product.image_url ? (
-                    <img src={product.image_url} alt={product.name} className="h-24 w-full object-cover" />
+                    <div className="h-24 w-full overflow-hidden bg-slate-50 border-b border-slate-100 shrink-0">
+                      <img
+                        src={product.image_url}
+                        alt={product.name}
+                        className="h-full w-full object-cover group-hover:scale-105 transition duration-150"
+                      />
+                    </div>
                   ) : (
-                    <div className="flex h-24 items-center justify-center bg-slate-900 text-3xl">
-                      {(product as any).category === "Beer" ? "🍺" :
-                       (product as any).category === "Wines" ? "🍷" :
-                       (product as any).category === "Spirits" ? "🥃" :
-                       (product as any).category === "Food" ? "🍗" :
-                       (product as any).category === "Snacks" ? "🍟" :
-                       (product as any).category === "Soft Drinks" ? "🥤" : "🍾"}
+                    <div className="flex h-20 w-full items-center justify-center bg-slate-50 border-b border-slate-100 shrink-0">
+                      {getCategoryIcon((product as any).category)}
                     </div>
                   )}
-                  <div className="p-3 flex-1 flex flex-col justify-between">
+
+                  <div className="p-2.5 flex-1 flex flex-col justify-between">
                     <div>
-                      <p className="text-xs font-bold text-white line-clamp-2">{product.name}</p>
-                      <p className="mt-1 text-xs text-amber-400 font-black">{formatCurrency(product.selling_price)}</p>
+                      <p className="text-xs font-bold text-slate-900 line-clamp-2 leading-tight">
+                        {product.name}
+                      </p>
+                      <p className="mt-1 text-xs font-black text-brand-600">
+                        {formatCurrency(product.selling_price)}
+                      </p>
                     </div>
-                    <div className="mt-2 flex items-center justify-between">
-                      <span className={`text-[10px] font-black px-2 py-0.5 rounded-lg ${
-                        isOut ? "bg-rose-500/20 text-rose-400" :
-                        isLow ? "bg-amber-500/20 text-amber-400" :
-                        "bg-emerald-500/20 text-emerald-400"
-                      }`}>
-                        Stock: {stock}
+
+                    <div className="mt-2 flex items-center justify-between pt-1 border-t border-slate-100 text-[10px]">
+                      <span
+                        className={`font-black px-1.5 py-0.5 rounded-md ${
+                          availableStock < 0
+                            ? "bg-rose-100 text-rose-800 font-black"
+                            : availableStock === 0
+                            ? "bg-amber-100 text-amber-800 font-black"
+                            : isLow
+                            ? "bg-amber-50 text-amber-700 font-bold"
+                            : "bg-emerald-50 text-emerald-700 font-bold"
+                        }`}
+                      >
+                        Stock: {availableStock}
                       </span>
+                      {cartItem && (
+                        <span className="text-[9px] font-bold text-brand-600">In Cart</span>
+                      )}
                     </div>
                   </div>
                 </button>
               );
             })}
+
             {filteredProducts.length === 0 && (
-              <div className="col-span-3 xl:col-span-4 py-16 text-center text-slate-500">
-                <ShoppingCart size={40} className="mx-auto mb-3 text-slate-600" />
-                <p className="text-base font-bold text-slate-400">No products found</p>
-                <p className="text-xs text-slate-600 mt-1">Check search query or add products from the Products menu</p>
+              <div className="col-span-full py-16 text-center text-slate-400">
+                <ShoppingCart size={36} className="mx-auto mb-2 text-slate-300" />
+                <p className="text-sm font-bold text-slate-600">No products found</p>
+                <p className="text-xs text-slate-400 mt-0.5">Try searching with a different term</p>
               </div>
             )}
           </div>
         </div>
       </div>
 
-      {/* ========== RIGHT: ORDER / CART (50%) ========== */}
-      <div className="flex w-1/2 flex-col bg-slate-900/40">
-        {/* Context selectors (Table / Customer / Room) */}
-        <div className="grid grid-cols-3 gap-2 border-b border-white/10 p-3 bg-slate-900/80">
-          {/* Table Selector */}
-          <div>
-            <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">🪑 Table</label>
-            <select
-              value={selectedTable?.id || ""}
-              onChange={(e) => setSelectedTable(tables.find((t) => t.id === e.target.value) || null)}
-              className="w-full rounded-xl bg-slate-800 border border-white/20 px-3 py-2 text-xs font-bold text-white outline-none focus:ring-1 focus:ring-amber-500"
-              style={{ backgroundColor: "#1e293b", color: "#ffffff" }}
-            >
-              <option value="" style={{ backgroundColor: "#0f172a", color: "#ffffff" }}>Select Table</option>
-              {tables.map((t) => (
-                <option
-                  key={t.id}
-                  value={t.id}
-                  style={{ backgroundColor: "#0f172a", color: t.status === "occupied" ? "#f87171" : "#4ade80" }}
-                >
-                  Table {t.table_number} ({t.status})
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Customer Selector */}
-          <div>
-            <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">👤 Customer</label>
-            <select
-              value={selectedCustomer?.id || ""}
-              onChange={(e) => setSelectedCustomer(customers.find((c) => c.id === e.target.value) || null)}
-              className="w-full rounded-xl bg-slate-800 border border-white/20 px-3 py-2 text-xs font-bold text-white outline-none focus:ring-1 focus:ring-amber-500"
-              style={{ backgroundColor: "#1e293b", color: "#ffffff" }}
-            >
-              <option value="" style={{ backgroundColor: "#0f172a", color: "#ffffff" }}>Select Customer</option>
-              {customers.map((c) => (
-                <option key={c.id} value={c.id} style={{ backgroundColor: "#0f172a", color: "#ffffff" }}>
-                  {c.full_name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Room Selector */}
-          <div>
-            <label className="block text-[9px] font-black uppercase tracking-widest text-amber-400 mb-1">🛏️ Charge to Room</label>
-            <select
-              value={selectedRoom?.id || ""}
-              onChange={(e) => {
-                const b = activeBookings.find((bk) => bk.id === e.target.value) || null;
-                setSelectedRoom(b);
-                if (b) setPaymentMethod("room_folio");
-              }}
-              className="w-full rounded-xl bg-amber-500/20 border border-amber-500/40 px-3 py-2 text-xs font-black text-amber-300 outline-none focus:ring-1 focus:ring-amber-400"
-              style={{ backgroundColor: "#1e293b", color: "#fcd34d" }}
-            >
-              <option value="" style={{ backgroundColor: "#0f172a", color: "#ffffff" }}>No Room (Direct)</option>
-              {activeBookings.map((b) => (
-                <option key={b.id} value={b.id} style={{ backgroundColor: "#0f172a", color: "#fcd34d" }}>
-                  Room {(b as any).room?.room_number} – {b.guest_name}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        {/* Selected Room or Resumed Tab Banner */}
-        <div className="space-y-1 px-3 pt-2">
-          {selectedRoom && (
-            <div className="flex items-center justify-between rounded-xl bg-amber-500/20 px-3 py-2 border border-amber-500/40">
-              <div className="flex items-center gap-2">
-                <BedDouble size={16} className="text-amber-400 shrink-0" />
-                <p className="text-xs font-bold text-amber-300">
-                  Folio: Room {(selectedRoom as any).room?.room_number} ({selectedRoom.guest_name})
-                </p>
-              </div>
-              <button onClick={() => setSelectedRoom(null)} className="text-amber-400 hover:text-white">
-                <X size={14} />
-              </button>
-            </div>
-          )}
-          {resumedTabId && (
-            <div className="flex items-center justify-between rounded-xl bg-sky-500/20 px-3 py-1.5 border border-sky-500/40">
-              <span className="text-[11px] font-bold text-sky-300">Resumed Held Tab</span>
-              <button onClick={() => setResumedTabId(null)} className="text-sky-300 hover:text-white text-xs font-bold">
-                Detach
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Cart items */}
-        <div className="flex-1 overflow-y-auto p-3 space-y-2">
-          {cart.length === 0 ? (
-            <div className="flex h-full flex-col items-center justify-center text-slate-500">
-              <ShoppingCart size={48} className="mb-3 text-slate-700" />
-              <p className="text-sm font-bold text-slate-400">Order is empty</p>
-              <p className="text-xs text-slate-600 mt-1">Tap drinks, food or chicken on the left to add</p>
-            </div>
-          ) : (
-            cart.map((item) => (
-              <div key={item.product_id} className="flex items-center gap-3 rounded-2xl bg-white/5 border border-white/10 p-3 hover:bg-white/10 transition">
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-black text-white truncate">{item.name}</p>
-                  <p className="text-[10px] text-amber-400 font-bold">{formatCurrency(item.unit_price)} each</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => updateQty(item.product_id, -1)}
-                    className="flex h-7 w-7 items-center justify-center rounded-xl bg-white/10 hover:bg-rose-500/30 hover:text-rose-300 transition"
-                  >
-                    <Minus size={13} />
-                  </button>
-                  <span className="text-xs font-black w-6 text-center">{item.quantity}</span>
-                  <button
-                    onClick={() => updateQty(item.product_id, 1)}
-                    className="flex h-7 w-7 items-center justify-center rounded-xl bg-white/10 hover:bg-emerald-500/30 hover:text-emerald-300 transition"
-                  >
-                    <Plus size={13} />
-                  </button>
-                  <span className="text-xs font-black text-white w-20 text-right">{formatCurrency(item.line_total)}</span>
-                  <button
-                    onClick={() => removeFromCart(item.product_id)}
-                    className="flex h-7 w-7 items-center justify-center rounded-xl text-slate-500 hover:bg-rose-500/20 hover:text-rose-400 transition"
-                  >
-                    <Trash2 size={13} />
-                  </button>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-
-        {/* Totals Section */}
-        <div className="border-t border-white/10 bg-slate-900/70 px-4 py-3 space-y-1.5">
-          <div className="flex items-center justify-between text-xs text-slate-400">
-            <span>Subtotal</span>
-            <span>{formatCurrency(subtotal)}</span>
-          </div>
-          {taxAmount > 0 && (
-            <div className="flex items-center justify-between text-xs text-slate-400">
-              <span>Tax ({taxRate}%)</span>
-              <span>{formatCurrency(taxAmount)}</span>
-            </div>
-          )}
-          <div className="flex items-center justify-between text-xs text-slate-400">
-            <div className="flex items-center gap-2">
-              <Percent size={12} />
-              <input
-                type="number"
-                min={0}
-                max={100}
-                value={discount || ""}
-                onChange={(e) => setDiscount(Math.min(100, Math.max(0, Number(e.target.value))))}
-                className="w-12 bg-white/10 rounded px-1.5 py-0.5 text-white outline-none text-xs font-bold"
-                placeholder="0"
-              />
-              <span>% Discount</span>
-            </div>
-            <span className="text-rose-400">-{formatCurrency(discountAmount)}</span>
-          </div>
-          <div className="flex items-center justify-between border-t border-white/10 pt-2 text-lg font-black text-white">
-            <span>TOTAL</span>
-            <span className="text-amber-400 text-xl">{formatCurrency(total)}</span>
-          </div>
-        </div>
-
-        {/* Action buttons */}
-        <div className="grid grid-cols-2 gap-2 p-3 border-t border-white/10 bg-slate-950">
-          <button
-            onClick={() => setShowTabsModal(true)}
-            className="flex items-center justify-center gap-2 rounded-2xl bg-white/10 py-3 text-xs font-bold text-slate-300 hover:bg-white/20 transition"
-          >
-            <Clock3 size={15} />
-            Held Tabs ({openTabs.length})
-          </button>
-          <button
-            onClick={holdOrder}
-            disabled={cart.length === 0}
-            className="flex items-center justify-center gap-2 rounded-2xl bg-white/10 py-3 text-xs font-bold text-slate-300 hover:bg-white/20 transition disabled:opacity-40"
-          >
-            <History size={15} />
-            Hold Tab
-          </button>
-          <button
-            onClick={clearCart}
-            disabled={cart.length === 0}
-            className="flex items-center justify-center gap-2 rounded-2xl bg-rose-500/20 py-3.5 text-xs font-bold text-rose-400 hover:bg-rose-500/30 transition disabled:opacity-40"
-          >
-            <Trash2 size={15} />
-            Clear
-          </button>
-          <button
-            onClick={() => {
-              setAmountPaid(total.toString());
-              setShowPayModal(true);
-            }}
-            disabled={cart.length === 0}
-            className="flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-400 py-3.5 text-xs font-black text-slate-950 hover:opacity-95 shadow-lg shadow-amber-500/20 transition disabled:opacity-40 active:scale-95"
-          >
-            <Receipt size={16} />
-            Pay {formatCurrency(total)}
-          </button>
-        </div>
-      </div>
-
-      {/* ========== PAYMENT MODAL ========== */}
-      {showPayModal && createPortal(
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className="w-full max-w-md rounded-3xl bg-slate-900 border border-white/10 p-6 shadow-2xl animate-in zoom-in-95">
-            <div className="flex items-center justify-between mb-5">
-              <h2 className="text-lg font-black text-white">Settle Bill</h2>
-              <button onClick={() => setShowPayModal(false)} className="rounded-full bg-white/10 p-1.5 text-slate-400 hover:text-white">
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="mb-4 rounded-2xl bg-white/5 border border-white/10 p-4">
-              <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Total Due (Bar & Food)</p>
-              <p className="text-3xl font-black text-amber-400">{formatCurrency(total)}</p>
-              {selectedRoom && (
-                <p className="mt-1 text-xs text-amber-300 font-bold">
-                  🛏️ Charged to Room {(selectedRoom as any).room?.room_number} – {selectedRoom.guest_name}
-                </p>
-              )}
-            </div>
-
-            <div className="mb-4">
-              <p className="text-xs font-black uppercase tracking-widest text-slate-400 mb-2">Select Method</p>
-              <div className="grid grid-cols-2 gap-2">
-                {([
-                  { method: "cash" as const, label: "Cash", icon: Wallet },
-                  { method: "momo" as const, label: "Mobile Money", icon: Smartphone },
-                  { method: "card" as const, label: "Card", icon: CreditCard },
-                  { method: "room_folio" as const, label: "Room Folio", icon: BedDouble },
-                ] as const).map(({ method, label, icon: Icon }) => (
-                  <button
-                    key={method}
-                    onClick={() => setPaymentMethod(method)}
-                    className={`flex items-center gap-2.5 rounded-2xl p-3 text-xs font-bold border transition ${
-                      paymentMethod === method
-                        ? "border-amber-500 bg-amber-500/20 text-amber-300 shadow-md"
-                        : "border-white/10 bg-white/5 text-slate-400 hover:border-white/20 hover:text-white"
-                    }`}
-                  >
-                    <Icon size={16} />
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {paymentMethod !== "room_folio" && (
-              <div className="mb-5">
-                <p className="text-xs font-black uppercase tracking-widest text-slate-400 mb-2">Amount Received</p>
-                <input
-                  type="number"
-                  className="w-full rounded-2xl bg-white/10 border border-white/20 px-4 py-3 text-2xl font-black text-white outline-none focus:border-amber-500 transition"
-                  placeholder="0"
-                  value={amountPaid}
-                  onChange={(e) => setAmountPaid(e.target.value)}
-                  autoFocus
-                />
-                {change > 0 && (
-                  <div className="mt-2 flex items-center justify-between rounded-xl bg-emerald-500/20 px-3 py-2 border border-emerald-500/30">
-                    <span className="text-xs font-bold text-emerald-300">Change to return:</span>
-                    <span className="text-sm font-black text-emerald-400">{formatCurrency(change)}</span>
-                  </div>
-                )}
-              </div>
-            )}
-
-            <button
-              onClick={handlePayNow}
-              disabled={processing}
-              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-amber-500 py-4 font-black text-slate-950 hover:bg-amber-400 transition disabled:opacity-50 shadow-xl shadow-amber-500/20"
-            >
-              {processing ? (
-                <div className="h-5 w-5 animate-spin rounded-full border-2 border-slate-950 border-t-transparent" />
-              ) : (
-                <>
-                  <CheckCircle2 size={18} />
-                  {paymentMethod === "room_folio" ? "Charge to Room Folio" : "Complete & Print"}
-                </>
-              )}
-            </button>
-          </div>
-        </div>,
-        document.body
-      )}
-
-      {/* ========== WORKING CALCULATOR MODAL ========== */}
-      {showCalc && createPortal(
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className="w-full max-w-xs rounded-3xl bg-slate-900 border border-white/15 p-6 shadow-2xl">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <Calculator size={18} className="text-amber-400" />
-                <h3 className="font-black text-sm text-white">POS Calculator</h3>
-              </div>
-              <button onClick={() => setShowCalc(false)} className="rounded-full bg-white/10 p-1.5 text-slate-400 hover:text-white">
-                <X size={16} />
-              </button>
-            </div>
-
-            {/* Screen */}
-            <div className="mb-4 rounded-2xl bg-slate-950 border border-white/10 p-4 text-right">
-              <p className="text-xs text-slate-500 font-mono h-4">{calcEquation || " "}</p>
-              <p className="text-2xl font-black text-amber-400 font-mono truncate">{calcDisplay}</p>
-            </div>
-
-            {/* Keys */}
-            <div className="grid grid-cols-4 gap-2">
-              <button onClick={handleCalcClear} className="col-span-2 rounded-xl bg-rose-500/20 py-3 font-black text-rose-400 text-sm hover:bg-rose-500/30">C</button>
-              <button onClick={() => setCalcDisplay(calcDisplay.length > 1 ? calcDisplay.slice(0, -1) : "0")} className="rounded-xl bg-white/10 py-3 font-bold text-slate-300 text-sm hover:bg-white/20">⌫</button>
-              <button onClick={() => handleCalcOp("/")} className="rounded-xl bg-amber-500/20 py-3 font-black text-amber-400 text-sm hover:bg-amber-500/30">÷</button>
-
-              {["7", "8", "9"].map((n) => (
-                <button key={n} onClick={() => handleCalcNumber(n)} className="rounded-xl bg-white/5 py-3 font-black text-white text-base hover:bg-white/10">{n}</button>
-              ))}
-              <button onClick={() => handleCalcOp("*")} className="rounded-xl bg-amber-500/20 py-3 font-black text-amber-400 text-sm hover:bg-amber-500/30">×</button>
-
-              {["4", "5", "6"].map((n) => (
-                <button key={n} onClick={() => handleCalcNumber(n)} className="rounded-xl bg-white/5 py-3 font-black text-white text-base hover:bg-white/10">{n}</button>
-              ))}
-              <button onClick={() => handleCalcOp("-")} className="rounded-xl bg-amber-500/20 py-3 font-black text-amber-400 text-sm hover:bg-amber-500/30">−</button>
-
-              {["1", "2", "3"].map((n) => (
-                <button key={n} onClick={() => handleCalcNumber(n)} className="rounded-xl bg-white/5 py-3 font-black text-white text-base hover:bg-white/10">{n}</button>
-              ))}
-              <button onClick={() => handleCalcOp("+")} className="rounded-xl bg-amber-500/20 py-3 font-black text-amber-400 text-sm hover:bg-amber-500/30">+</button>
-
-              <button onClick={() => handleCalcNumber("0")} className="rounded-xl bg-white/5 py-3 font-black text-white text-base hover:bg-white/10">0</button>
-              <button onClick={() => handleCalcNumber("00")} className="rounded-xl bg-white/5 py-3 font-black text-white text-base hover:bg-white/10">00</button>
-              <button onClick={() => !calcDisplay.includes(".") && setCalcDisplay(calcDisplay + ".")} className="rounded-xl bg-white/5 py-3 font-black text-white text-base hover:bg-white/10">.</button>
-              <button onClick={handleCalcEquals} className="rounded-xl bg-amber-500 py-3 font-black text-slate-950 text-base hover:bg-amber-400">=</button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
-
-      {/* ========== CLOSING DAY MODAL ========== */}
-      {showCloseDayModal && createPortal(
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className="w-full max-w-lg rounded-3xl bg-slate-900 border border-white/15 p-6 shadow-2xl animate-in zoom-in-95 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-5">
+      {/* ========== RIGHT: ORDER / CART (40%) — DARK CARD (SUPERMARKET POS STYLE) ========== */}
+      <div className="flex w-[45%] flex-col bg-slate-950 text-white border-l border-slate-800 p-2 shadow-2xl">
+        <div className="flex flex-col h-full rounded-2xl bg-slate-900 border border-slate-800 overflow-hidden">
+          {/* Order Destination / Context Selection (Dark Header) */}
+          <div className="border-b border-slate-800 p-2.5 bg-slate-900 space-y-2">
+            <div className="grid grid-cols-3 gap-2.5">
+              {/* Table */}
               <div>
-                <h2 className="text-xl font-black text-white">Closing Day & Shift Settlement</h2>
-                <p className="text-xs text-slate-400">Date: {dailySummary?.date || new Date().toLocaleDateString()}</p>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1 flex items-center gap-1">
+                  <Table2 size={11} className="text-slate-400" /> Table
+                </label>
+                <select
+                  value={selectedTable?.id || ""}
+                  onChange={(e) => setSelectedTable(tables.find((t) => t.id === e.target.value) || null)}
+                  className="w-full rounded-lg bg-slate-950 border border-slate-800 px-2 py-1.5 text-xs font-semibold text-white outline-none focus:border-brand-500"
+                >
+                  <option value="">No Table</option>
+                  {tables.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      Table {t.table_number} {t.status === "occupied" ? "(Occupied)" : ""}
+                    </option>
+                  ))}
+                </select>
               </div>
-              <button onClick={() => setShowCloseDayModal(false)} className="rounded-full bg-white/10 p-1.5 text-slate-400 hover:text-white">
-                <X size={18} />
-              </button>
+
+              {/* Customer */}
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1 flex items-center gap-1">
+                  <User size={11} className="text-slate-400" /> Customer
+                </label>
+                <select
+                  value={selectedCustomer?.id || ""}
+                  onChange={(e) => setSelectedCustomer(customers.find((c) => c.id === e.target.value) || null)}
+                  className="w-full rounded-lg bg-slate-950 border border-slate-800 px-2 py-1.5 text-xs font-semibold text-white outline-none focus:border-brand-500"
+                >
+                  <option value="">Walk-in</option>
+                  {customers.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.full_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Room Folio: Strictly Occupied / Reserved Rooms with Deduplicated Guest */}
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-sky-400 mb-1 flex items-center gap-1">
+                  <BedDouble size={11} className="text-sky-400" /> Room Folio
+                </label>
+                <select
+                  value={selectedRoom?.id || ""}
+                  onChange={(e) => {
+                    const b = validActiveRoomBookings.find((bk) => bk.id === e.target.value) || null;
+                    setSelectedRoom(b);
+                    if (b) setPaymentMethod("room_folio");
+                  }}
+                  className="w-full rounded-lg bg-slate-950 border border-sky-600/40 px-2 py-1.5 text-xs font-bold text-sky-300 outline-none focus:border-sky-500"
+                >
+                  <option value="">No Room</option>
+                  {validActiveRoomBookings.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      Room {(b as any).room?.room_number} – {b.guest_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
-            {closedSummaryRecord ? (
-              <div className="space-y-4">
-                <div className="rounded-2xl bg-emerald-500/20 border border-emerald-500/40 p-4 text-center">
-                  <CheckCircle2 size={36} className="mx-auto mb-2 text-emerald-400" />
-                  <h3 className="text-lg font-black text-emerald-300">Day Successfully Closed!</h3>
-                  <p className="text-xs text-slate-300 mt-1">Audit report has been saved to the day closures ledger.</p>
-                </div>
-
-                <div className="rounded-2xl bg-white/5 p-4 space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Cash Received:</span>
-                    <span className="font-bold text-emerald-400">{formatCurrency(closedSummaryRecord.cash_received)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">MoMo Received:</span>
-                    <span className="font-bold text-sky-400">{formatCurrency(closedSummaryRecord.momo_received)}</span>
-                  </div>
-                  <div className="flex justify-between border-b border-white/10 pb-2">
-                    <span className="text-slate-400">Card Payments:</span>
-                    <span className="font-bold text-purple-400">{formatCurrency(closedSummaryRecord.card_received)}</span>
-                  </div>
-                  <div className="flex justify-between pt-2 font-black text-base">
-                    <span className="text-white">Bar & Kitchen Total:</span>
-                    <span className="text-amber-400 text-lg">{formatCurrency(closedSummaryRecord.total_sales)}</span>
-                  </div>
-                  <div className="flex justify-between text-slate-300 text-xs pt-2 border-t border-white/10 mt-2">
-                    <span>Expenses:</span>
-                    <span>{formatCurrency(closedSummaryRecord.total_expenses)}</span>
-                  </div>
-                  <div className="flex justify-between text-amber-200 text-xs font-bold">
-                    <span>Net Profit:</span>
-                    <span>{formatCurrency(closedSummaryRecord.net_profit)}</span>
-                  </div>
-                </div>
-
-                <div className="flex gap-3">
-                  <button onClick={() => window.print()} className="flex-1 flex items-center justify-center gap-2 rounded-2xl bg-white/10 py-3.5 font-bold text-white hover:bg-white/20">
-                    <Printer size={16} /> Print Audit Sheet
-                  </button>
-                  <button onClick={() => { setShowCloseDayModal(false); setClosedSummaryRecord(null); }} className="flex-1 rounded-2xl bg-amber-500 py-3.5 font-black text-slate-950 hover:bg-amber-400">
-                    Done
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {/* Revenue breakdown grid — Bar & Kitchen only, Room is separate system */}
-                <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 px-4 py-2.5 mb-3">
-                  <p className="text-[10px] font-black text-amber-400 uppercase tracking-widest">
-                    📊 Bar & Kitchen Cash Register Only
-                  </p>
-                  <p className="text-[10px] text-amber-200 font-semibold mt-1">
-                    ✓ Rooms payment tracked separately | ✓ Only direct bar/kitchen sales counted
-                  </p>
-                </div>
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="rounded-2xl bg-white/5 border border-white/10 p-3">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Cash</p>
-                    <p className="text-lg font-black text-emerald-400 mt-1">{formatCurrency(dailySummary?.cashReceived || 0)}</p>
-                  </div>
-                  <div className="rounded-2xl bg-white/5 border border-white/10 p-3">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">MoMo</p>
-                    <p className="text-lg font-black text-sky-400 mt-1">{formatCurrency(dailySummary?.momoReceived || 0)}</p>
-                  </div>
-                  <div className="rounded-2xl bg-white/5 border border-white/10 p-3">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Card</p>
-                    <p className="text-lg font-black text-purple-400 mt-1">{formatCurrency(dailySummary?.cardReceived || 0)}</p>
-                  </div>
-                </div>
-
-                {/* Grand Total */}
-                <div className="rounded-2xl bg-gradient-to-r from-amber-950/60 to-slate-950 border border-amber-500/30 p-4 flex items-center justify-between">
-                  <div>
-                    <p className="text-xs font-black uppercase tracking-widest text-slate-300">Bar & Food Total</p>
-                    <p className="text-3xl font-black text-amber-400 mt-1">
-                      {formatCurrency(dailySummary?.totalSales || 0)}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm text-slate-300 font-bold">{dailySummary?.salesCount || 0}</p>
-                    <p className="text-xs text-slate-500 font-medium">Transactions</p>
-                  </div>
-                </div>
-
-                {/* Notes */}
-                <div>
-                  <label className="block text-xs font-black uppercase tracking-widest text-slate-400 mb-1">
-                    Shift / Closure Notes
-                  </label>
-                  <textarea
-                    rows={2}
-                    placeholder="Enter any shift notes, cash count variances, or hand-over comments..."
-                    className="w-full rounded-xl bg-white/10 border border-white/10 p-3 text-xs text-white placeholder-slate-500 outline-none focus:border-amber-500 resize-none"
-                    value={closureNotes}
-                    onChange={(e) => setClosureNotes(e.target.value)}
-                  />
-                </div>
-
-                <button
-                  onClick={handleFinalizeCloseDay}
-                  disabled={closingDayLoading}
-                  className="w-full flex items-center justify-center gap-2 rounded-2xl bg-amber-500 py-4 font-black text-slate-950 hover:bg-amber-400 transition shadow-xl shadow-amber-500/20 disabled:opacity-50"
-                >
-                  {closingDayLoading ? (
-                    <div className="h-5 w-5 animate-spin rounded-full border-2 border-slate-950 border-t-transparent" />
+            {/* Active Context Alerts */}
+            {(selectedRoom || resumedTabId) && (
+              <div className="flex items-center justify-between rounded-lg bg-sky-950/70 border border-sky-800/60 px-3 py-1.5 text-xs">
+                <div className="flex items-center gap-2 font-bold text-sky-300">
+                  {selectedRoom ? (
+                    <>
+                      <BedDouble size={13} className="text-sky-400 shrink-0" />
+                      <span>Charging Room {(selectedRoom as any).room?.room_number} ({selectedRoom.guest_name})</span>
+                    </>
                   ) : (
                     <>
-                      <CheckCircle2 size={18} />
-                      Finalize & Reconcile Day
+                      <Clock3 size={13} className="text-sky-400 shrink-0" />
+                      <span>Resumed tab in progress</span>
                     </>
                   )}
+                </div>
+                <button
+                  onClick={() => {
+                    if (selectedRoom) setSelectedRoom(null);
+                    if (resumedTabId) setResumedTabId(null);
+                  }}
+                  className="text-slate-400 hover:text-white"
+                >
+                  <X size={13} />
                 </button>
               </div>
             )}
           </div>
-        </div>,
-        document.body
-      )}
 
-      {/* ========== HELD ORDERS MODAL ========== */}
-      {showTabsModal && createPortal(
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md rounded-3xl bg-slate-900 border border-white/10 p-6 shadow-2xl animate-in zoom-in-95">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-black text-white">Held Order Tabs</h2>
-              <button onClick={() => setShowTabsModal(false)} className="rounded-full bg-white/10 p-1.5 text-slate-400 hover:text-white">
-                <X size={16} />
-              </button>
-            </div>
-            {openTabs.length === 0 ? (
-              <p className="py-8 text-center text-sm text-slate-500">No active held tabs</p>
+          {/* Cart Item Rows (Dark Theme) */}
+          <div className="flex-1 overflow-y-auto p-3 space-y-2 bg-slate-950/60">
+            {cart.length === 0 ? (
+              <div className="flex h-full flex-col items-center justify-center text-slate-500 py-12">
+                <ShoppingCart size={34} className="mb-2 text-slate-700" />
+                <p className="text-xs font-bold text-slate-400">Order is empty</p>
+                <p className="text-[11px] text-slate-600 mt-0.5">Tap products on the left to add items</p>
+              </div>
             ) : (
-              <div className="space-y-2 max-h-80 overflow-y-auto">
-                {openTabs.map((tab) => (
-                  <div
-                    key={tab.id}
-                    className="flex items-center justify-between gap-3 rounded-2xl bg-white/5 border border-white/10 px-4 py-3.5 transition hover:border-amber-500/50 hover:bg-white/10"
-                  >
-                    <div>
-                      <p className="text-sm font-black text-white">{tab.tab_name}</p>
-                      <p className="text-xs text-slate-400">
-                        {Array.isArray(tab.cart_items) ? tab.cart_items.length : 0} items •{" "}
-                        {new Date(tab.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                      </p>
-                    </div>
-                    <div className="flex shrink-0 flex-col items-end gap-2">
-                      <span className="text-sm font-black text-amber-400">{formatCurrency(tab.total)}</span>
+              cart.map((item) => (
+                <div
+                  key={item.product_id}
+                  className="flex items-center justify-between gap-2.5 rounded-xl bg-slate-900 border border-slate-800 p-2.5 hover:border-slate-700 transition"
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-bold text-white truncate">{item.name}</p>
+                    <p className="text-[10px] text-slate-400 font-medium mt-0.5">
+                      {formatCurrency(item.unit_price)} each
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center border border-slate-700 rounded-lg bg-slate-950 overflow-hidden">
                       <button
-                        onClick={() => resumeTab(tab)}
-                        className="rounded-xl bg-amber-500 px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-slate-950 transition hover:bg-amber-400"
+                        onClick={() => updateQty(item.product_id, -1)}
+                        className="flex h-6 w-6 items-center justify-center text-slate-300 hover:bg-slate-800 transition"
                       >
-                        Continue / Add items
+                        <Minus size={11} />
+                      </button>
+                      <span className="w-6 text-center text-xs font-black text-white">{item.quantity}</span>
+                      <button
+                        onClick={() => updateQty(item.product_id, 1)}
+                        className="flex h-6 w-6 items-center justify-center text-slate-300 hover:bg-slate-800 transition"
+                      >
+                        <Plus size={11} />
                       </button>
                     </div>
+
+                    <span className="text-xs font-black text-emerald-400 w-16 text-right">
+                      {formatCurrency(item.line_total)}
+                    </span>
+
+                    <button
+                      onClick={() => removeFromCart(item.product_id)}
+                      className="flex h-6 w-6 items-center justify-center rounded-md text-slate-500 hover:bg-rose-950 hover:text-rose-400 transition"
+                    >
+                      <Trash2 size={12} />
+                    </button>
                   </div>
-                ))}
-              </div>
+                </div>
+              ))
             )}
           </div>
-        </div>,
-        document.body
-      )}
 
-      {showOpenRegister && createPortal(
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-sm rounded-3xl border border-white/10 bg-slate-900 p-6 shadow-2xl">
-            <div className="mb-5"><h2 className="text-lg font-black text-white">Start your cashier shift</h2><p className="mt-1 text-xs text-slate-400">Enter the cash amount currently in the drawer. This opening amount is required before selling and makes the close-day report accurate.</p></div>
-            <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-400">Opening cash amount</label>
-            <input autoFocus type="number" min="0" value={openingCash} onChange={(event) => setOpeningCash(event.target.value)} placeholder="0" className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-lg font-black text-white outline-none focus:border-amber-400" />
-            <button disabled={openingRegister} onClick={() => void handleOpenRegister()} className="mt-5 w-full rounded-2xl bg-emerald-500 py-3 text-sm font-black text-slate-950 disabled:opacity-60">{openingRegister ? "Opening register..." : "Open register"}</button>
-          </div>
-        </div>, document.body
-      )}
+          {/* Bill Summary Calculations (Dark Theme) */}
+          <div className="border-t border-slate-800 bg-slate-900 px-4 py-3 space-y-1.5 text-xs">
+            <div className="flex items-center justify-between text-slate-400 font-medium">
+              <span>Subtotal</span>
+              <span className="text-white font-bold">{formatCurrency(subtotal)}</span>
+            </div>
 
-      {showGuestOrders && createPortal(
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-3xl border border-white/10 bg-slate-900 p-6 shadow-2xl">
-            <div className="mb-4 flex items-center justify-between"><div><h2 className="text-lg font-black text-white">Customer QR orders</h2><p className="text-xs text-slate-400">Accepting creates a held tab; the cashier settles it later.</p></div><button onClick={() => setShowGuestOrders(false)} className="rounded-full bg-white/10 p-2 text-slate-300"><X size={17}/></button></div>
-            {pendingGuestOrders.length === 0 ? <div className="py-10 text-center text-sm text-slate-500">No customer orders waiting.</div> : <div className="max-h-[60vh] space-y-3 overflow-y-auto">{pendingGuestOrders.map((order) => <div key={order.id} className="rounded-2xl border border-white/10 bg-white/5 p-4"><div className="flex justify-between gap-3"><div><p className="font-black text-white">{order.guest_name}</p><p className="text-xs text-slate-400">{order.guest_phone || "No phone"} · {new Date(order.created_at).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})}</p></div><p className="font-black text-amber-400">{formatCurrency(order.total)}</p></div><div className="my-3 space-y-1 border-y border-white/10 py-2">{(order.items || []).map((item: any, index: number) => <p key={index} className="text-xs text-slate-300">{item.quantity}× {item.name}</p>)}</div><div className="grid grid-cols-2 gap-2"><button disabled={reviewingGuestOrder === order.id} onClick={() => void reviewGuestOrder(order, false)} className="rounded-xl bg-rose-500/15 py-2 text-xs font-black text-rose-300 hover:bg-rose-500/25 disabled:opacity-50">Reject</button><button disabled={reviewingGuestOrder === order.id} onClick={() => void reviewGuestOrder(order, true)} className="rounded-xl bg-emerald-500 py-2 text-xs font-black text-slate-950 hover:bg-emerald-400 disabled:opacity-50">{reviewingGuestOrder === order.id ? "Saving…" : "Accept order"}</button></div></div>)}</div>}
+            {taxAmount > 0 && (
+              <div className="flex items-center justify-between text-slate-400 font-medium">
+                <span>Tax ({taxRate}%)</span>
+                <span className="text-white font-bold">{formatCurrency(taxAmount)}</span>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between text-slate-400 font-medium">
+              <div className="flex items-center gap-1.5">
+                <span>Discount</span>
+                <div className="flex items-center border border-slate-700 rounded bg-slate-950 px-1.5 py-0.5">
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={discount || ""}
+                    onChange={(e) => setDiscount(Math.min(100, Math.max(0, Number(e.target.value))))}
+                    className="w-7 bg-transparent text-center text-white outline-none text-xs font-bold"
+                    placeholder="0"
+                  />
+                  <span className="text-[10px] text-slate-500">%</span>
+                </div>
+              </div>
+              <span className={discountAmount > 0 ? "text-rose-400 font-bold" : "text-white font-bold"}>
+                -{formatCurrency(discountAmount)}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between border-t border-slate-800 pt-2 text-base font-black">
+              <span className="text-slate-200">Total Payable</span>
+              <span className="text-emerald-400 text-lg font-black">{formatCurrency(total)}</span>
+            </div>
           </div>
-        </div>, document.body
-      )}
+
+          {/* Cart Action Buttons (Dark Theme) */}
+          <div className="grid grid-cols-4 gap-2 p-2.5 border-t border-slate-800 bg-slate-950">
+            <button
+              onClick={() => setShowTabsModal(true)}
+              className="flex items-center justify-center gap-1 rounded-xl border border-slate-800 bg-slate-900 py-2.5 text-xs font-bold text-slate-300 hover:bg-slate-800 hover:text-white transition shadow-xs"
+              title="View held tabs"
+            >
+              <Clock3 size={13} />
+              <span>Tabs ({openTabs.length})</span>
+            </button>
+
+            <button
+              onClick={holdOrder}
+              disabled={cart.length === 0}
+              className="flex items-center justify-center gap-1 rounded-xl border border-slate-800 bg-slate-900 py-2.5 text-xs font-bold text-slate-300 hover:bg-slate-800 hover:text-white transition disabled:opacity-30 shadow-xs"
+              title="Hold current order"
+            >
+              <History size={13} />
+              <span>Hold Tab</span>
+            </button>
+
+            <button
+              onClick={clearCart}
+              disabled={cart.length === 0}
+              className="flex items-center justify-center gap-1 rounded-xl border border-rose-900/60 bg-rose-950/40 py-2.5 text-xs font-bold text-rose-400 hover:bg-rose-900/60 hover:text-rose-200 transition disabled:opacity-30 shadow-xs"
+              title="Clear cart"
+            >
+              <Trash2 size={13} />
+              <span>Clear</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setAmountPaid(total.toString());
+                setShowPayModal(true);
+              }}
+              disabled={cart.length === 0}
+              className="flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 py-2.5 text-xs font-black text-white hover:bg-emerald-500 shadow-md transition disabled:opacity-30 active:scale-[0.98]"
+            >
+              <Receipt size={14} />
+              <span>Pay</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ========== PAYMENT MODAL (WHITE & VISIBLE) ========== */}
+      {showPayModal &&
+        createPortal(
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-150">
+            <div className="w-full max-w-md rounded-2xl bg-white border border-slate-200 p-6 shadow-2xl">
+              <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-3">
+                <h2 className="text-base font-black text-slate-900">Payment & Settlement</h2>
+                <button
+                  onClick={() => setShowPayModal(false)}
+                  className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Total Due Banner */}
+              <div className="mb-4 rounded-xl bg-slate-50 border border-slate-200 p-4">
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Total Amount Due</span>
+                <p className="text-3xl font-black text-brand-600 mt-0.5">{formatCurrency(total)}</p>
+                {selectedRoom && (
+                  <p className="mt-1 text-xs text-brand-700 font-bold">
+                    Charging to Room {(selectedRoom as any).room?.room_number} ({selectedRoom.guest_name})
+                  </p>
+                )}
+              </div>
+
+              {/* Payment Method Selector */}
+              <div className="mb-4">
+                <label className="block text-xs font-bold text-slate-700 mb-2">Select Payment Method</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {(
+                    [
+                      { method: "cash" as const, label: "Cash", icon: Wallet },
+                      { method: "momo" as const, label: "Mobile Money", icon: Smartphone },
+                      { method: "card" as const, label: "Credit/Debit Card", icon: CreditCard },
+                      { method: "room_folio" as const, label: "Room Folio", icon: BedDouble },
+                    ] as const
+                  ).map(({ method, label, icon: Icon }) => (
+                    <button
+                      key={method}
+                      onClick={() => setPaymentMethod(method)}
+                      className={`flex items-center gap-2.5 rounded-lg p-2.5 text-xs font-bold border transition ${
+                        paymentMethod === method
+                          ? "border-brand-600 bg-brand-50 text-brand-700 shadow-xs"
+                          : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                      }`}
+                    >
+                      <Icon size={16} />
+                      <span>{label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Amount Tendered */}
+              {paymentMethod !== "room_folio" && (
+                <div className="mb-5 space-y-2">
+                  <label className="block text-xs font-bold text-slate-700">Amount Tendered</label>
+                  <input
+                    type="number"
+                    className="w-full rounded-lg bg-slate-50 border border-slate-300 px-3.5 py-2.5 text-xl font-black text-slate-900 outline-none focus:border-brand-600 focus:bg-white transition"
+                    placeholder="0"
+                    value={amountPaid}
+                    onChange={(e) => setAmountPaid(e.target.value)}
+                    autoFocus
+                  />
+
+                  {/* Quick cash denomination chips */}
+                  <div className="flex gap-1.5 flex-wrap pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setQuickTender(total)}
+                      className="px-2.5 py-1 rounded bg-slate-100 text-[11px] font-bold text-slate-700 border border-slate-200 hover:bg-slate-200 transition"
+                    >
+                      Exact
+                    </button>
+                    {[1000, 2000, 5000, 10000, 20000].map((preset) => (
+                      <button
+                        key={preset}
+                        type="button"
+                        onClick={() => setQuickTender(preset)}
+                        className="px-2.5 py-1 rounded bg-slate-100 text-[11px] font-bold text-slate-700 border border-slate-200 hover:bg-slate-200 transition"
+                      >
+                        {formatCurrency(preset)}
+                      </button>
+                    ))}
+                  </div>
+
+                  {change > 0 && (
+                    <div className="mt-2 flex items-center justify-between rounded-lg bg-emerald-50 px-3 py-2 border border-emerald-200">
+                      <span className="text-xs font-bold text-emerald-800">Change Due:</span>
+                      <span className="text-sm font-black text-emerald-700">{formatCurrency(change)}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Submit Payment */}
+              <button
+                onClick={handlePayNow}
+                disabled={processing}
+                className="flex w-full items-center justify-center gap-2 rounded-lg bg-brand-600 py-3 text-sm font-black text-white hover:bg-brand-700 transition disabled:opacity-50 shadow-md"
+              >
+                {processing ? (
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                ) : (
+                  <>
+                    <CheckCircle2 size={16} />
+                    <span>{paymentMethod === "room_folio" ? "Charge to Room Folio" : "Complete Transaction"}</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>,
+          document.body
+        )}
+
+      {/* ========== SHIFT CLOSURE & DAY SETTLEMENT MODAL (CLEAN WHITE) ========== */}
+      {showCloseDayModal &&
+        createPortal(
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-150">
+            <div className="w-full max-w-lg rounded-2xl bg-white border border-slate-200 p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-3">
+                <div>
+                  <h2 className="text-lg font-black text-slate-900">Shift Settlement & Register Closure</h2>
+                  <p className="text-xs text-slate-500 font-medium">Date: {dailySummary?.date || new Date().toLocaleDateString()}</p>
+                </div>
+                <button
+                  onClick={() => setShowCloseDayModal(false)}
+                  className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {closedSummaryRecord ? (
+                <div className="space-y-4">
+                  <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-4 text-center">
+                    <CheckCircle2 size={32} className="mx-auto mb-2 text-emerald-600" />
+                    <h3 className="text-base font-black text-emerald-800">Shift Reconciled & Closed</h3>
+                    <p className="text-xs text-emerald-600 mt-0.5">Summary record has been saved to the closure audit log.</p>
+                  </div>
+
+                  <div className="rounded-xl bg-slate-50 border border-slate-200 p-4 space-y-2 text-xs">
+                    <div className="flex justify-between py-1 border-b border-slate-200">
+                      <span className="text-slate-500 font-medium">Cash Received:</span>
+                      <span className="font-bold text-slate-900">
+                        {formatCurrency(closedSummaryRecord.cash_received)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between py-1 border-b border-slate-200">
+                      <span className="text-slate-500 font-medium">Mobile Money:</span>
+                      <span className="font-bold text-slate-900">
+                        {formatCurrency(closedSummaryRecord.momo_received)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between py-1 border-b border-slate-200">
+                      <span className="text-slate-500 font-medium">Card Payments:</span>
+                      <span className="font-bold text-slate-900">
+                        {formatCurrency(closedSummaryRecord.card_received)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between py-1.5 font-black text-sm">
+                      <span className="text-slate-900">Total Gross Sales:</span>
+                      <span className="text-brand-600">{formatCurrency(closedSummaryRecord.total_sales)}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => window.print()}
+                      className="flex-1 flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 transition shadow-xs"
+                    >
+                      <Printer size={15} /> Print Audit Sheet
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowCloseDayModal(false);
+                        setClosedSummaryRecord(null);
+                      }}
+                      className="flex-1 rounded-lg bg-brand-600 py-2.5 text-xs font-black text-white hover:bg-brand-700 transition shadow-sm"
+                    >
+                      Done
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-3 gap-2.5">
+                    <div className="rounded-xl bg-slate-50 border border-slate-200 p-3">
+                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Cash</p>
+                      <p className="text-base font-black text-slate-900 mt-1">
+                        {formatCurrency(dailySummary?.cashReceived || 0)}
+                      </p>
+                    </div>
+                    <div className="rounded-xl bg-slate-50 border border-slate-200 p-3">
+                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Mobile Money</p>
+                      <p className="text-base font-black text-slate-900 mt-1">
+                        {formatCurrency(dailySummary?.momoReceived || 0)}
+                      </p>
+                    </div>
+                    <div className="rounded-xl bg-slate-50 border border-slate-200 p-3">
+                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Card</p>
+                      <p className="text-base font-black text-slate-900 mt-1">
+                        {formatCurrency(dailySummary?.cardReceived || 0)}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl bg-slate-50 border border-slate-200 p-4 flex items-center justify-between">
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Total Shift Sales</p>
+                      <p className="text-2xl font-black text-brand-600 mt-0.5">
+                        {formatCurrency(dailySummary?.totalSales || 0)}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-black text-slate-900">{dailySummary?.salesCount || 0}</p>
+                      <p className="text-[11px] text-slate-500 font-medium">Transactions</p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                      Shift Notes & Cash Count Comments
+                    </label>
+                    <textarea
+                      rows={2}
+                      placeholder="Optional shift handover notes, drawer variances or observations..."
+                      className="w-full rounded-lg bg-slate-50 border border-slate-200 p-2.5 text-xs text-slate-900 placeholder-slate-400 outline-none focus:border-brand-600 focus:bg-white resize-none"
+                      value={closureNotes}
+                      onChange={(e) => setClosureNotes(e.target.value)}
+                    />
+                  </div>
+
+                  <button
+                    onClick={handleFinalizeCloseDay}
+                    disabled={closingDayLoading}
+                    className="w-full flex items-center justify-center gap-2 rounded-lg bg-brand-600 py-3 text-sm font-black text-white hover:bg-brand-700 transition shadow-md disabled:opacity-50"
+                  >
+                    {closingDayLoading ? (
+                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                    ) : (
+                      <>
+                        <CheckCircle2 size={16} />
+                        <span>Confirm Shift Closure & Reconcile</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>,
+          document.body
+        )}
+
+      {/* ========== HELD TABS MODAL (CLEAN WHITE & VISIBLE) ========== */}
+      {showTabsModal &&
+        createPortal(
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-150">
+            <div className="w-full max-w-md rounded-2xl bg-white border border-slate-200 p-6 shadow-2xl">
+              <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-3">
+                <h2 className="text-base font-black text-slate-900">Held Order Tabs</h2>
+                <button
+                  onClick={() => setShowTabsModal(false)}
+                  className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {openTabs.length === 0 ? (
+                <div className="py-10 text-center text-slate-400">
+                  <Clock3 size={32} className="mx-auto mb-2 text-slate-300" />
+                  <p className="text-sm font-bold text-slate-600">No active held tabs</p>
+                  <p className="text-xs text-slate-400 mt-0.5">Orders placed on hold will appear here</p>
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-80 overflow-y-auto">
+                  {openTabs.map((tab) => (
+                    <div
+                      key={tab.id}
+                      className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 border border-slate-200 p-3.5 transition hover:bg-slate-100 hover:border-slate-300 shadow-xs"
+                    >
+                      <div>
+                        <p className="text-xs font-black text-slate-900">{tab.tab_name}</p>
+                        <p className="text-[11px] text-slate-500 font-medium mt-0.5">
+                          {Array.isArray(tab.cart_items) ? tab.cart_items.length : 0} items •{" "}
+                          {new Date(tab.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-3">
+                        <span className="text-xs font-black text-brand-600">{formatCurrency(tab.total)}</span>
+                        <button
+                          onClick={() => resumeTab(tab)}
+                          className="rounded-md bg-brand-600 px-3 py-1.5 text-xs font-black text-white hover:bg-brand-700 transition shadow-xs"
+                        >
+                          Resume
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>,
+          document.body
+        )}
+
+      {/* ========== OPEN REGISTER MODAL (CLEAN WHITE) ========== */}
+      {showOpenRegister &&
+        createPortal(
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm animate-in fade-in duration-150">
+            <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
+              <div className="mb-4">
+                <h2 className="text-base font-black text-slate-900">Open Cash Register</h2>
+                <p className="mt-1 text-xs text-slate-500 font-medium">
+                  Enter the starting cash float in the drawer to begin operations for this shift.
+                </p>
+              </div>
+              <label className="mb-1.5 block text-xs font-bold text-slate-700">Opening Cash Float</label>
+              <input
+                autoFocus
+                type="number"
+                min="0"
+                value={openingCash}
+                onChange={(event) => setOpeningCash(event.target.value)}
+                placeholder="0"
+                className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-lg font-black text-slate-900 outline-none focus:border-brand-600 focus:bg-white"
+              />
+              <button
+                disabled={openingRegister}
+                onClick={() => void handleOpenRegister()}
+                className="mt-4 w-full rounded-xl bg-brand-600 py-3 text-xs font-black text-white hover:bg-brand-700 disabled:opacity-60 transition shadow-sm"
+              >
+                {openingRegister ? "Opening register..." : "Open Register & Start Shift"}
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate("/")}
+                className="mt-2 w-full rounded-xl bg-slate-100 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-200 transition"
+              >
+                Return to Dashboard
+              </button>
+            </div>
+          </div>,
+          document.body
+        )}
+
+      {/* ========== GUEST ORDERS MODAL (CLEAN WHITE) ========== */}
+      {showGuestOrders &&
+        createPortal(
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm animate-in fade-in duration-150">
+            <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
+              <div className="mb-4 flex items-center justify-between border-b border-slate-100 pb-3">
+                <div>
+                  <h2 className="text-base font-black text-slate-900">Customer QR Orders</h2>
+                  <p className="text-xs text-slate-500 font-medium">Accept orders to hold them as active tabs for settlement.</p>
+                </div>
+                <button
+                  onClick={() => setShowGuestOrders(false)}
+                  className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {pendingGuestOrders.length === 0 ? (
+                <div className="py-10 text-center text-slate-400">
+                  <Bell size={32} className="mx-auto mb-2 text-slate-300" />
+                  <p className="text-sm font-bold text-slate-600">No customer orders waiting</p>
+                </div>
+              ) : (
+                <div className="max-h-[60vh] space-y-3 overflow-y-auto">
+                  {pendingGuestOrders.map((order) => {
+                    const targetBadge = getOrderTargetBadge(order);
+                    return (
+                      <div key={order.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4 shadow-xs space-y-2.5">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {targetBadge ? (
+                                <span
+                                  className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-0.5 text-xs font-black uppercase tracking-wider ${
+                                    targetBadge.type === "room"
+                                      ? "bg-violet-100 text-violet-800 border border-violet-200"
+                                      : "bg-indigo-100 text-indigo-800 border border-indigo-200"
+                                  }`}
+                                >
+                                  {targetBadge.type === "room" ? <BedDouble size={13} /> : <Utensils size={13} />}
+                                  {targetBadge.label}
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center rounded-lg bg-slate-200 px-2 py-0.5 text-[10px] font-bold text-slate-700">
+                                  Customer QR
+                                </span>
+                              )}
+                              <p className="font-bold text-xs text-slate-900">{order.guest_name}</p>
+                            </div>
+                            <p className="text-[11px] text-slate-500 font-medium">
+                              {order.guest_phone || "No phone"} ·{" "}
+                              {new Date(order.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                            </p>
+                          </div>
+                          <p className="font-black text-sm text-brand-600">{formatCurrency(order.total)}</p>
+                        </div>
+
+                        <div className="my-2 rounded-xl border border-slate-200 bg-white p-2.5 space-y-1">
+                          {(order.items || []).map((item: any, index: number) => (
+                            <div key={index} className="flex justify-between text-xs font-semibold text-slate-700">
+                              <span>{item.quantity}× {item.name}</span>
+                              <span className="text-slate-400 font-medium">
+                                {item.line_total ? formatCurrency(item.line_total) : ""}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 pt-0.5">
+                          <button
+                            disabled={reviewingGuestOrder === order.id}
+                            onClick={() => void reviewGuestOrder(order, false)}
+                            className="rounded-xl bg-rose-50 border border-rose-200 py-2.5 text-xs font-bold text-rose-700 hover:bg-rose-100 disabled:opacity-50 transition"
+                          >
+                            Reject
+                          </button>
+                          <button
+                            disabled={reviewingGuestOrder === order.id}
+                            onClick={() => void reviewGuestOrder(order, true)}
+                            className="rounded-xl bg-brand-600 py-2.5 text-xs font-black text-white hover:bg-brand-700 disabled:opacity-50 transition shadow-xs"
+                          >
+                            {reviewingGuestOrder === order.id ? "Processing..." : "Accept Order"}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>,
+          document.body
+        )}
+
+      {/* ========== WORKING CALCULATOR MODAL (CLEAN WHITE) ========== */}
+      {showCalc &&
+        createPortal(
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-150">
+            <div className="w-full max-w-xs rounded-2xl bg-white border border-slate-200 p-5 shadow-2xl">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Calculator size={16} className="text-brand-600" />
+                  <h3 className="font-bold text-xs text-slate-900">Calculator</h3>
+                </div>
+                <button
+                  onClick={() => setShowCalc(false)}
+                  className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              {/* Screen */}
+              <div className="mb-3 rounded-lg bg-slate-100 border border-slate-200 p-3 text-right">
+                <p className="text-[11px] text-slate-500 font-mono h-4">{calcEquation || " "}</p>
+                <p className="text-xl font-black text-slate-900 font-mono truncate">{calcDisplay}</p>
+              </div>
+
+              {/* Keys */}
+              <div className="grid grid-cols-4 gap-1.5">
+                <button
+                  onClick={handleCalcClear}
+                  className="col-span-2 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 py-2.5 font-bold text-xs hover:bg-rose-100 transition"
+                >
+                  C
+                </button>
+                <button
+                  onClick={() => setCalcDisplay(calcDisplay.length > 1 ? calcDisplay.slice(0, -1) : "0")}
+                  className="rounded-lg bg-slate-100 border border-slate-200 text-slate-700 py-2.5 font-bold text-xs hover:bg-slate-200 transition"
+                >
+                  ⌫
+                </button>
+                <button
+                  onClick={() => handleCalcOp("/")}
+                  className="rounded-lg bg-slate-100 border border-slate-200 text-brand-600 py-2.5 font-black text-xs hover:bg-slate-200 transition"
+                >
+                  ÷
+                </button>
+
+                {["7", "8", "9"].map((n) => (
+                  <button
+                    key={n}
+                    onClick={() => handleCalcNumber(n)}
+                    className="rounded-lg bg-slate-50 border border-slate-200 text-slate-900 py-2.5 font-bold text-xs hover:bg-slate-100 transition shadow-xs"
+                  >
+                    {n}
+                  </button>
+                ))}
+                <button
+                  onClick={() => handleCalcOp("*")}
+                  className="rounded-lg bg-slate-100 border border-slate-200 text-brand-600 py-2.5 font-black text-xs hover:bg-slate-200 transition"
+                >
+                  ×
+                </button>
+
+                {["4", "5", "6"].map((n) => (
+                  <button
+                    key={n}
+                    onClick={() => handleCalcNumber(n)}
+                    className="rounded-lg bg-slate-50 border border-slate-200 text-slate-900 py-2.5 font-bold text-xs hover:bg-slate-100 transition shadow-xs"
+                  >
+                    {n}
+                  </button>
+                ))}
+                <button
+                  onClick={() => handleCalcOp("-")}
+                  className="rounded-lg bg-slate-100 border border-slate-200 text-brand-600 py-2.5 font-black text-xs hover:bg-slate-200 transition"
+                >
+                  −
+                </button>
+
+                {["1", "2", "3"].map((n) => (
+                  <button
+                    key={n}
+                    onClick={() => handleCalcNumber(n)}
+                    className="rounded-lg bg-slate-50 border border-slate-200 text-slate-900 py-2.5 font-bold text-xs hover:bg-slate-100 transition shadow-xs"
+                  >
+                    {n}
+                  </button>
+                ))}
+                <button
+                  onClick={() => handleCalcOp("+")}
+                  className="rounded-lg bg-slate-100 border border-slate-200 text-brand-600 py-2.5 font-black text-xs hover:bg-slate-200 transition"
+                >
+                  +
+                </button>
+
+                <button
+                  onClick={() => handleCalcNumber("0")}
+                  className="rounded-lg bg-slate-50 border border-slate-200 text-slate-900 py-2.5 font-bold text-xs hover:bg-slate-100 transition shadow-xs"
+                >
+                  0
+                </button>
+                <button
+                  onClick={() => handleCalcNumber("00")}
+                  className="rounded-lg bg-slate-50 border border-slate-200 text-slate-900 py-2.5 font-bold text-xs hover:bg-slate-100 transition shadow-xs"
+                >
+                  00
+                </button>
+                <button
+                  onClick={() => !calcDisplay.includes(".") && setCalcDisplay(calcDisplay + ".")}
+                  className="rounded-lg bg-slate-50 border border-slate-200 text-slate-900 py-2.5 font-bold text-xs hover:bg-slate-100 transition shadow-xs"
+                >
+                  .
+                </button>
+                <button
+                  onClick={handleCalcEquals}
+                  className="rounded-lg bg-brand-600 text-white py-2.5 font-black text-xs hover:bg-brand-700 transition shadow-xs"
+                >
+                  =
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 }

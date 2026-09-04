@@ -387,7 +387,7 @@ export function SalesPage() {
 
         <div className="overflow-hidden rounded-3xl border border-brand-100 shadow-[0_20px_50px_rgba(37,99,235,0.08)]">
           <div className="overflow-x-auto">
-            <table className="min-w-full border-separate border-spacing-0 text-sm">
+            <table className="w-full table-fixed border-separate border-spacing-0 text-xs lg:text-sm">
               <thead className="bg-gradient-to-r from-slate-900 via-slate-800 to-brand-700 text-white">
                 <tr>
                   {[
@@ -400,7 +400,7 @@ export function SalesPage() {
                     t('sales.table.date'),
                     t('common.actions')
                   ].map((col) => (
-                    <th key={col} className="border-b border-white/10 px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-100">{col}</th>
+                    <th key={col} className="border-b border-white/10 px-3 py-3 text-left text-[10px] font-bold uppercase tracking-[0.12em] text-slate-100 whitespace-nowrap">{col}</th>
                   ))}
                 </tr>
               </thead>

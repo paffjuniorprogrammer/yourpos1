@@ -18,7 +18,7 @@ export default {
         soft: "0 12px 30px rgba(15, 23, 42, 0.08)"
       },
       fontFamily: {
-        sans: ["'Segoe UI'", "system-ui", "sans-serif"]
+        sans: ["'Plus Jakarta Sans'", "'Inter'", "-apple-system", "BlinkMacSystemFont", "'Segoe UI'", "Roboto", "sans-serif"],
       },
       fontSize: {
         /* Responsive font sizes using CSS custom properties */

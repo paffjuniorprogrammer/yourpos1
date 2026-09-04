@@ -38,6 +38,7 @@ import {
 import { GlobalUsersPage } from "./pages/super-admin/GlobalUsersPage";
 import { SubscriptionBillingPage } from "./pages/SubscriptionBillingPage";
 import { SubscriptionExpiredPage } from "./pages/SubscriptionExpiredPage";
+import { ResetPasswordPage } from "./pages/ResetPasswordPage";
 
 export default function App() {
   const location = useLocation();
@@ -49,6 +50,7 @@ export default function App() {
         <Route path="/" element={<HomePage />} />
         <Route path="/home" element={<HomePage />} />
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/guest-order/:kind/:token" element={<GuestOrderPage />} />
         
         {/* Regular POS Tenant Routes */}
